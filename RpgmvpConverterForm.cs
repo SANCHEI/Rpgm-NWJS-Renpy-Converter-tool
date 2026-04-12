@@ -495,6 +495,20 @@ namespace RpgmvpConverterWinForms
                 return;
             }
 
+            if (IsRenpyGame(rootPath))
+            {
+                WriteLog("Renpy game detected - starting file extraction");
+                Task.Run(delegate { RunRenpyExtraction(rootPath); });
+                return;
+            }
+
+            if (IsUnityGame(rootPath))
+            {
+                WriteLog("Unity game detected - use Unity Extractor");
+                MessageBox.Show("Unity game detected.\n\nPlease use the 'Extract' button for Unity extraction.", "Game Asset Tool", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(keyBox.Text))
             {
                 string detectedKey = TryFindKey(rootPath);
@@ -654,6 +668,241 @@ namespace RpgmvpConverterWinForms
             bool hasManaged = Directory.Exists(Path.Combine(rootPath, "Managed"));
 
             return hasStreamingAssets || hasUnityPlayer || (hasManaged && hasDataFolder);
+        }
+
+        private static bool IsRenpyGame(string rootPath)
+        {
+            string gameFolder = Path.Combine(rootPath, "game");
+            
+            bool hasGameFolder = Directory.Exists(gameFolder);
+            if (!hasGameFolder) return false;
+
+            bool hasRpa = Directory.GetFiles(gameFolder, "*.rpa", SearchOption.TopDirectoryOnly).Length > 0;
+            bool hasRpyc = Directory.GetFiles(gameFolder, "*.rpyc", SearchOption.TopDirectoryOnly).Length > 0;
+            bool hasRpy = Directory.GetFiles(gameFolder, "*.rpy", SearchOption.AllDirectories).Length > 0;
+            bool hasRenpyExe = File.Exists(Path.Combine(rootPath, "renpy.exe"));
+            bool hasGameExe = File.Exists(Path.Combine(rootPath, "game.exe"));
+            bool hasLauncherScript = File.Exists(Path.Combine(rootPath, "launcher.sh")) || File.Exists(Path.Combine(rootPath, "game", "launcher.py"));
+
+            return hasRpa || hasRpyc || hasRpy || hasRenpyExe || hasGameExe || hasLauncherScript;
+        }
+
+        private void RunRenpyExtraction(string rootPath)
+        {
+            try
+            {
+                string gameFolder = Path.Combine(rootPath, "game");
+                string outputDir = Path.Combine(rootPath, "extracted");
+                Directory.CreateDirectory(outputDir);
+
+                this.BeginInvoke((MethodInvoker)delegate
+                {
+                    progressBar.Maximum = 100;
+                    progressBar.Value = 0;
+                    statusLabel.Text = "Renpy: Finding archives...";
+                    statsLabel.Text = "";
+                });
+
+                var rpaFiles = new List<string>();
+                foreach (string rpa in Directory.GetFiles(gameFolder, "*.rpa", SearchOption.AllDirectories))
+                    rpaFiles.Add(rpa);
+
+                if (rpaFiles.Count == 0)
+                {
+                    this.BeginInvoke((MethodInvoker)delegate
+                    {
+                        statusLabel.Text = "Renpy: No RPA files found";
+                        WriteLog("No RPA files found");
+                    });
+                    return;
+                }
+
+                WriteLog("Found " + rpaFiles.Count + " RPA archives");
+
+                string tempDir = Path.Combine(Path.GetTempPath(), "RpgmvpConverter");
+                Directory.CreateDirectory(tempDir);
+                string scriptPath = Path.Combine(tempDir, "extract_rpa.py");
+
+                string script = @"
+import struct
+import zlib
+import pickle
+import os
+import sys
+
+def extract_rpa(rpa_path, output_dir):
+    with open(rpa_path, 'rb') as f:
+        header = f.readline().decode('ascii').strip()
+        
+        if header.startswith('RPA-3.0'):
+            parts = header.split()
+            index_offset = int(parts[1], 16)
+            key = int(parts[2], 16)
+        elif header.startswith('RPA-2.0'):
+            parts = header.split()
+            index_offset = int(parts[1], 16)
+            key = 0
+        else:
+            print('ERROR: Unknown RPA format')
+            return 0, 0
+        
+        f.seek(index_offset)
+        compressed = f.read()
+        index_data = zlib.decompress(compressed)
+        index = pickle.loads(index_data)
+        
+        total = sum(len(entries) for entries in index.values())
+        print('TOTAL:' + str(total))
+        sys.stdout.flush()
+        
+        count = 0
+        for filename, entries in index.items():
+            for entry in entries:
+                if len(entry) == 2:
+                    offset, length = entry
+                    start = 0
+                else:
+                    offset, length, start = entry
+                
+                if key != 0:
+                    offset ^= key
+                    length ^= key
+                
+                f.seek(offset)
+                data = f.read(length)
+                
+                out_path = os.path.join(output_dir, filename.replace('/', os.sep))
+                out_dir = os.path.dirname(out_path)
+                if out_dir:
+                    os.makedirs(out_dir, exist_ok=True)
+                
+                with open(out_path, 'wb') as out:
+                    out.write(data)
+                
+                count += 1
+                if count % 500 == 0:
+                    print('PROGRESS:' + str(count) + ':' + str(total))
+                    sys.stdout.flush()
+        
+        print('PROGRESS:' + str(count) + ':' + str(total))
+        return count, total
+
+rpa_file = os.environ.get('RPA_PATH', '')
+output_dir = os.environ.get('OUTPUT_PATH', '')
+
+if not rpa_file or not os.path.exists(rpa_file):
+    print('ERROR: RPA file not found')
+    sys.exit(1)
+
+count = extract_rpa(rpa_file, output_dir)
+print('DONE:' + str(count[0]))
+";
+
+                File.WriteAllText(scriptPath, script, new System.Text.UTF8Encoding(false));
+
+                int totalExtracted = 0;
+                int totalFiles = 1;
+                DateTime startTime = DateTime.UtcNow;
+
+                this.BeginInvoke((MethodInvoker)delegate
+                {
+                    progressBar.Maximum = 100;
+                    progressBar.Value = 0;
+                    statusLabel.Text = "Renpy: Starting...";
+                    statsLabel.Text = "ETA: --:--";
+                });
+
+                for (int i = 0; i < rpaFiles.Count; i++)
+                {
+                    string rpaFile = rpaFiles[i];
+                    string rpaName = Path.GetFileName(rpaFile);
+                    
+                    WriteLog("Processing: " + rpaName);
+
+                    ProcessStartInfo psi = new ProcessStartInfo();
+                    psi.FileName = "python";
+                    psi.Arguments = "\"" + scriptPath + "\"";
+                    psi.UseShellExecute = false;
+                    psi.RedirectStandardOutput = true;
+                    psi.RedirectStandardError = true;
+                    psi.CreateNoWindow = true;
+                    psi.StandardOutputEncoding = System.Text.Encoding.UTF8;
+                    psi.EnvironmentVariables["RPA_PATH"] = rpaFile;
+                    psi.EnvironmentVariables["OUTPUT_PATH"] = outputDir;
+                    psi.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
+
+                    using (Process process = Process.Start(psi))
+                    {
+                        if (process != null)
+                        {
+                            process.OutputDataReceived += delegate(object sender, DataReceivedEventArgs e)
+                            {
+                                if (!string.IsNullOrEmpty(e.Data))
+                                {
+                                    this.BeginInvoke((MethodInvoker)delegate
+                                    {
+                                        string data = e.Data;
+
+                                        if (data.StartsWith("TOTAL:"))
+                                        {
+                                            string[] parts = data.Split(':');
+                                            if (parts.Length >= 2)
+                                            {
+                                                int.TryParse(parts[1], out totalFiles);
+                                                progressBar.Maximum = Math.Max(totalFiles, 1);
+                                            }
+                                        }
+                                        else if (data.StartsWith("PROGRESS:"))
+                                        {
+                                            string[] parts = data.Split(':');
+                                            if (parts.Length >= 3)
+                                            {
+                                                int.TryParse(parts[1], out totalExtracted);
+                                                int.TryParse(parts[2], out totalFiles);
+                                                progressBar.Maximum = Math.Max(totalFiles, 1);
+                                                progressBar.Value = Math.Min(totalExtracted, progressBar.Maximum);
+
+                                                double elapsed = Math.Max((DateTime.UtcNow - startTime).TotalSeconds, 0.1);
+                                                double speed = elapsed > 0 ? totalExtracted / elapsed : 0;
+                                                int remaining = totalFiles - totalExtracted;
+                                                string eta = speed > 0 ? FormatDuration(remaining / speed) : "--:--";
+                                                statsLabel.Text = "Extracted: " + totalExtracted + " / " + totalFiles + " | " + speed.ToString("N0") + " f/s | ETA: " + eta;
+                                                statusLabel.Text = "Renpy: " + totalExtracted + " / " + totalFiles;
+                                            }
+                                        }
+                                        else if (data.StartsWith("ERROR:"))
+                                        {
+                                            WriteLog(data);
+                                            statusLabel.Text = "Renpy: Error";
+                                        }
+                                    });
+                                }
+                            };
+                            process.BeginOutputReadLine();
+                            process.WaitForExit();
+                        }
+                    }
+                }
+
+                this.BeginInvoke((MethodInvoker)delegate
+                {
+                    progressBar.Value = progressBar.Maximum;
+                    statusLabel.Text = "Renpy: Complete";
+                    double elapsed = Math.Max((DateTime.UtcNow - startTime).TotalSeconds, 0.1);
+                    double speed = elapsed > 0 ? totalExtracted / elapsed : 0;
+                    statsLabel.Text = "Extracted: " + totalExtracted + " | " + speed.ToString("N0") + " f/s";
+                    MessageBox.Show("Renpy extraction complete!\n\nExtracted: " + totalExtracted + " files\n\nOutput: " + outputDir, "Renpy Extractor", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                });
+            }
+            catch (Exception ex)
+            {
+                this.BeginInvoke((MethodInvoker)delegate
+                {
+                    progressBar.Value = 0;
+                    statusLabel.Text = "Renpy: Error";
+                    WriteLog("Error: " + ex.Message);
+                });
+            }
         }
 
         private void RunUnityExtraction(string rootPath, string extractMode)
@@ -1049,6 +1298,70 @@ sys.stdout.flush()
         {
             if (logBox.TextLength > 0) logBox.AppendText(Environment.NewLine);
             logBox.AppendText(message);
+        }
+
+        private static bool CheckUnrpaInstalled()
+        {
+            try
+            {
+                ProcessStartInfo psi = new ProcessStartInfo();
+                psi.FileName = "python";
+                psi.Arguments = "-c \"from unrpa import UNRPA; print('ok')\"";
+                psi.UseShellExecute = false;
+                psi.RedirectStandardOutput = true;
+                psi.CreateNoWindow = true;
+                psi.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
+
+                using (Process process = Process.Start(psi))
+                {
+                    string output = process.StandardOutput.ReadToEnd();
+                    process.WaitForExit();
+                    return output.Trim().Contains("ok");
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private void InstallUnrpa()
+        {
+            try
+            {
+                WriteLog("Installing unrpa...");
+                statusLabel.Text = "Installing unrpa...";
+
+                ProcessStartInfo psi = new ProcessStartInfo();
+                psi.FileName = "cmd";
+                psi.Arguments = "/c pip install unrpa";
+                psi.UseShellExecute = false;
+                psi.RedirectStandardOutput = true;
+                psi.RedirectStandardError = true;
+                psi.CreateNoWindow = true;
+
+                using (Process process = Process.Start(psi))
+                {
+                    string output = process.StandardOutput.ReadToEnd();
+                    string error = process.StandardError.ReadToEnd();
+                    process.WaitForExit();
+
+                    if (process.ExitCode == 0)
+                    {
+                        WriteLog("unrpa installed successfully");
+                        MessageBox.Show("unrpa installed successfully!\n\nClick Start again to extract RPA files.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    else
+                    {
+                        WriteLog("Failed to install unrpa");
+                        MessageBox.Show("Failed to install unrpa.\n\nError: " + error, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                WriteLog("Install error: " + ex.Message);
+            }
         }
 
         private static string FormatDuration(double seconds)
