@@ -84,7 +84,7 @@ namespace RpgmvpConverterWinForms
             Font titleFont = new Font("Segoe UI Semibold", 13f, FontStyle.Regular);
             Font logFont = new Font("Consolas", 10f, FontStyle.Regular);
 
-            Text = "RPGMVP/PNG_ -> PNG ULTRA";
+            Text = "Game Asset Tool";
             StartPosition = FormStartPosition.CenterScreen;
             MinimumSize = new Size(900, 850);
             Size = new Size(900, 850);
@@ -106,7 +106,7 @@ namespace RpgmvpConverterWinForms
 
             titleLabel = new Label
             {
-                Text = "RPGMVP/PNG_ -> PNG ULTRA",
+                Text = "Game Asset Tool",
                 Font = titleFont,
                 ForeColor = textColor,
                 Location = new Point(18, 10),
@@ -117,7 +117,7 @@ namespace RpgmvpConverterWinForms
 
             subtitleLabel = new Label
             {
-                Text = "Fast conversion + Unity Extractor + Unlocker",
+                Text = "Convert, Extract, Unlock",
                 ForeColor = mutedColor,
                 Location = new Point(19, 38),
                 Size = new Size(500, 20),
@@ -167,22 +167,6 @@ namespace RpgmvpConverterWinForms
 
             y += 42;
 
-            startButton = CreateButton("Start", new Point(18, y), new Size(100, 34), successColor, formBack, uiBold);
-            startButton.Click += async delegate { await StartConversionAsync(); };
-            Controls.Add(startButton);
-
-            pauseButton = CreateButton("Pause", new Point(126, y), new Size(100, 34), warningColor, Color.Black, uiBold);
-            pauseButton.Enabled = false;
-            pauseButton.Click += delegate { TogglePause(); };
-            Controls.Add(pauseButton);
-
-            cancelButton = CreateButton("Cancel", new Point(234, y), new Size(100, 34), dangerColor, textColor, uiBold);
-            cancelButton.Enabled = false;
-            cancelButton.Click += delegate { CancelConversion(); };
-            Controls.Add(cancelButton);
-
-            y += 42;
-
             Panel keyPanel = new Panel
             {
                 Location = new Point(18, y),
@@ -197,7 +181,7 @@ namespace RpgmvpConverterWinForms
             {
                 Text = "HEX key",
                 Location = new Point(8, 8),
-                Size = new Size(80, 20),
+                Size = new Size(70, 20),
                 ForeColor = mutedColor,
                 BackColor = Color.Transparent
             };
@@ -205,8 +189,8 @@ namespace RpgmvpConverterWinForms
 
             keyBox = new TextBox
             {
-                Location = new Point(90, 4),
-                Size = new Size(660, 26),
+                Location = new Point(80, 4),
+                Size = new Size(520, 26),
                 BackColor = inputBack,
                 ForeColor = textColor,
                 BorderStyle = BorderStyle.FixedSingle,
@@ -217,7 +201,7 @@ namespace RpgmvpConverterWinForms
             engineRpgmLabel = new Label
             {
                 Text = "RPGM",
-                Location = new Point(755, 8),
+                Location = new Point(610, 8),
                 Size = new Size(45, 20),
                 ForeColor = Color.FromArgb(68, 197, 255),
                 BackColor = Color.Transparent,
@@ -228,13 +212,17 @@ namespace RpgmvpConverterWinForms
             engineNwjsLabel = new Label
             {
                 Text = "NWJS",
-                Location = new Point(805, 8),
+                Location = new Point(660, 8),
                 Size = new Size(45, 20),
                 ForeColor = Color.FromArgb(255, 105, 180),
                 BackColor = Color.Transparent,
                 Font = uiBold
             };
             keyPanel.Controls.Add(engineNwjsLabel);
+
+            startButton = CreateButton("Start", new Point(715, 3), new Size(125, 28), successColor, formBack, uiBold);
+            startButton.Click += async delegate { await StartConversionAsync(); };
+            keyPanel.Controls.Add(startButton);
 
             y += 38;
 
@@ -300,6 +288,18 @@ namespace RpgmvpConverterWinForms
             Controls.Add(unityExtractButton);
 
             y += 42;
+
+            pauseButton = CreateButton("Pause", new Point(18, y), new Size(100, 30), warningColor, Color.Black, uiBold);
+            pauseButton.Enabled = false;
+            pauseButton.Click += delegate { TogglePause(); };
+            Controls.Add(pauseButton);
+
+            cancelButton = CreateButton("Cancel", new Point(126, y), new Size(100, 30), dangerColor, textColor, uiBold);
+            cancelButton.Enabled = false;
+            cancelButton.Click += delegate { CancelConversion(); };
+            Controls.Add(cancelButton);
+
+            y += 38;
 
             progressBar = new ProgressBar
             {

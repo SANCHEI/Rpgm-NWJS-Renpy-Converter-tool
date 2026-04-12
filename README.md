@@ -1,8 +1,10 @@
-# RPGMVP/PNG_ -> PNG ULTRA
+# Game Asset Tool
 
-Fast RPGMVP to PNG converter + **Unity Asset Extractor** + **Gallery Unlocker** with full **En/Ru localization**.
+![Screenshot](screenshot.png)
 
-![Version](https://img.shields.io/badge/version-1.1.0-blue)
+Fast converter for **RPGMVP**, **Unity** and **Gallery Unlocker** for **NWJS/Renpy** games.
+
+![Version](https://img.shields.io/badge/version-1.2.0-blue)
 ![.NET](https://img.shields.io/badge/.NET-4.0-blue)
 ![Python](https://img.shields.io/badge/Python-3.x-green)
 
@@ -11,7 +13,6 @@ Fast RPGMVP to PNG converter + **Unity Asset Extractor** + **Gallery Unlocker** 
 - **RPGMVP to PNG Conversion** - Fast conversion with live progress, ETA and task control (pause/cancel)
 - **Unity Asset Extractor** - Extract textures from Unity games (.assets, .bundle files)
 - **Gallery Unlocker** - Unlock galleries in Renpy/NWJS games
-- **En/Ru Localization** - Switch between English and Russian
 - **Auto-detection** - Automatically detects game type and root folder
 
 ## Requirements
@@ -28,14 +29,14 @@ pip install UnityPy
 
 ## Download
 
-**Full Version:** [RpgmvpConverterWinForms.exe](https://github.com/SANCHEI/Rpgm-NWJS-Renpy-Converter-tool/releases)
+**Full Version:** [GameAssetTool.exe](https://github.com/SANCHEI/Rpgm-NWJS-Renpy-Converter-tool/releases)
 
 For **Unity games only**, use the lighter version: [UnityAssetExtractor.exe](https://github.com/SANCHEI/Rpgm-NWJS-Renpy-Converter-tool/releases/tag/v1.1.0-unity)
 
 ## Supported Games
 
 ### RPG Maker MV/MZ
-- RPGMVP encryption (RPGM label)
+- RPGMVP encryption
 - Custom HEX key support
 - Auto key detection
 
@@ -46,7 +47,7 @@ For **Unity games only**, use the lighter version: [UnityAssetExtractor.exe](htt
 - Real-time progress with ETA
 
 ### Renpy/NWJS Games
-- Gallery unlocker (NWJS label)
+- Gallery unlocker
 - NWJS process detection
 
 ## Supported Engines
@@ -65,37 +66,18 @@ For **Unity games only**, use the lighter version: [UnityAssetExtractor.exe](htt
 ### Unity Extraction
 1. Select Unity game folder (auto-detected)
 2. Choose extraction mode: Textures / Videos / All
-3. Click "Extract Unity"
+3. Click "Extract"
 4. Find extracted files in `game_folder/extracted/`
 
 ### Gallery Unlocker
 1. Select game folder
-2. Choose game type: Renpy / NWJS
+2. Choose game type: Soft / Hard
 3. Click "Unlock"
 
 ## Keyboard Shortcuts
 
 - **Ctrl+A** in logs - Select all
 - **Ctrl+C** in logs - Copy selected
-
-## Screenshots
-
-```
-┌─────────────────────────────────────────────────────┐
-│  RPGMVP/PNG_ -> PNG ULTRA                           │
-│  Fast conversion + Unity Extractor + Unlocker        │
-├─────────────────────────────────────────────────────┤
-│  Game Root: [D:\Games\MyGame            ] [G] [...] │
-│  HEX key:   [xxxxxxxxxxxxxxxx        ] RPGM NWJS  │
-│  [▶ Start]  [⏸ Pause]  [✕ Cancel]                   │
-├─────────────────────────────────────────────────────┤
-│  Renpy Gallery Unlocker: [Renpy ▾] [Unlock]        │
-│  Unity Asset Extractor: [Textures ▾] [Extract]     │
-├─────────────────────────────────────────────────────┤
-│  Progress: ████████████░░░░░░░░ 67%                │
-│  Processed: 156 / 233 | Speed: 12.5 f/s | ETA: 00:06│
-└─────────────────────────────────────────────────────┘
-```
 
 ## Building from Source
 

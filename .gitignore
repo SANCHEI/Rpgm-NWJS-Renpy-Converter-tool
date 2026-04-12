@@ -10,9 +10,3 @@ Unity_Version/bin/
 *.log
 .vs/
 TestResults/
-*.tmp
-CSC*.TMP
-unlocker_hard.json
-unlocker_soft.json
-generate_unlocker.ps1
-RpgmvpConverterWinForms.csproj
