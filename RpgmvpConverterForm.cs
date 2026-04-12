@@ -1256,8 +1256,6 @@ files_with_content = []
 for f in all_files:
     if has_relevant_content(f, extract_mode):
         files_with_content.append(f)
-    print('PROGRESS:0:' + str(len(all_files)))
-    sys.stdout.flush()
 
 all_files = files_with_content
 
@@ -1267,9 +1265,9 @@ print('TOTAL:' + str(len(all_files)))
 sys.stdout.flush()
 
 for i, file_path in enumerate(all_files):
-    print('PROGRESS:' + str(i) + ':' + str(len(all_files)))
-    sys.stdout.flush()
     total_extracted += extract_file(file_path, output_path, extract_mode)
+    print('PROGRESS:' + str(i + 1) + ':' + str(len(all_files)))
+    sys.stdout.flush()
 
 print('-' * 50)
 print('Done! Extracted ' + str(total_extracted) + ' assets')
