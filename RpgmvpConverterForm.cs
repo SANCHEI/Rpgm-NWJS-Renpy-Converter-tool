@@ -654,10 +654,94 @@ namespace RpgmvpConverterWinForms
                 return;
             }
 
+            if (!CheckUnityPyInstalled())
+            {
+                var result = MessageBox.Show("UnityPy is required for Unity extraction.\n\nWould you like to install it now?", "UnityPy Required", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (result == DialogResult.Yes)
+                {
+                    InstallUnityPy();
+                    if (!CheckUnityPyInstalled())
+                    {
+                        WriteLog("UnityPy installation failed");
+                        MessageBox.Show("Failed to install UnityPy.\n\nPlease run: pip install UnityPy", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return;
+                    }
+                }
+                else
+                {
+                    return;
+                }
+            }
+
             string extractMode = unityExtractModeBox.SelectedIndex == 0 ? "textures" : (unityExtractModeBox.SelectedIndex == 1 ? "videos" : "all");
             WriteLog("Unity extraction started: " + extractMode);
 
             Task.Run(delegate { RunUnityExtraction(rootPath, extractMode); });
+        }
+
+        private static bool CheckUnityPyInstalled()
+        {
+            try
+            {
+                ProcessStartInfo psi = new ProcessStartInfo();
+                psi.FileName = "python";
+                psi.Arguments = "-c \"import UnityPy; print('ok')\"";
+                psi.UseShellExecute = false;
+                psi.RedirectStandardOutput = true;
+                psi.CreateNoWindow = true;
+                psi.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
+
+                using (Process process = Process.Start(psi))
+                {
+                    string output = process.StandardOutput.ReadToEnd();
+                    process.WaitForExit();
+                    return output.Trim().Contains("ok");
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private void InstallUnityPy()
+        {
+            try
+            {
+                WriteLog("Installing UnityPy...");
+                statusLabel.Text = "Installing UnityPy...";
+
+                ProcessStartInfo psi = new ProcessStartInfo();
+                psi.FileName = "python";
+                psi.Arguments = "-m pip install UnityPy";
+                psi.UseShellExecute = false;
+                psi.RedirectStandardOutput = true;
+                psi.RedirectStandardError = true;
+                psi.CreateNoWindow = true;
+                psi.StandardOutputEncoding = System.Text.Encoding.UTF8;
+                psi.StandardErrorEncoding = System.Text.Encoding.UTF8;
+                psi.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
+
+                using (Process process = Process.Start(psi))
+                {
+                    string output = process.StandardOutput.ReadToEnd();
+                    string error = process.StandardError.ReadToEnd();
+                    process.WaitForExit();
+
+                    if (process.ExitCode == 0)
+                    {
+                        WriteLog("UnityPy installed successfully");
+                    }
+                    else
+                    {
+                        WriteLog("UnityPy install error: " + error);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                WriteLog("Install error: " + ex.Message);
+            }
         }
 
         private static bool IsUnityGame(string rootPath)
