@@ -1,6 +1,5 @@
 bin/
 obj/
-Unity_Version/bin/
 *.exe
 *.dll
 *.pdb
