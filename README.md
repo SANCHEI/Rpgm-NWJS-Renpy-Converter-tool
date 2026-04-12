@@ -1,6 +1,8 @@
 # Game Asset Tool
 
-![Screenshot](screenshot.png)
+ ![Screenshot](screenshot.png)
+
+ ![Demo](demo.gif)
 
 Fast converter for **RPGMVP**, **Unity** and **Gallery Unlocker** for **NWJS/Renpy** games.
 
