@@ -1,5 +1,7 @@
 # Game Asset Tool - Unity Edition
 
+![Screenshot](UnityAssetExtractor_YJR85N7Lpo.png)
+
 Lightweight standalone tool for extracting textures from **Unity games** (.assets, .bundle files).
 
 ![Version](https://img.shields.io/badge/version-1.2.0-blue)
