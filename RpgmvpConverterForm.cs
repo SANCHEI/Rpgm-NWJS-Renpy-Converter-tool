@@ -1132,25 +1132,31 @@ extract_mode = os.environ.get('EXTRACT_MODE', 'all')
 
 if not game_path or not output_path:
     print('ERROR: GAME_PATH or OUTPUT_PATH not set in environment', file=sys.stderr)
-    print('Arguments received:', sys.argv, file=sys.stderr)
-    print('GAME_PATH:', game_path, file=sys.stderr)
-    print('OUTPUT_PATH:', output_path, file=sys.stderr)
-    sys.stderr.flush()
     sys.exit(1)
 
 os.makedirs(output_path, exist_ok=True)
 
-def extract_file(file_path, output, mode, progress_queue):
-    total = 0
+def has_relevant_content(file_path, mode):
     try:
         env = UnityPy.load(file_path)
-        
-        has_textures = any(obj.type.name == 'Texture2D' for obj in env.objects)
-        if not has_textures and mode in ['textures', 'all']:
-            return 0
-        
+        for obj in env.objects:
+            if mode in ['textures', 'all'] and obj.type.name == 'Texture2D':
+                return True
+            if mode in ['videos', 'all'] and obj.type.name == 'VideoClip':
+                return True
+            if mode in ['audios', 'all'] and obj.type.name == 'AudioClip':
+                return True
+        return False
+    except:
+        return False
+
+def extract_file(file_path, output, mode):
+    total = 0
+    try:
         print('Processing: ' + os.path.basename(file_path))
         sys.stdout.flush()
+        
+        env = UnityPy.load(file_path)
         
         file_output = os.path.join(output, os.path.splitext(os.path.basename(file_path))[0])
         os.makedirs(file_output, exist_ok=True)
@@ -1158,8 +1164,6 @@ def extract_file(file_path, output, mode, progress_queue):
         textures = 0
         videos = 0
         audios = 0
-        obj_count = 0
-        total_objs = len(env.objects)
         
         for obj in env.objects:
             try:
@@ -1180,7 +1184,6 @@ def extract_file(file_path, output, mode, progress_queue):
                         data = obj.read()
                         name = getattr(data, 'm_Name', 'video_' + str(videos))
                         safe_name = ''.join(c for c in str(name) if c.isalnum() or c in '._- ')
-                        print('  Video: ' + safe_name)
                         videos += 1
                 
                 if mode in ['audios', 'all']:
@@ -1196,25 +1199,16 @@ def extract_file(file_path, output, mode, progress_queue):
                                 f.write(audio_data)
                             audios += 1
                             total += 1
-                
-                obj_count += 1
-                if obj_count % 50 == 0:
-                    progress_queue.put(total)
-                    print('PROGRESS:' + str(total))
-                    sys.stdout.flush()
             
             except Exception as e:
                 pass
         
-        if textures > 0 or audios > 0:
-            print('  +' + str(textures) + ' textures, +' + str(audios) + ' audios')
-            sys.stdout.flush()
+        return total
         
     except Exception as e:
         print('Error: ' + str(e))
         sys.stdout.flush()
-    
-    return total
+        return 0
 
 print('Unity Asset Extractor')
 print('Game: ' + game_path)
@@ -1240,7 +1234,7 @@ else:
                 if f.endswith('.assets') and not f.endswith('.resS'):
                     all_files.append(os.path.join(data_folder, f))
         except Exception as e:
-            print('Error scanning data folder: ' + str(e))
+            pass
         
         ggm_path = os.path.join(data_folder, 'globalgamemanagers.assets')
         if os.path.exists(ggm_path):
@@ -1252,20 +1246,30 @@ else:
                 for bundle_file in os.listdir(streaming):
                     if bundle_file.endswith('.bundle'):
                         all_files.append(os.path.join(streaming, bundle_file))
-            except Exception as e:
-                print('Error scanning bundles: ' + str(e))
+            except:
+                pass
 
-print('Found ' + str(len(all_files)) + ' files to process')
+# Filter files that have relevant content
+print('Checking for content...')
+sys.stdout.flush()
+files_with_content = []
+for f in all_files:
+    if has_relevant_content(f, extract_mode):
+        files_with_content.append(f)
+    print('PROGRESS:0:' + str(len(all_files)))
+    sys.stdout.flush()
+
+all_files = files_with_content
+
+print('Found ' + str(len(all_files)) + ' files with content')
 sys.stdout.flush()
 print('TOTAL:' + str(len(all_files)))
 sys.stdout.flush()
 
-progress_queue = []
-
 for i, file_path in enumerate(all_files):
     print('PROGRESS:' + str(i) + ':' + str(len(all_files)))
     sys.stdout.flush()
-    total_extracted += extract_file(file_path, output_path, extract_mode, progress_queue)
+    total_extracted += extract_file(file_path, output_path, extract_mode)
 
 print('-' * 50)
 print('Done! Extracted ' + str(total_extracted) + ' assets')
