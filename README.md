@@ -2,7 +2,7 @@
 
 ![Screenshot](screenshot.png)
 
-[**Watch Demo Video on YouTube**]((https://youtu.be/BnjRjik9fk0))]
+[**Watch Demo Video on YouTube**]((https://youtu.be/BnjRjik9fk0))
 
 Fast converter for **RPGMVP**, **Unity** and **Gallery Unlocker** for **NWJS/Renpy** games.
 
