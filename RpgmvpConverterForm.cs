@@ -1153,10 +1153,13 @@ def has_relevant_content(file_path, mode):
 def extract_file(file_path, output, mode):
     total = 0
     try:
-        print('Processing: ' + os.path.basename(file_path))
+        print('Loading: ' + os.path.basename(file_path))
         sys.stdout.flush()
         
         env = UnityPy.load(file_path)
+        
+        print('Processing: ' + os.path.basename(file_path))
+        sys.stdout.flush()
         
         file_output = os.path.join(output, os.path.splitext(os.path.basename(file_path))[0])
         os.makedirs(file_output, exist_ok=True)
