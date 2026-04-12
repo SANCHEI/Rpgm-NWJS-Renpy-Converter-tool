@@ -1,8 +1,8 @@
 # Game Asset Tool
 
-[![Watch video](https://img.youtube.com/vi/y7z-_byQjXo/0.jpg)](https://youtu.be/y7z-_byQjXo)
- ![Screenshot](screenshot.png)
- ![Demo](demo.gif)
+![Screenshot](screenshot.png)
+
+[**Watch Demo Video on YouTube**](https://youtu.be/y7z-_byQjXo)
 
 Fast converter for **RPGMVP**, **Unity** and **Gallery Unlocker** for **NWJS/Renpy** games.
 
