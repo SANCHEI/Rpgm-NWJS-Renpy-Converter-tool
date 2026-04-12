@@ -1,0 +1,13 @@
+bin/
+obj/
+*.exe
+*.dll
+*.pdb
+*.user
+*.suo
+*.cache
+*.log
+.vs/
+TestResults/
+*.tmp
+CSC*.TMP
