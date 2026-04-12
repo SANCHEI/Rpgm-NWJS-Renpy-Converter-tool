@@ -74,6 +74,12 @@ namespace RpgmvpConverterWinForms
             en["invalid_key"] = "Key must contain even number of HEX characters.";
             en["close_warning_title"] = "RPGMVP -> PNG ULTRA";
             en["close_warning_msg"] = "Please stop or wait for the operation to complete first.";
+            en["unity_label"] = "Unity Asset Extractor";
+            en["unity_mode_textures"] = "Textures";
+            en["unity_mode_videos"] = "Videos";
+            en["unity_mode_all"] = "All Assets";
+            en["unity_extract_btn"] = "Extract Unity";
+            en["clear_log_btn"] = "Clear";
             Strings["en"] = en;
 
             Dictionary<string, string> ru = new Dictionary<string, string>();
@@ -141,6 +147,12 @@ namespace RpgmvpConverterWinForms
             ru["invalid_key"] = "Ключ должен содержать чётное число HEX-символов.";
             ru["close_warning_title"] = "RPGMVP -> PNG ULTRA";
             ru["close_warning_msg"] = "Сначала остановите или дождитесь завершения обработки.";
+            ru["unity_label"] = "Unity Asset Extractor";
+            ru["unity_mode_textures"] = "Текстуры";
+            ru["unity_mode_videos"] = "Видео";
+            ru["unity_mode_all"] = "Все ассеты";
+            ru["unity_extract_btn"] = "Извлечь Unity";
+            ru["clear_log_btn"] = "Очистить";
             Strings["ru"] = ru;
         }
 

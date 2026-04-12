@@ -41,6 +41,10 @@ namespace RpgmvpConverterWinForms
         private ComboBox unlockerModeBox;
         private Button unlockerButton;
 
+        private Label unityLabel;
+        private ComboBox unityExtractModeBox;
+        private Button unityExtractButton;
+
         private Button startButton;
         private Button pauseButton;
         private Button cancelButton;
@@ -74,8 +78,10 @@ namespace RpgmvpConverterWinForms
 
             Text = Loc.Get("app_title");
             StartPosition = FormStartPosition.CenterScreen;
-            MinimumSize = new Size(900, 700);
-            Size = new Size(900, 700);
+            MinimumSize = new Size(900, 850);
+            Size = new Size(900, 850);
+            FormBorderStyle = FormBorderStyle.FixedSingle;
+            MaximizeBox = false;
             BackColor = formBack;
             ForeColor = textColor;
             Font = uiFont;
@@ -232,6 +238,38 @@ namespace RpgmvpConverterWinForms
 
             y += 42;
 
+            unityLabel = new Label
+            {
+                Text = Loc.Get("unity_label"),
+                Location = new Point(18, y),
+                Size = new Size(300, 20),
+                ForeColor = mutedColor,
+                BackColor = Color.Transparent
+            };
+            Controls.Add(unityLabel);
+
+            y += 24;
+
+            unityExtractModeBox = new ComboBox
+            {
+                Location = new Point(18, y),
+                Size = new Size(150, 26),
+                BackColor = inputBack,
+                ForeColor = textColor,
+                FlatStyle = FlatStyle.Flat
+            };
+            unityExtractModeBox.Items.Add(Loc.Get("unity_mode_textures"));
+            unityExtractModeBox.Items.Add(Loc.Get("unity_mode_videos"));
+            unityExtractModeBox.Items.Add(Loc.Get("unity_mode_all"));
+            unityExtractModeBox.SelectedIndex = 0;
+            Controls.Add(unityExtractModeBox);
+
+            unityExtractButton = CreateButton(Loc.Get("unity_extract_btn"), new Point(180, y - 3), new Size(160, 30), Color.FromArgb(138, 98, 255), formBack, uiBold);
+            unityExtractButton.Click += delegate { StartUnityExtraction(); };
+            Controls.Add(unityExtractButton);
+
+            y += 42;
+
             startButton = CreateButton(Loc.Get("start_btn"), new Point(18, y), new Size(100, 34), successColor, formBack, uiBold);
             startButton.Click += async delegate { await StartConversionAsync(); };
             Controls.Add(startButton);
@@ -286,7 +324,7 @@ namespace RpgmvpConverterWinForms
             Panel logPanel = new Panel
             {
                 Location = new Point(18, y),
-                Size = new Size(852, 260),
+                Size = new Size(852, 330),
                 BackColor = logBack,
                 BorderStyle = BorderStyle.FixedSingle
             };
@@ -296,12 +334,26 @@ namespace RpgmvpConverterWinForms
             {
                 Text = Loc.Get("log_header"),
                 Location = new Point(10, 10),
-                Size = new Size(100, 20),
+                Size = new Size(60, 20),
                 ForeColor = mutedColor,
                 BackColor = Color.Transparent,
                 Font = new Font("Segoe UI", 9f, FontStyle.Bold)
             };
             logPanel.Controls.Add(logHeader);
+
+            Button clearLogButton = new Button
+            {
+                Text = Loc.Get("clear_log_btn"),
+                Location = new Point(75, 8),
+                Size = new Size(80, 24),
+                BackColor = Color.FromArgb(45, 50, 60),
+                ForeColor = textColor,
+                FlatStyle = FlatStyle.Flat,
+                Font = uiFont
+            };
+            clearLogButton.FlatAppearance.BorderSize = 0;
+            clearLogButton.Click += delegate { logBox.Clear(); };
+            logPanel.Controls.Add(clearLogButton);
 
             logBox = new TextBox
             {
@@ -309,11 +361,32 @@ namespace RpgmvpConverterWinForms
                 ScrollBars = ScrollBars.Vertical,
                 ReadOnly = true,
                 Location = new Point(10, 36),
-                Size = new Size(830, 212),
+                Size = new Size(830, 282),
                 BackColor = logBack,
                 ForeColor = textColor,
                 BorderStyle = BorderStyle.None,
                 Font = logFont
+            };
+            logBox.TextChanged += delegate(object sender, EventArgs e) 
+            { 
+                logBox.SelectionStart = logBox.Text.Length; 
+                logBox.ScrollToCaret(); 
+            };
+            logBox.KeyDown += delegate(object sender, KeyEventArgs e)
+            {
+                if (e.Control && e.KeyCode == Keys.A)
+                {
+                    logBox.SelectAll();
+                    e.SuppressKeyPress = true;
+                }
+                else if (e.Control && e.KeyCode == Keys.C)
+                {
+                    if (logBox.SelectionLength > 0)
+                    {
+                        Clipboard.SetText(logBox.SelectedText);
+                    }
+                    e.SuppressKeyPress = true;
+                }
             };
             logPanel.Controls.Add(logBox);
 
@@ -344,6 +417,15 @@ namespace RpgmvpConverterWinForms
             {
                 unlockerModeBox.Items[0] = Loc.Get("unlocker_soft");
                 unlockerModeBox.Items[1] = Loc.Get("unlocker_hard");
+            }
+
+            unityLabel.Text = Loc.Get("unity_label");
+            unityExtractButton.Text = Loc.Get("unity_extract_btn");
+            if (unityExtractModeBox.Items.Count >= 3)
+            {
+                unityExtractModeBox.Items[0] = Loc.Get("unity_mode_textures");
+                unityExtractModeBox.Items[1] = Loc.Get("unity_mode_videos");
+                unityExtractModeBox.Items[2] = Loc.Get("unity_mode_all");
             }
 
             startButton.Text = currentRun == null ? Loc.Get("start_btn") : startButton.Text;
@@ -579,6 +661,322 @@ namespace RpgmvpConverterWinForms
             return (hasGame && hasExe) || (hasPackage && hasWww) || (hasWww && hasData);
         }
 
+        private void StartUnityExtraction()
+        {
+            string rootPath = pathBox.Text.Trim();
+            if (!Directory.Exists(rootPath))
+            {
+                WriteLog(Loc.Get("msg_invalid_path"));
+                return;
+            }
+
+            if (!IsUnityGame(rootPath))
+            {
+                WriteLog("Unity extraction: No Unity game found.");
+                MessageBox.Show("Unity extraction: No Unity game found.\n\nLook for folders with *_Data, StreamingAssets, or UnityPlayer.dll", "Unity Extractor", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            string extractMode = unityExtractModeBox.SelectedIndex == 0 ? "textures" : (unityExtractModeBox.SelectedIndex == 1 ? "videos" : "all");
+            WriteLog("Unity extraction started: " + extractMode);
+
+            Task.Run(delegate { RunUnityExtraction(rootPath, extractMode); });
+        }
+
+        private static bool IsUnityGame(string rootPath)
+        {
+            bool hasDataFolder = Directory.Exists(Path.Combine(rootPath, "*_Data"));
+            bool hasStreamingAssets = Directory.Exists(Path.Combine(rootPath, "StreamingAssets"));
+            bool hasUnityPlayer = File.Exists(Path.Combine(rootPath, "UnityPlayer.dll"));
+            bool hasManaged = Directory.Exists(Path.Combine(rootPath, "Managed"));
+
+            return hasStreamingAssets || hasUnityPlayer || (hasManaged && hasDataFolder);
+        }
+
+        private void RunUnityExtraction(string rootPath, string extractMode)
+        {
+            try
+            {
+                string exeDir = AppDomain.CurrentDomain.BaseDirectory;
+                string tempDir = Path.Combine(Path.GetTempPath(), "RpgmvpConverter");
+                Directory.CreateDirectory(tempDir);
+                string scriptPath = Path.Combine(tempDir, "extract_unity.py");
+
+                string script = GetUnityExtractionScript();
+                File.WriteAllText(scriptPath, script, new System.Text.UTF8Encoding(false));
+
+                string outputDir = Path.Combine(rootPath, "extracted");
+                Directory.CreateDirectory(outputDir);
+
+                progressBar.Maximum = 100;
+                progressBar.Value = 0;
+                statusLabel.Text = "Unity: Scanning...";
+                statsLabel.Text = Loc.Get("stats_eta") + ": --:--";
+
+                int totalFiles = 0;
+                int processedFiles = 0;
+
+                ProcessStartInfo psi = new ProcessStartInfo();
+                psi.FileName = "python";
+                psi.Arguments = "\"" + scriptPath + "\"";
+                psi.UseShellExecute = false;
+                psi.RedirectStandardOutput = true;
+                psi.RedirectStandardError = true;
+                psi.CreateNoWindow = true;
+                psi.StandardOutputEncoding = System.Text.Encoding.UTF8;
+                psi.StandardErrorEncoding = System.Text.Encoding.UTF8;
+                psi.EnvironmentVariables["GAME_PATH"] = rootPath;
+                psi.EnvironmentVariables["OUTPUT_PATH"] = outputDir;
+                psi.EnvironmentVariables["EXTRACT_MODE"] = extractMode;
+                psi.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
+                psi.EnvironmentVariables["PYTHONUNBUFFERED"] = "x";
+
+                using (Process process = Process.Start(psi))
+                {
+                    if (process != null)
+                    {
+                        DateTime startTime = DateTime.UtcNow;
+                        string lastStatus = "";
+
+                        process.OutputDataReceived += delegate(object sender, DataReceivedEventArgs e)
+                        {
+                            if (!string.IsNullOrEmpty(e.Data))
+                            {
+                                string data = e.Data;
+                                this.BeginInvoke((MethodInvoker)delegate
+                                {
+                                    WriteLog(data);
+
+                                    if (data.StartsWith("TOTAL:"))
+                                    {
+                                        string[] parts = data.Split(':');
+                                        if (parts.Length >= 2)
+                                        {
+                                            int.TryParse(parts[1], out totalFiles);
+                                            progressBar.Maximum = Math.Max(totalFiles, 1);
+                                            statusLabel.Text = "Unity: Found " + totalFiles + " files";
+                                        }
+                                    }
+                                    else if (data.StartsWith("PROGRESS:"))
+                                    {
+                                        string[] parts = data.Split(':');
+                                        if (parts.Length >= 3)
+                                        {
+                                            int.TryParse(parts[1], out processedFiles);
+                                            int.TryParse(parts[2], out totalFiles);
+                                            progressBar.Maximum = Math.Max(totalFiles, 1);
+                                            progressBar.Value = Math.Min(processedFiles, progressBar.Maximum);
+
+                                            double elapsed = Math.Max((DateTime.UtcNow - startTime).TotalSeconds, 0.1);
+                                            double speed = processedFiles / elapsed;
+                                            int remaining = totalFiles - processedFiles;
+                                            string eta = speed > 0 ? FormatDuration(remaining / speed) : "--:--";
+                                            statsLabel.Text = Loc.Get("stats_processed") + ": " + processedFiles + " / " + totalFiles + " | " + Loc.Get("stats_speed") + ": " + speed.ToString("N2") + " " + Loc.Get("stats_fps") + " | " + Loc.Get("stats_eta") + ": " + eta;
+                                            statusLabel.Text = "Unity: Processing " + processedFiles + "/" + totalFiles + " (" + (totalFiles > 0 ? (processedFiles * 100 / totalFiles).ToString() : "0") + "%)";
+                                        }
+                                    }
+                                    else if (data.StartsWith("Processing:") && lastStatus != data)
+                                    {
+                                        lastStatus = data;
+                                        statusLabel.Text = "Unity: " + data;
+                                    }
+                                });
+                            }
+                        };
+                        process.ErrorDataReceived += delegate(object sender, DataReceivedEventArgs e)
+                        {
+                            if (!string.IsNullOrEmpty(e.Data))
+                            {
+                                this.BeginInvoke((MethodInvoker)delegate { WriteLog("ERROR: " + e.Data); });
+                            }
+                        };
+                        process.BeginOutputReadLine();
+                        process.BeginErrorReadLine();
+                        process.WaitForExit();
+                    }
+                }
+
+                this.BeginInvoke((MethodInvoker)delegate
+                {
+                    progressBar.Value = progressBar.Maximum;
+                    statusLabel.Text = "Unity: Complete";
+                    statsLabel.Text = Loc.Get("stats_processed") + ": " + processedFiles + " / " + totalFiles;
+                    WriteLog("Unity extraction complete! Output: " + outputDir);
+                    MessageBox.Show("Unity extraction complete!\n\nExtracted: " + processedFiles + " files\n\nOutput: " + outputDir, "Unity Extractor", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                });
+            }
+            catch (Exception ex)
+            {
+                this.BeginInvoke((MethodInvoker)delegate
+                {
+                    progressBar.Value = 0;
+                    statusLabel.Text = "Unity: Error";
+                    WriteLog("Unity extraction error: " + ex.Message);
+                });
+            }
+        }
+
+        private static string GetUnityExtractionScript()
+        {
+            return @"# -*- coding: utf-8 -*-
+from __future__ import print_function
+import sys
+import io
+import os
+
+if sys.version_info[0] >= 3:
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
+import UnityPy
+
+game_path = os.environ.get('GAME_PATH', '')
+output_path = os.environ.get('OUTPUT_PATH', '')
+extract_mode = os.environ.get('EXTRACT_MODE', 'all')
+
+if not game_path or not output_path:
+    print('ERROR: GAME_PATH or OUTPUT_PATH not set in environment', file=sys.stderr)
+    print('Arguments received:', sys.argv, file=sys.stderr)
+    print('GAME_PATH:', game_path, file=sys.stderr)
+    print('OUTPUT_PATH:', output_path, file=sys.stderr)
+    sys.stderr.flush()
+    sys.exit(1)
+
+os.makedirs(output_path, exist_ok=True)
+
+def extract_file(file_path, output, mode, progress_queue):
+    total = 0
+    try:
+        env = UnityPy.load(file_path)
+        
+        has_textures = any(obj.type.name == 'Texture2D' for obj in env.objects)
+        if not has_textures and mode in ['textures', 'all']:
+            return 0
+        
+        print('Processing: ' + os.path.basename(file_path))
+        sys.stdout.flush()
+        
+        file_output = os.path.join(output, os.path.splitext(os.path.basename(file_path))[0])
+        os.makedirs(file_output, exist_ok=True)
+        
+        textures = 0
+        videos = 0
+        audios = 0
+        obj_count = 0
+        total_objs = len(env.objects)
+        
+        for obj in env.objects:
+            try:
+                if mode in ['textures', 'all']:
+                    if obj.type.name == 'Texture2D':
+                        data = obj.read()
+                        name = getattr(data, 'name', None) or getattr(data, 'm_Name', 'texture_' + str(textures))
+                        safe_name = ''.join(c for c in str(name) if c.isalnum() or c in '._- ')
+                        
+                        if hasattr(data, 'image') and data.image:
+                            img_path = os.path.join(file_output, safe_name + '.png')
+                            data.image.save(img_path)
+                            textures += 1
+                            total += 1
+                
+                if mode in ['videos', 'all']:
+                    if obj.type.name == 'VideoClip':
+                        data = obj.read()
+                        name = getattr(data, 'm_Name', 'video_' + str(videos))
+                        safe_name = ''.join(c for c in str(name) if c.isalnum() or c in '._- ')
+                        print('  Video: ' + safe_name)
+                        videos += 1
+                
+                if mode in ['audios', 'all']:
+                    if obj.type.name == 'AudioClip':
+                        data = obj.read()
+                        name = getattr(data, 'name', None) or getattr(data, 'm_Name', 'audio_' + str(audios))
+                        safe_name = ''.join(c for c in str(name) if c.isalnum() or c in '._- ')
+                        
+                        audio_data = getattr(data, 'audio_data', None) or getattr(data, 'm_AudioData', None)
+                        if audio_data:
+                            audio_path = os.path.join(file_output, safe_name + '.wav')
+                            with open(audio_path, 'wb') as f:
+                                f.write(audio_data)
+                            audios += 1
+                            total += 1
+                
+                obj_count += 1
+                if obj_count % 50 == 0:
+                    progress_queue.put(total)
+                    print('PROGRESS:' + str(total))
+                    sys.stdout.flush()
+            
+            except Exception as e:
+                pass
+        
+        if textures > 0 or audios > 0:
+            print('  +' + str(textures) + ' textures, +' + str(audios) + ' audios')
+            sys.stdout.flush()
+        
+    except Exception as e:
+        print('Error: ' + str(e))
+        sys.stdout.flush()
+    
+    return total
+
+print('Unity Asset Extractor')
+print('Game: ' + game_path)
+print('Output: ' + output_path)
+print('Mode: ' + extract_mode)
+print('-' * 50)
+
+total_extracted = 0
+all_files = []
+
+# Find all *_Data folders and collect files
+data_folders = []
+for item in os.listdir(game_path):
+    if item.endswith('_Data'):
+        data_folders.append(os.path.join(game_path, item))
+
+if not data_folders:
+    print('No Unity data folders found')
+else:
+    for data_folder in data_folders:
+        try:
+            for f in os.listdir(data_folder):
+                if f.endswith('.assets') and not f.endswith('.resS'):
+                    all_files.append(os.path.join(data_folder, f))
+        except Exception as e:
+            print('Error scanning data folder: ' + str(e))
+        
+        ggm_path = os.path.join(data_folder, 'globalgamemanagers.assets')
+        if os.path.exists(ggm_path):
+            all_files.append(ggm_path)
+        
+        streaming = os.path.join(data_folder, 'StreamingAssets', 'aa', 'StandaloneWindows64')
+        if os.path.exists(streaming):
+            try:
+                for bundle_file in os.listdir(streaming):
+                    if bundle_file.endswith('.bundle'):
+                        all_files.append(os.path.join(streaming, bundle_file))
+            except Exception as e:
+                print('Error scanning bundles: ' + str(e))
+
+print('Found ' + str(len(all_files)) + ' files to process')
+sys.stdout.flush()
+print('TOTAL:' + str(len(all_files)))
+sys.stdout.flush()
+
+progress_queue = []
+
+for i, file_path in enumerate(all_files):
+    print('PROGRESS:' + str(i) + ':' + str(len(all_files)))
+    sys.stdout.flush()
+    total_extracted += extract_file(file_path, output_path, extract_mode, progress_queue)
+
+print('-' * 50)
+print('Done! Extracted ' + str(total_extracted) + ' assets')
+sys.stdout.flush()
+";
+        }
+
         private void TogglePause()
         {
             if (currentRun == null) return;
@@ -748,11 +1146,16 @@ namespace RpgmvpConverterWinForms
                     bool hasImg = Directory.Exists(Path.Combine(current.FullName, "img"));
                     bool hasGame = Directory.Exists(Path.Combine(current.FullName, "game"));
                     bool hasExe = Directory.EnumerateFiles(current.FullName, "*.exe", SearchOption.TopDirectoryOnly).Any();
+                    bool hasUnityData = Directory.GetDirectories(current.FullName, "*_Data", SearchOption.TopDirectoryOnly).Any();
+                    bool hasUnityPlayer = File.Exists(Path.Combine(current.FullName, "UnityPlayer.dll"));
+                    bool hasManaged = Directory.Exists(Path.Combine(current.FullName, "Managed"));
 
                     if (string.Equals(current.Name, "Game", StringComparison.OrdinalIgnoreCase) ||
                         (hasWww && (hasPackage || hasWwwData || hasExe)) ||
                         (hasPackage && hasData && hasImg) ||
-                        (hasGame && hasExe))
+                        (hasGame && hasExe) ||
+                        (hasUnityData && hasExe) ||
+                        (hasUnityPlayer && hasManaged))
                         return current.FullName;
 
                     current = current.Parent;
