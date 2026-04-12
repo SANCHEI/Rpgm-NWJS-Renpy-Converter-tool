@@ -35,7 +35,7 @@ namespace UnityExtractorWinForms
 
         private void BuildUi()
         {
-            Text = "Unity Asset Extractor";
+            Text = "Game Asset Tool";
             StartPosition = FormStartPosition.CenterScreen;
             Size = new Size(700, 600);
             FormBorderStyle = FormBorderStyle.FixedSingle;
