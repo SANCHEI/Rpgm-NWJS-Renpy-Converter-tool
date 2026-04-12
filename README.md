@@ -2,23 +2,25 @@
 
 A Windows desktop application for converting RPGMV encrypted image files (.rpgmvp, .png_) to standard PNG format.
 
-![RPGMVP Converter](https://img.shields.io/badge/Platform-Windows-blue)
+![Platform](https://img.shields.io/badge/Platform-Windows-blue)
 ![.NET](https://img.shields.io/badge/.NET-4.0+-purple)
 ![License](https://img.shields.io/badge/License-MIT-green)
+
+![Screenshot](screenshot.png)
 
 ## Features
 
 - **RPGMVP Conversion** - Convert .rpgmvp and .png_ files to PNG
-- **RPA Extraction** - Extract files from Ren'Py RPA archives
-- **Unlocker** - Install unlocker mods for Universal Gallery games
+- **Unlocker** - Install unlocker mods for Universal Gallery games (RPGM/NWJS)
 - **Multi-language** - English and Russian interface
 - **Live Progress** - Real-time progress tracking with ETA
+- **Auto-detect** - Automatically finds game root and HEX key
 - **Parallel Processing** - Multi-threaded conversion for speed
 
 ## Installation
 
 ### Pre-built Executable
-Download the latest release from the [Releases](https://github.com/YOUR_USERNAME/RpgmvpConverterWinForms/releases) page.
+Download the latest release from the [Releases](https://github.com/SANCHEI/Universal-tool/releases) page.
 
 ### Build from Source
 ```batch
@@ -30,28 +32,13 @@ The executable will be created in the `bin` folder.
 ### Requirements
 - Windows 7 or later
 - .NET Framework 4.0 or later
-- For RPA extraction: Python 3 with `unrpa` module (`pip install unrpa`)
 
 ## Usage
 
-### RPGMVP Tab
-1. Select your game folder using "Browse" or "Game Root"
-2. Enter the HEX encryption key (or it will be auto-detected from System.json)
+1. Select your game folder using "Browse"
+2. HEX key is auto-detected from System.json
 3. Click "Start" to begin conversion
-
-### RPA Extract Tab
-1. Select the game folder containing .rpa files
-2. Click "Extract RPA" to extract files
-
-### Unlocker Tab
-1. Select your game folder
-2. Choose Soft or Hard mode
-3. Click "Unlocker" to install
-
-## Keyboard Shortcuts
-| Key | Action |
-|-----|--------|
-| Enter | Start conversion |
+4. Use "Unlock Gallery" to install gallery unlocker (RPGM/NWJS games only)
 
 ## Building
 
@@ -59,32 +46,30 @@ The executable will be created in the `bin` folder.
 - Windows OS
 - .NET Framework 4.0+ (CSC compiler)
 
-### Files
-- `Program.cs` - Application entry point
-- `RpgmvpConverterForm.cs` - Main form
-- `RpaExtractor.cs` - RPA file handling
-- `UnlockerResources.cs` - Embedded unlocker files
-- `Localization.cs` - Language strings
+### Project Files
+```
+RpgmvpConverterWinForms/
+├── Program.cs              - Application entry point
+├── RpgmvpConverterForm.cs - Main form
+├── UnlockerResources.cs    - Embedded unlocker files
+├── Localization.cs         - Language strings
+├── RpaExtractor.cs         - RPA file handling
+├── build_winforms.bat      - Build script
+├── .github/workflows/build.yml - CI/CD
+└── bin/                    - Output directory
+```
 
 ## Language
 
 The application supports:
-- English
+- English (default)
 - Russian (Русский)
 
-Switch language using the dropdown in the top-right corner.
+Switch language using the RU/EN button in the top-right corner.
 
 ## License
 
 MIT License - Feel free to use and modify.
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
 
 ## Support
 
