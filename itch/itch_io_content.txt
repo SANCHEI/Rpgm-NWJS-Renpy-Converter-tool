@@ -27,16 +27,16 @@ Convert, Extract, Unlock - All-in-one game modding utility
 ## Details
 
 ### Description
-**Game Asset Tool** is a powerful utility for game modding, asset extraction, and unlocking hidden content.
+Game Asset Tool is a powerful utility for game modding, asset extraction, and unlocking hidden content.
 
-**Watch Demo**: https://youtu.be/y7z-_byQjXo
+Watch Demo: https://youtu.be/y7z-_byQjXo
 
 ### Features
-- **RPGMVP / NWJS Converter** - Convert encrypted RPGMVP images to PNG with auto-detect key, live progress, ETA and pause/cancel
-- **Unity Asset Extractor** - Extract textures from `.assets` and `.bundle` files (auto-installs UnityPy)
-- **Renpy RPA Extraction** - Extract files from Renpy `.rpa` archives (no Python dependencies required)
-- **Gallery Unlocker** - Unlock galleries in Renpy/NWJS games
-- **Auto-Detection** - Automatically detect game type and encryption key
+- RPGMVP / NWJS Converter - Convert encrypted RPGMVP images to PNG with auto-detect key, live progress, ETA and pause/cancel
+- Unity Asset Extractor - Extract textures from .assets and .bundle files (auto-installs UnityPy)
+- Renpy RPA Extraction - Extract files from Renpy .rpa archives (no Python dependencies required)
+- Gallery Unlocker - Unlock galleries in Renpy/NWJS games
+- Auto-Detection - Automatically detect game type and encryption key
 
 ### Supported Games
 - RPG Maker MV/MZ (RPGMVP encryption)
@@ -57,9 +57,9 @@ Convert, Extract, Unlock - All-in-one game modding utility
 
 ### Output
 - RPGMVP/NWJS: Extracted PNGs in original folders
-- Unity: Textures in `game_folder/extracted/`
-- Renpy RPA: Extracted files in `game_folder/extracted/`
-- Unlocker: Mod files in `game/_mods/`
+- Unity: Textures in game_folder/extracted/
+- Renpy RPA: Extracted files in game_folder/extracted/
+- Unlocker: Mod files in game/_mods/
 
 ---
 
