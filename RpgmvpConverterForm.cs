@@ -29,7 +29,6 @@ namespace RpgmvpConverterWinForms
 
         private Label titleLabel;
         private Label subtitleLabel;
-        private Button langButton;
 
         private Label rootLabel;
         private TextBox pathBox;
@@ -76,7 +75,6 @@ namespace RpgmvpConverterWinForms
                 pathBox.Text = initialRoot;
                 TryAutoDetectKey(initialRoot);
             }
-            ApplyLocalization();
         }
 
         private void BuildUi()
@@ -86,7 +84,7 @@ namespace RpgmvpConverterWinForms
             Font titleFont = new Font("Segoe UI Semibold", 13f, FontStyle.Regular);
             Font logFont = new Font("Consolas", 10f, FontStyle.Regular);
 
-            Text = Loc.Get("app_title");
+            Text = "RPGMVP/PNG_ -> PNG ULTRA";
             StartPosition = FormStartPosition.CenterScreen;
             MinimumSize = new Size(900, 850);
             Size = new Size(900, 850);
@@ -108,7 +106,7 @@ namespace RpgmvpConverterWinForms
 
             titleLabel = new Label
             {
-                Text = Loc.Get("app_title"),
+                Text = "RPGMVP/PNG_ -> PNG ULTRA",
                 Font = titleFont,
                 ForeColor = textColor,
                 Location = new Point(18, 10),
@@ -119,7 +117,7 @@ namespace RpgmvpConverterWinForms
 
             subtitleLabel = new Label
             {
-                Text = Loc.Get("app_subtitle"),
+                Text = "Fast conversion + Unity Extractor + Unlocker",
                 ForeColor = mutedColor,
                 Location = new Point(19, 38),
                 Size = new Size(500, 20),
@@ -127,26 +125,11 @@ namespace RpgmvpConverterWinForms
             };
             header.Controls.Add(subtitleLabel);
 
-            langButton = new Button
-            {
-                Text = Loc.CurrentLanguage == "en" ? "RU" : "EN",
-                Location = new Point(800, 18),
-                Size = new Size(70, 32),
-                BackColor = accentColor,
-                ForeColor = formBack,
-                Font = uiBold,
-                FlatStyle = FlatStyle.Flat,
-                Cursor = Cursors.Hand
-            };
-            langButton.FlatAppearance.BorderSize = 0;
-            langButton.Click += OnLangButtonClick;
-            header.Controls.Add(langButton);
-
             int y = 100;
 
             rootLabel = new Label
             {
-                Text = Loc.Get("root_label"),
+                Text = "Game Root",
                 Location = new Point(18, y),
                 Size = new Size(100, 20),
                 ForeColor = mutedColor,
@@ -178,22 +161,22 @@ namespace RpgmvpConverterWinForms
             pathBox.TextChanged += delegate(object sender, EventArgs e) { OnPathChanged(); };
             pathPanel.Controls.Add(pathBox);
 
-            browseButton = CreateButton(Loc.Get("browse_btn"), new Point(676, 3), new Size(168, 28), accentColor, formBack, uiBold);
+            browseButton = CreateButton("...", new Point(676, 3), new Size(168, 28), accentColor, formBack, uiBold);
             browseButton.Click += delegate { BrowseFolder(); };
             pathPanel.Controls.Add(browseButton);
 
             y += 42;
 
-            startButton = CreateButton(Loc.Get("start_btn"), new Point(18, y), new Size(100, 34), successColor, formBack, uiBold);
+            startButton = CreateButton("Start", new Point(18, y), new Size(100, 34), successColor, formBack, uiBold);
             startButton.Click += async delegate { await StartConversionAsync(); };
             Controls.Add(startButton);
 
-            pauseButton = CreateButton(Loc.Get("pause_btn"), new Point(126, y), new Size(100, 34), warningColor, Color.Black, uiBold);
+            pauseButton = CreateButton("Pause", new Point(126, y), new Size(100, 34), warningColor, Color.Black, uiBold);
             pauseButton.Enabled = false;
             pauseButton.Click += delegate { TogglePause(); };
             Controls.Add(pauseButton);
 
-            cancelButton = CreateButton(Loc.Get("cancel_btn"), new Point(234, y), new Size(100, 34), dangerColor, textColor, uiBold);
+            cancelButton = CreateButton("Cancel", new Point(234, y), new Size(100, 34), dangerColor, textColor, uiBold);
             cancelButton.Enabled = false;
             cancelButton.Click += delegate { CancelConversion(); };
             Controls.Add(cancelButton);
@@ -212,7 +195,7 @@ namespace RpgmvpConverterWinForms
 
             keyLabelInner = new Label
             {
-                Text = Loc.Get("key_label"),
+                Text = "HEX key",
                 Location = new Point(8, 8),
                 Size = new Size(80, 20),
                 ForeColor = mutedColor,
@@ -233,7 +216,7 @@ namespace RpgmvpConverterWinForms
 
             engineRpgmLabel = new Label
             {
-                Text = Loc.Get("engine_rpgm"),
+                Text = "RPGM",
                 Location = new Point(755, 8),
                 Size = new Size(45, 20),
                 ForeColor = Color.FromArgb(68, 197, 255),
@@ -244,7 +227,7 @@ namespace RpgmvpConverterWinForms
 
             engineNwjsLabel = new Label
             {
-                Text = Loc.Get("engine_nwjs"),
+                Text = "NWJS",
                 Location = new Point(805, 8),
                 Size = new Size(45, 20),
                 ForeColor = Color.FromArgb(255, 105, 180),
@@ -257,7 +240,7 @@ namespace RpgmvpConverterWinForms
 
             unlockerLabel = new Label
             {
-                Text = Loc.Get("unlocker_label"),
+                Text = "Gallery Unlocker",
                 Location = new Point(18, y),
                 Size = new Size(300, 20),
                 ForeColor = mutedColor,
@@ -275,12 +258,12 @@ namespace RpgmvpConverterWinForms
                 ForeColor = textColor,
                 FlatStyle = FlatStyle.Flat
             };
-            unlockerModeBox.Items.Add(Loc.Get("unlocker_soft"));
-            unlockerModeBox.Items.Add(Loc.Get("unlocker_hard"));
+            unlockerModeBox.Items.Add("Soft");
+            unlockerModeBox.Items.Add("Hard");
             unlockerModeBox.SelectedIndex = 0;
             Controls.Add(unlockerModeBox);
 
-            unlockerButton = CreateButton(Loc.Get("unlocker_btn"), new Point(130, y - 3), new Size(160, 30), pinkColor, formBack, uiBold);
+            unlockerButton = CreateButton("Unlock", new Point(130, y - 3), new Size(160, 30), pinkColor, formBack, uiBold);
             unlockerButton.Click += delegate { StartUnlocker(); };
             Controls.Add(unlockerButton);
 
@@ -288,7 +271,7 @@ namespace RpgmvpConverterWinForms
 
             unityLabel = new Label
             {
-                Text = Loc.Get("unity_label"),
+                Text = "Unity Extractor",
                 Location = new Point(18, y),
                 Size = new Size(300, 20),
                 ForeColor = mutedColor,
@@ -306,13 +289,13 @@ namespace RpgmvpConverterWinForms
                 ForeColor = textColor,
                 FlatStyle = FlatStyle.Flat
             };
-            unityExtractModeBox.Items.Add(Loc.Get("unity_mode_textures"));
-            unityExtractModeBox.Items.Add(Loc.Get("unity_mode_videos"));
-            unityExtractModeBox.Items.Add(Loc.Get("unity_mode_all"));
+            unityExtractModeBox.Items.Add("Textures");
+            unityExtractModeBox.Items.Add("Videos");
+            unityExtractModeBox.Items.Add("All");
             unityExtractModeBox.SelectedIndex = 0;
             Controls.Add(unityExtractModeBox);
 
-            unityExtractButton = CreateButton(Loc.Get("unity_extract_btn"), new Point(180, y - 3), new Size(160, 30), Color.FromArgb(138, 98, 255), formBack, uiBold);
+            unityExtractButton = CreateButton("Extract", new Point(180, y - 3), new Size(160, 30), Color.FromArgb(138, 98, 255), formBack, uiBold);
             unityExtractButton.Click += delegate { StartUnityExtraction(); };
             Controls.Add(unityExtractButton);
 
@@ -330,7 +313,7 @@ namespace RpgmvpConverterWinForms
 
             statusLabel = new Label
             {
-                Text = Loc.Get("status_waiting"),
+                Text = "Waiting to start",
                 Location = new Point(18, y),
                 Size = new Size(852, 20),
                 ForeColor = textColor,
@@ -343,7 +326,7 @@ namespace RpgmvpConverterWinForms
 
             statsLabel = new Label
             {
-                Text = Loc.Get("stats_processed") + ": 0 / 0 | " + Loc.Get("stats_speed") + ": 0.00 " + Loc.Get("stats_fps") + " | " + Loc.Get("stats_eta") + ": --:--",
+                Text = "Processed: 0 / 0 | Speed: 0.00 f/s | ETA: --:--",
                 Location = new Point(18, y),
                 Size = new Size(852, 20),
                 ForeColor = mutedColor,
@@ -364,7 +347,7 @@ namespace RpgmvpConverterWinForms
 
             Label logHeader = new Label
             {
-                Text = Loc.Get("log_header"),
+                Text = "Log",
                 Location = new Point(10, 10),
                 Size = new Size(60, 20),
                 ForeColor = mutedColor,
@@ -375,7 +358,7 @@ namespace RpgmvpConverterWinForms
 
             Button clearLogButton = new Button
             {
-                Text = Loc.Get("clear_log_btn"),
+                Text = "Clear",
                 Location = new Point(75, 8),
                 Size = new Size(80, 24),
                 BackColor = Color.FromArgb(45, 50, 60),
@@ -426,60 +409,6 @@ namespace RpgmvpConverterWinForms
             uiTimer.Tick += delegate { UpdateUiFromRun(); };
         }
 
-        private void OnLangButtonClick(object sender, EventArgs e)
-        {
-            string newLang = Loc.CurrentLanguage == "en" ? "ru" : "en";
-            Loc.SetLanguage(newLang);
-            ApplyLocalization();
-        }
-
-        private void ApplyLocalization()
-        {
-            titleLabel.Text = Loc.Get("app_title");
-            subtitleLabel.Text = Loc.Get("app_subtitle");
-            langButton.Text = Loc.CurrentLanguage == "en" ? "RU" : "EN";
-
-            rootLabel.Text = Loc.Get("root_label");
-            browseButton.Text = Loc.Get("browse_btn");
-            keyLabelInner.Text = Loc.Get("key_label");
-            engineRpgmLabel.Text = Loc.Get("engine_rpgm");
-            engineNwjsLabel.Text = Loc.Get("engine_nwjs");
-
-            unlockerLabel.Text = Loc.Get("unlocker_label");
-            unlockerButton.Text = Loc.Get("unlocker_btn");
-            if (unlockerModeBox.Items.Count >= 2)
-            {
-                unlockerModeBox.Items[0] = Loc.Get("unlocker_soft");
-                unlockerModeBox.Items[1] = Loc.Get("unlocker_hard");
-            }
-
-            unityLabel.Text = Loc.Get("unity_label");
-            unityExtractButton.Text = Loc.Get("unity_extract_btn");
-            if (unityExtractModeBox.Items.Count >= 3)
-            {
-                unityExtractModeBox.Items[0] = Loc.Get("unity_mode_textures");
-                unityExtractModeBox.Items[1] = Loc.Get("unity_mode_videos");
-                unityExtractModeBox.Items[2] = Loc.Get("unity_mode_all");
-            }
-
-            startButton.Text = currentRun == null ? Loc.Get("start_btn") : startButton.Text;
-            pauseButton.Text = currentRun != null && currentRun.IsPaused ? Loc.Get("resume_btn") : Loc.Get("pause_btn");
-            cancelButton.Text = Loc.Get("cancel_btn");
-
-            statusLabel.Text = currentRun == null ? Loc.Get("status_waiting") : statusLabel.Text;
-            UpdateStatsLabel();
-
-            Refresh();
-        }
-
-        private void UpdateStatsLabel()
-        {
-            if (currentRun == null)
-            {
-                statsLabel.Text = Loc.Get("stats_processed") + ": 0 / 0 | " + Loc.Get("stats_speed") + ": 0.00 " + Loc.Get("stats_fps") + " | " + Loc.Get("stats_eta") + ": --:--";
-            }
-        }
-
         private void TryAutoDetectKey(string path)
         {
             if (string.IsNullOrWhiteSpace(keyBox.Text))
@@ -526,7 +455,7 @@ namespace RpgmvpConverterWinForms
         {
             using (OpenFileDialog dialog = new OpenFileDialog())
             {
-                dialog.Title = Loc.Get("folder_dialog_title");
+                dialog.Title = "Select Game Folder";
                 dialog.CheckFileExists = false;
                 dialog.CheckPathExists = true;
                 dialog.FileName = "Select Folder";
@@ -562,7 +491,7 @@ namespace RpgmvpConverterWinForms
             string rootPath = pathBox.Text.Trim();
             if (!Directory.Exists(rootPath))
             {
-                WriteLog(Loc.Get("msg_invalid_path"));
+                WriteLog("Invalid path");
                 return;
             }
 
@@ -571,11 +500,11 @@ namespace RpgmvpConverterWinForms
                 string detectedKey = TryFindKey(rootPath);
                 if (string.IsNullOrWhiteSpace(detectedKey))
                 {
-                    WriteLog(Loc.Get("msg_key_not_found"));
+                    WriteLog("Key not found");
                     return;
                 }
                 keyBox.Text = detectedKey;
-                WriteLog(Loc.Get("key_found") + ": " + detectedKey);
+                WriteLog("Key found" + ": " + detectedKey);
             }
 
             byte[] keyBytes;
@@ -585,20 +514,20 @@ namespace RpgmvpConverterWinForms
             }
             catch
             {
-                WriteLog(Loc.Get("invalid_key"));
+                WriteLog("Invalid key format");
                 return;
             }
 
             if (keyBytes.Length < 16)
             {
-                WriteLog(Loc.Get("msg_key_too_short"));
+                WriteLog("Key too short (min 16 bytes)");
                 return;
             }
 
             List<string> files = GetFilesToConvert(rootPath);
             if (files.Count == 0)
             {
-                WriteLog(Loc.Get("msg_no_files"));
+                WriteLog("No .rpgmvp/.png_ files found");
                 return;
             }
 
@@ -610,12 +539,12 @@ namespace RpgmvpConverterWinForms
 
             progressBar.Maximum = files.Count;
             progressBar.Value = 0;
-            statusLabel.Text = Loc.Get("status_preparing");
-            statsLabel.Text = string.Format("{0}: 0 / {1} | {2}: 0.00 {3} | {4}: --:--", Loc.Get("stats_processed"), files.Count, Loc.Get("stats_speed"), Loc.Get("stats_fps"), Loc.Get("stats_eta"));
-            pauseButton.Text = Loc.Get("pause_btn");
+            statusLabel.Text = "Preparing...";
+            statsLabel.Text = string.Format("Processed: 0 / {0} | Speed: 0.00 f/s | ETA: --:--", files.Count);
+            pauseButton.Text = "Pause";
 
-            WriteLog(string.Format("{0}: {1} | {2}: {3}", Loc.Get("msg_started"), files.Count, Loc.Get("msg_threads"), workerCount));
-            WriteLog(Loc.Get("msg_skip_tilesets"));
+            WriteLog(string.Format("Started: {0} | threads: {1}", files.Count, workerCount));
+            WriteLog("Skipping: img/tilesets, img/weather");
 
             uiTimer.Start();
             currentRun.Start();
@@ -627,7 +556,7 @@ namespace RpgmvpConverterWinForms
             }
             catch (Exception ex)
             {
-                WriteLog(Loc.Get("msg_errors") + ": " + ex.Message);
+                WriteLog("Errors" + ": " + ex.Message);
                 FinishConversion(true);
             }
         }
@@ -637,7 +566,7 @@ namespace RpgmvpConverterWinForms
             string rootPath = pathBox.Text.Trim();
             if (!Directory.Exists(rootPath))
             {
-                WriteLog(Loc.Get("msg_invalid_path"));
+                WriteLog("Invalid path");
                 return;
             }
 
@@ -658,8 +587,8 @@ namespace RpgmvpConverterWinForms
                 string[] existingMods = Directory.GetDirectories(modsPath, "ZLZK_UGU_*");
                 if (existingMods.Length > 0)
                 {
-                    WriteLog(Loc.Get("unlocker_installed"));
-                    MessageBox.Show(Loc.Get("unlocker_installed"), "Unlocker", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    WriteLog("Unlocker already installed");
+                    MessageBox.Show("Unlocker already installed", "Unlocker", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
 
@@ -669,18 +598,18 @@ namespace RpgmvpConverterWinForms
 
                 if (Directory.Exists(destPath))
                 {
-                    WriteLog(Loc.Get("unlocker_install_success"));
-                    WriteLog(Loc.Get("unlocker_install_path") + ": " + destPath);
-                    MessageBox.Show(Loc.Get("unlocker_install_success") + "\n\n" + Loc.Get("unlocker_remove_note"), "Unlocker", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    WriteLog("Unlocker installed successfully");
+                    WriteLog("Installed to" + ": " + destPath);
+                    MessageBox.Show("Unlocker installed successfully" + "\n\n" + "Run game to activate. Remove for uninstall.", "Unlocker", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 else
                 {
-                    WriteLog(Loc.Get("unlocker_install_error"));
+                    WriteLog("Installation error");
                 }
             }
             catch (Exception ex)
             {
-                WriteLog(Loc.Get("unlocker_install_error") + ": " + ex.Message);
+                    WriteLog("Installation error" + ": " + ex.Message);
             }
         }
 
@@ -700,7 +629,7 @@ namespace RpgmvpConverterWinForms
             string rootPath = pathBox.Text.Trim();
             if (!Directory.Exists(rootPath))
             {
-                WriteLog(Loc.Get("msg_invalid_path"));
+                WriteLog("Invalid path");
                 return;
             }
 
@@ -745,7 +674,7 @@ namespace RpgmvpConverterWinForms
                 progressBar.Maximum = 100;
                 progressBar.Value = 0;
                 statusLabel.Text = "Unity: Scanning...";
-                statsLabel.Text = Loc.Get("stats_eta") + ": --:--";
+                statsLabel.Text = "ETA: --:--";
 
                 int totalFiles = 0;
                 int processedFiles = 0;
@@ -805,7 +734,7 @@ namespace RpgmvpConverterWinForms
                                             double speed = processedFiles / elapsed;
                                             int remaining = totalFiles - processedFiles;
                                             string eta = speed > 0 ? FormatDuration(remaining / speed) : "--:--";
-                                            statsLabel.Text = Loc.Get("stats_processed") + ": " + processedFiles + " / " + totalFiles + " | " + Loc.Get("stats_speed") + ": " + speed.ToString("N2") + " " + Loc.Get("stats_fps") + " | " + Loc.Get("stats_eta") + ": " + eta;
+                                            statsLabel.Text = "Processed: " + processedFiles + " / " + totalFiles + " | Speed: " + speed.ToString("N2") + " f/s | ETA: " + eta;
                                             statusLabel.Text = "Unity: Processing " + processedFiles + "/" + totalFiles + " (" + (totalFiles > 0 ? (processedFiles * 100 / totalFiles).ToString() : "0") + "%)";
                                         }
                                     }
@@ -834,7 +763,7 @@ namespace RpgmvpConverterWinForms
                 {
                     progressBar.Value = progressBar.Maximum;
                     statusLabel.Text = "Unity: Complete";
-                    statsLabel.Text = Loc.Get("stats_processed") + ": " + processedFiles + " / " + totalFiles;
+                    statsLabel.Text = "Processed: " + processedFiles + " / " + totalFiles;
                     WriteLog("Unity extraction complete! Output: " + outputDir);
                     MessageBox.Show("Unity extraction complete!\n\nExtracted: " + processedFiles + " files\n\nOutput: " + outputDir, "Unity Extractor", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 });
@@ -1018,19 +947,19 @@ sys.stdout.flush()
             if (currentRun.IsPaused)
             {
                 currentRun.Resume();
-                pauseButton.Text = Loc.Get("pause_btn");
+                pauseButton.Text = "Pause";
                 pauseButton.BackColor = warningColor;
                 pauseButton.ForeColor = Color.Black;
-                WriteLog(Loc.Get("msg_resumed"));
+                WriteLog("Processing resumed");
             }
             else
             {
                 currentRun.Pause();
-                pauseButton.Text = Loc.Get("resume_btn");
+                pauseButton.Text = "Resume";
                 pauseButton.BackColor = accentColor;
                 pauseButton.ForeColor = textColor;
-                statusLabel.Text = Loc.Get("status_paused");
-                WriteLog(Loc.Get("msg_pause_enabled"));
+                statusLabel.Text = "Paused";
+                WriteLog("Pause enabled");
             }
         }
 
@@ -1041,8 +970,8 @@ sys.stdout.flush()
                 currentRun.Cancel();
                 cancelButton.Enabled = false;
                 pauseButton.Enabled = false;
-                statusLabel.Text = Loc.Get("status_stopping");
-                WriteLog(Loc.Get("msg_cancel_requested"));
+                statusLabel.Text = "Stopping...";
+                WriteLog("Stop requested");
             }
         }
 
@@ -1054,17 +983,17 @@ sys.stdout.flush()
             progressBar.Value = Math.Min(processed, progressBar.Maximum);
 
             if (currentRun.CancelRequested)
-                statusLabel.Text = Loc.Get("status_stopping");
+                statusLabel.Text = "Stopping...";
             else if (currentRun.IsPaused)
-                statusLabel.Text = Loc.Get("status_paused");
+                statusLabel.Text = "Paused";
             else
-                statusLabel.Text = Loc.Get("status_processing") + ": " + (string.IsNullOrWhiteSpace(currentRun.CurrentFile) ? "..." : currentRun.CurrentFile);
+                statusLabel.Text = "Processing" + ": " + (string.IsNullOrWhiteSpace(currentRun.CurrentFile) ? "..." : currentRun.CurrentFile);
 
             double elapsedSeconds = Math.Max((DateTime.UtcNow - currentRun.StartUtc).TotalSeconds, 0.001d);
             double speed = processed / elapsedSeconds;
             int remaining = currentRun.TotalCount - processed;
             string eta = speed > 0d && !currentRun.IsPaused ? FormatDuration(remaining / speed) : "--:--";
-            statsLabel.Text = string.Format("{0}: {1} / {2} | {3}: {4:N2} {5} | {6}: {7}", Loc.Get("stats_processed"), processed, currentRun.TotalCount, Loc.Get("stats_speed"), speed, Loc.Get("stats_fps"), Loc.Get("stats_eta"), eta);
+            statsLabel.Text = string.Format("Processed: {0} / {1} | Speed: {2:N2} f/s | ETA: {3}", processed, currentRun.TotalCount, speed, eta);
         }
 
         private void FinishConversion(bool cancelled)
@@ -1083,19 +1012,19 @@ sys.stdout.flush()
 
             if (cancelled)
             {
-                statusLabel.Text = Loc.Get("status_cancelled");
-                statsLabel.Text = string.Format("{0}: {1} / {2} | {3}: {4:N2} {5}", Loc.Get("stats_processed"), processed, finished.TotalCount, Loc.Get("stats_speed"), speed, Loc.Get("stats_fps"));
-                WriteLog(Loc.Get("msg_cancelled") + ": " + processed);
+                statusLabel.Text = "Cancelled";
+                statsLabel.Text = string.Format("Processed: {0} / {1} | Speed: {2:N2} f/s", processed, finished.TotalCount, speed);
+                WriteLog("Cancelled" + ": " + processed);
                 return;
             }
 
-            statusLabel.Text = Loc.Get("status_done");
-            statsLabel.Text = string.Format("{0}: {1} / {2} | {3}: {4:N2} {5} | {6}: 00:00", Loc.Get("stats_processed"), processed, finished.TotalCount, Loc.Get("stats_speed"), speed, Loc.Get("stats_fps"), Loc.Get("stats_eta"));
+            statusLabel.Text = "Done";
+            statsLabel.Text = string.Format("Processed: {0} / {1} | Speed: {2:N2} f/s | ETA: 00:00", processed, finished.TotalCount, speed);
 
             if (finished.ErrorCount > 0)
-                WriteLog(string.Format("{0}: {1}. {2}: {3}", Loc.Get("msg_errors"), finished.ErrorCount, Loc.Get("msg_last_error"), finished.LastError));
+                WriteLog(string.Format("Errors: {0}. Last error: {1}", finished.ErrorCount, finished.LastError));
             else
-                WriteLog(string.Format("{0} {1} {2} {3}.", Loc.Get("msg_completed"), processed, Loc.Get("msg_files_processed"), FormatDuration(elapsedSeconds)));
+                WriteLog(string.Format("Completed {0} {1} {2}.", processed, "files processed in", FormatDuration(elapsedSeconds)));
         }
 
         private void SetRunningState(bool running)
@@ -1113,7 +1042,7 @@ sys.stdout.flush()
             if (currentRun == null) return;
 
             e.Cancel = true;
-            MessageBox.Show(this, Loc.Get("close_warning_msg"), Loc.Get("close_warning_title"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, "Conversion in progress. Stop first.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void WriteLog(string message)
@@ -1135,7 +1064,7 @@ sys.stdout.flush()
         {
             string key = input.Trim();
             if (key.Length % 2 != 0)
-                throw new InvalidOperationException(Loc.Get("invalid_key"));
+                throw new InvalidOperationException("Invalid HEX key");
 
             byte[] bytes = new byte[key.Length / 2];
             for (int i = 0; i < key.Length; i += 2)
