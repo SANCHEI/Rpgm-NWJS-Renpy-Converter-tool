@@ -33,6 +33,7 @@ namespace RpgmvpConverterWinForms
 
         private Label rootLabel;
         private TextBox pathBox;
+        private Label keyLabelInner;
         private TextBox keyBox;
         private Button browseButton;
 
@@ -177,7 +178,7 @@ namespace RpgmvpConverterWinForms
             };
             Controls.Add(keyPanel);
 
-            Label keyLabelInner = new Label
+            keyLabelInner = new Label
             {
                 Text = Loc.Get("key_label"),
                 Location = new Point(8, 8),
@@ -335,6 +336,7 @@ namespace RpgmvpConverterWinForms
 
             rootLabel.Text = Loc.Get("root_label");
             browseButton.Text = Loc.Get("browse_btn");
+            keyLabelInner.Text = Loc.Get("key_label");
 
             unlockerLabel.Text = Loc.Get("unlocker_label");
             unlockerButton.Text = Loc.Get("unlocker_btn");
@@ -349,8 +351,17 @@ namespace RpgmvpConverterWinForms
             cancelButton.Text = Loc.Get("cancel_btn");
 
             statusLabel.Text = currentRun == null ? Loc.Get("status_waiting") : statusLabel.Text;
+            UpdateStatsLabel();
 
             Refresh();
+        }
+
+        private void UpdateStatsLabel()
+        {
+            if (currentRun == null)
+            {
+                statsLabel.Text = Loc.Get("stats_processed") + ": 0 / 0 | " + Loc.Get("stats_speed") + ": 0.00 " + Loc.Get("stats_fps") + " | " + Loc.Get("stats_eta") + ": --:--";
+            }
         }
 
         private void TryAutoDetectKey(string path)

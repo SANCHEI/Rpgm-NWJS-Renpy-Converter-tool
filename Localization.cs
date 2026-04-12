@@ -5,7 +5,7 @@ namespace RpgmvpConverterWinForms
     internal static class Loc
     {
         private static readonly Dictionary<string, Dictionary<string, string>> Strings = new Dictionary<string, Dictionary<string, string>>();
-        private static string currentLang = "ru";
+        private static string currentLang = "en";
 
         static Loc()
         {
