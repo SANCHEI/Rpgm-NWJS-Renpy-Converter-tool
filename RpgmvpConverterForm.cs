@@ -35,6 +35,8 @@ namespace RpgmvpConverterWinForms
         private TextBox pathBox;
         private Label keyLabelInner;
         private TextBox keyBox;
+        private Label engineRpgmLabel;
+        private Label engineNwjsLabel;
         private Button browseButton;
 
         private Label unlockerLabel;
@@ -60,7 +62,15 @@ namespace RpgmvpConverterWinForms
         public RpgmvpConverterForm()
         {
             BuildUi();
-            string initialRoot = TryFindGameRoot(AppDomain.CurrentDomain.BaseDirectory);
+            
+            string exeDir = AppDomain.CurrentDomain.BaseDirectory;
+            string iconPath = Path.Combine(exeDir, "app.ico");
+            if (File.Exists(iconPath))
+            {
+                try { Icon = new Icon(iconPath); } catch { }
+            }
+            
+            string initialRoot = TryFindGameRoot(exeDir);
             if (!string.IsNullOrWhiteSpace(initialRoot))
             {
                 pathBox.Text = initialRoot;
@@ -174,6 +184,22 @@ namespace RpgmvpConverterWinForms
 
             y += 42;
 
+            startButton = CreateButton(Loc.Get("start_btn"), new Point(18, y), new Size(100, 34), successColor, formBack, uiBold);
+            startButton.Click += async delegate { await StartConversionAsync(); };
+            Controls.Add(startButton);
+
+            pauseButton = CreateButton(Loc.Get("pause_btn"), new Point(126, y), new Size(100, 34), warningColor, Color.Black, uiBold);
+            pauseButton.Enabled = false;
+            pauseButton.Click += delegate { TogglePause(); };
+            Controls.Add(pauseButton);
+
+            cancelButton = CreateButton(Loc.Get("cancel_btn"), new Point(234, y), new Size(100, 34), dangerColor, textColor, uiBold);
+            cancelButton.Enabled = false;
+            cancelButton.Click += delegate { CancelConversion(); };
+            Controls.Add(cancelButton);
+
+            y += 42;
+
             Panel keyPanel = new Panel
             {
                 Location = new Point(18, y),
@@ -197,13 +223,35 @@ namespace RpgmvpConverterWinForms
             keyBox = new TextBox
             {
                 Location = new Point(90, 4),
-                Size = new Size(762, 26),
+                Size = new Size(660, 26),
                 BackColor = inputBack,
                 ForeColor = textColor,
                 BorderStyle = BorderStyle.FixedSingle,
                 Font = uiFont
             };
             keyPanel.Controls.Add(keyBox);
+
+            engineRpgmLabel = new Label
+            {
+                Text = Loc.Get("engine_rpgm"),
+                Location = new Point(755, 8),
+                Size = new Size(45, 20),
+                ForeColor = Color.FromArgb(68, 197, 255),
+                BackColor = Color.Transparent,
+                Font = uiBold
+            };
+            keyPanel.Controls.Add(engineRpgmLabel);
+
+            engineNwjsLabel = new Label
+            {
+                Text = Loc.Get("engine_nwjs"),
+                Location = new Point(805, 8),
+                Size = new Size(45, 20),
+                ForeColor = Color.FromArgb(255, 105, 180),
+                BackColor = Color.Transparent,
+                Font = uiBold
+            };
+            keyPanel.Controls.Add(engineNwjsLabel);
 
             y += 38;
 
@@ -269,22 +317,6 @@ namespace RpgmvpConverterWinForms
             Controls.Add(unityExtractButton);
 
             y += 42;
-
-            startButton = CreateButton(Loc.Get("start_btn"), new Point(18, y), new Size(100, 34), successColor, formBack, uiBold);
-            startButton.Click += async delegate { await StartConversionAsync(); };
-            Controls.Add(startButton);
-
-            pauseButton = CreateButton(Loc.Get("pause_btn"), new Point(126, y), new Size(100, 34), warningColor, Color.Black, uiBold);
-            pauseButton.Enabled = false;
-            pauseButton.Click += delegate { TogglePause(); };
-            Controls.Add(pauseButton);
-
-            cancelButton = CreateButton(Loc.Get("cancel_btn"), new Point(234, y), new Size(100, 34), dangerColor, textColor, uiBold);
-            cancelButton.Enabled = false;
-            cancelButton.Click += delegate { CancelConversion(); };
-            Controls.Add(cancelButton);
-
-            y += 46;
 
             progressBar = new ProgressBar
             {
@@ -410,6 +442,8 @@ namespace RpgmvpConverterWinForms
             rootLabel.Text = Loc.Get("root_label");
             browseButton.Text = Loc.Get("browse_btn");
             keyLabelInner.Text = Loc.Get("key_label");
+            engineRpgmLabel.Text = Loc.Get("engine_rpgm");
+            engineNwjsLabel.Text = Loc.Get("engine_nwjs");
 
             unlockerLabel.Text = Loc.Get("unlocker_label");
             unlockerButton.Text = Loc.Get("unlocker_btn");

@@ -11,7 +11,10 @@ namespace RpgmvpConverterWinForms
         {
             Dictionary<string, string> en = new Dictionary<string, string>();
             en["app_title"] = "RPGMVP/PNG_ -> PNG ULTRA";
-            en["app_subtitle"] = "Fast RPGMVP to PNG conversion with live progress, ETA and task control";
+            en["app_subtitle"] = "Fast RPGMVP to PNG conversion + Unity Asset Extractor + Unlocker";
+            en["engine_rpgm"] = "RPGM";
+            en["engine_nwjs"] = "NWJS";
+            en["engine_unity"] = "Unity";
             en["root_label"] = "Game Root";
             en["path_label"] = "Project folder";
             en["key_label"] = "HEX key";
@@ -84,6 +87,10 @@ namespace RpgmvpConverterWinForms
 
             Dictionary<string, string> ru = new Dictionary<string, string>();
             ru["app_title"] = "RPGMVP/PNG_ -> PNG ULTRA";
+            ru["app_subtitle"] = "Быстрая конвертация RPGMVP в PNG + Unity Asset Extractor + Unlocker";
+            ru["engine_rpgm"] = "RPGM";
+            ru["engine_nwjs"] = "NWJS";
+            ru["engine_unity"] = "Unity";
             ru["app_subtitle"] = "Быстрая конвертация RPGMVP в PNG с живым прогрессом, ETA и управлением задачей";
             ru["root_label"] = "Корень";
             ru["path_label"] = "Папка проекта";

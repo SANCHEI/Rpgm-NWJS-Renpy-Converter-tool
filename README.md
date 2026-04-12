@@ -1,8 +1,8 @@
 # RPGMVP/PNG_ -> PNG ULTRA
 
-Fast RPGMVP to PNG converter with **Unity Asset Extractor**, **Renpy Gallery Unlocker** and full **En/Ru localization**.
+Fast RPGMVP to PNG converter + **Unity Asset Extractor** + **Gallery Unlocker** with full **En/Ru localization**.
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.1.0-blue)
 ![.NET](https://img.shields.io/badge/.NET-4.0-blue)
 ![Python](https://img.shields.io/badge/Python-3.x-green)
 
@@ -10,7 +10,7 @@ Fast RPGMVP to PNG converter with **Unity Asset Extractor**, **Renpy Gallery Unl
 
 - **RPGMVP to PNG Conversion** - Fast conversion with live progress, ETA and task control (pause/cancel)
 - **Unity Asset Extractor** - Extract textures from Unity games (.assets, .bundle files)
-- **Renpy Gallery Unlocker** - Unlock galleries in Renpy/NWJS games
+- **Gallery Unlocker** - Unlock galleries in Renpy/NWJS games
 - **En/Ru Localization** - Switch between English and Russian
 - **Auto-detection** - Automatically detects game type and root folder
 
@@ -28,24 +28,32 @@ pip install UnityPy
 
 ## Download
 
-**Latest Release:** [RpgmvpConverterWinForms.exe](https://github.com/SANCHEI/Rpgm-NWJS-Renpy-Converter-tool/releases/latest)
+**Full Version:** [RpgmvpConverterWinForms.exe](https://github.com/SANCHEI/Rpgm-NWJS-Renpy-Converter-tool/releases)
 
-For **Unity games only**, use the lighter version without RPGMVP converter.
+For **Unity games only**, use the lighter version: [UnityAssetExtractor.exe](https://github.com/SANCHEI/Rpgm-NWJS-Renpy-Converter-tool/releases/tag/v1.1.0-unity)
 
 ## Supported Games
 
 ### RPG Maker MV/MZ
-- RPGMVP encryption
+- RPGMVP encryption (RPGM label)
 - Custom HEX key support
+- Auto key detection
 
 ### Unity Games
 - Textures from .assets files
 - Textures from .bundle files
 - Automatic skipping of localization bundles
+- Real-time progress with ETA
 
 ### Renpy/NWJS Games
-- Gallery unlocker
+- Gallery unlocker (NWJS label)
 - NWJS process detection
+
+## Supported Engines
+
+- **RPGM** - RPG Maker MV/MZ
+- **NWJS** - Node WebKit Software (Renpy games)
+- **Unity** - Unity games
 
 ## Usage
 
@@ -55,9 +63,10 @@ For **Unity games only**, use the lighter version without RPGMVP converter.
 3. Click Start
 
 ### Unity Extraction
-1. Select Unity game folder
+1. Select Unity game folder (auto-detected)
 2. Choose extraction mode: Textures / Videos / All
 3. Click "Extract Unity"
+4. Find extracted files in `game_folder/extracted/`
 
 ### Gallery Unlocker
 1. Select game folder
@@ -74,20 +83,17 @@ For **Unity games only**, use the lighter version without RPGMVP converter.
 ```
 ┌─────────────────────────────────────────────────────┐
 │  RPGMVP/PNG_ -> PNG ULTRA                           │
-│  Fast conversion with live progress                  │
+│  Fast conversion + Unity Extractor + Unlocker        │
 ├─────────────────────────────────────────────────────┤
 │  Game Root: [D:\Games\MyGame            ] [G] [...] │
-│  HEX key:   [xxxxxxxxxxxxxxxx             ]         │
-├─────────────────────────────────────────────────────┤
+│  HEX key:   [xxxxxxxxxxxxxxxx        ] RPGM NWJS  │
 │  [▶ Start]  [⏸ Pause]  [✕ Cancel]                   │
+├─────────────────────────────────────────────────────┤
+│  Renpy Gallery Unlocker: [Renpy ▾] [Unlock]        │
+│  Unity Asset Extractor: [Textures ▾] [Extract]     │
 ├─────────────────────────────────────────────────────┤
 │  Progress: ████████████░░░░░░░░ 67%                │
 │  Processed: 156 / 233 | Speed: 12.5 f/s | ETA: 00:06│
-├─────────────────────────────────────────────────────┤
-│  Log:                                               │
-│  > Processing: img/faceset1.png                     │
-│  > Processing: img/faceset2.png                     │
-│  > Done! 233 files in 18.6s                         │
 └─────────────────────────────────────────────────────┘
 ```
 
