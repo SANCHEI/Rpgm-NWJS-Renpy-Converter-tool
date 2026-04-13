@@ -704,28 +704,62 @@ namespace RpgmvpConverterWinForms
 
         private static bool IsPythonInstalled()
         {
-            string[] pythonPaths = { "python", "python3", @"C:\Python312\python.exe", @"C:\Program Files\Python312\python.exe", @"C:\Users\" + Environment.UserName + @"\AppData\Local\Programs\Python\Python312\python.exe" };
-
-            foreach (string pyPath in pythonPaths)
+            try
             {
-                try
-                {
-                    ProcessStartInfo psi = new ProcessStartInfo();
-                    psi.FileName = pyPath;
-                    psi.Arguments = "--version";
-                    psi.UseShellExecute = false;
-                    psi.RedirectStandardOutput = true;
-                    psi.RedirectStandardError = true;
-                    psi.CreateNoWindow = true;
+                ProcessStartInfo psi = new ProcessStartInfo();
+                psi.FileName = "cmd";
+                psi.Arguments = "/c where python";
+                psi.UseShellExecute = false;
+                psi.RedirectStandardOutput = true;
+                psi.RedirectStandardError = true;
+                psi.CreateNoWindow = true;
 
-                    using (Process process = Process.Start(psi))
-                    {
-                        process.WaitForExit();
-                        if (process.ExitCode == 0) return true;
-                    }
+                using (Process process = Process.Start(psi))
+                {
+                    string output = process.StandardOutput.ReadToEnd();
+                    process.WaitForExit();
+                    if (process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output))
+                        return true;
                 }
-                catch { }
             }
+            catch { }
+
+            string[] commonPaths = {
+                @"C:\Python312\python.exe",
+                @"C:\Python311\python.exe",
+                @"C:\Python310\python.exe",
+                @"C:\Program Files\Python312\python.exe",
+                @"C:\Program Files\Python311\python.exe",
+                @"C:\Program Files\Python310\python.exe",
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + @"\Programs\Python\Python312\python.exe",
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + @"\Programs\Python\Python311\python.exe",
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + @"\Programs\Python\Python310\python.exe"
+            };
+
+            foreach (string path in commonPaths)
+            {
+                if (File.Exists(path))
+                {
+                    try
+                    {
+                        ProcessStartInfo psi = new ProcessStartInfo();
+                        psi.FileName = "\"" + path + "\"";
+                        psi.Arguments = "--version";
+                        psi.UseShellExecute = false;
+                        psi.RedirectStandardOutput = true;
+                        psi.RedirectStandardError = true;
+                        psi.CreateNoWindow = true;
+
+                        using (Process process = Process.Start(psi))
+                        {
+                            process.WaitForExit();
+                            if (process.ExitCode == 0) return true;
+                        }
+                    }
+                    catch { }
+                }
+            }
+
             return false;
         }
 
@@ -749,8 +783,8 @@ namespace RpgmvpConverterWinForms
                 statusLabel.Text = "Installing Python...";
 
                 ProcessStartInfo psi = new ProcessStartInfo();
-                psi.FileName = installerPath;
-                psi.Arguments = "/quiet InstallAllUsers=1 PrependPath=1";
+                psi.FileName = "\"" + installerPath + "\"";
+                psi.Arguments = "/quiet InstallAllUsers=0 PrependPath=1";
                 psi.UseShellExecute = false;
                 psi.CreateNoWindow = true;
 
