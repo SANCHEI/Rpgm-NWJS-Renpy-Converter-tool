@@ -1247,6 +1247,36 @@ print('DONE:' + str(count[0]))
                                             statusLabel.Text = "Unity: " + processedFiles + "/" + totalFiles;
                                         }
                                     }
+                                    else if (data.StartsWith("BUNDLE_CONFIRM:"))
+                                    {
+                                        string[] parts = data.Split(':');
+                                        if (parts.Length >= 3)
+                                        {
+                                            int bundleCount = 0;
+                                            int bundleSize = 0;
+                                            int.TryParse(parts[1], out bundleCount);
+                                            int.TryParse(parts[2], out bundleSize);
+                                            
+                                            var result = MessageBox.Show(
+                                                "Found " + bundleCount + " bundle files (" + bundleSize + " MB total).\n\nExtract bundles?",
+                                                "Bundle Extraction",
+                                                MessageBoxButtons.YesNo,
+                                                MessageBoxIcon.Question);
+                                            
+                                            string markerPath = Path.Combine(Path.GetTempPath(), "RpgmvpConverter", "skip_bundles.txt");
+                                            
+                                            if (result == DialogResult.No)
+                                            {
+                                                File.WriteAllText(markerPath, "skip");
+                                                WriteLog("Bundle extraction skipped by user");
+                                            }
+                                            else
+                                            {
+                                                if (File.Exists(markerPath)) File.Delete(markerPath);
+                                                WriteLog("Processing bundles...");
+                                            }
+                                        }
+                                    }
                                     else
                                     {
                                         WriteLog(data);
@@ -1345,6 +1375,8 @@ def has_relevant_content(file_path, mode):
 
 def extract_file(file_path, output, mode, is_bundle=False):
     total = 0
+    saved_files = set()
+    
     try:
         print('Loading: ' + os.path.basename(file_path))
         sys.stdout.flush()
@@ -1375,16 +1407,13 @@ def extract_file(file_path, output, mode, is_bundle=False):
                             
                             if hasattr(data, 'image') and data.image:
                                 img_path = os.path.join(file_output, safe_name + '.png')
-                                counter = 1
-                                base_name = safe_name
-                                while os.path.exists(img_path):
-                                    safe_name = base_name + '_' + str(counter)
-                                    img_path = os.path.join(file_output, safe_name + '.png')
-                                    counter += 1
                                 
-                                data.image.save(img_path)
-                                textures += 1
-                                total += 1
+                                # Only save if not already saved (avoid duplicates)
+                                if img_path not in saved_files:
+                                    data.image.save(img_path)
+                                    saved_files.add(img_path)
+                                    textures += 1
+                                    total += 1
                         except:
                             pass
                 
@@ -1407,17 +1436,13 @@ def extract_file(file_path, output, mode, is_bundle=False):
                                         ext = os.path.splitext(fname)[1] or '.mp4'
                                 
                                 video_path = os.path.join(file_output, safe_name + ext)
-                                counter = 1
-                                base_name = safe_name
-                                while os.path.exists(video_path):
-                                    safe_name = base_name + '_' + str(counter)
-                                    video_path = os.path.join(file_output, safe_name + ext)
-                                    counter += 1
                                 
-                                with open(video_path, 'wb') as vf:
-                                    vf.write(video_data)
-                                videos += 1
-                                total += 1
+                                if video_path not in saved_files:
+                                    with open(video_path, 'wb') as vf:
+                                        vf.write(video_data)
+                                    saved_files.add(video_path)
+                                    videos += 1
+                                    total += 1
                         except:
                             pass
                 
@@ -1431,17 +1456,13 @@ def extract_file(file_path, output, mode, is_bundle=False):
                             audio_data = getattr(data, 'audio_data', None) or getattr(data, 'm_AudioData', None)
                             if audio_data:
                                 audio_path = os.path.join(file_output, safe_name + '.wav')
-                                counter = 1
-                                base_name = safe_name
-                                while os.path.exists(audio_path):
-                                    safe_name = base_name + '_' + str(counter)
-                                    audio_path = os.path.join(file_output, safe_name + '.wav')
-                                    counter += 1
                                 
-                                with open(audio_path, 'wb') as f:
-                                    f.write(audio_data)
-                                audios += 1
-                                total += 1
+                                if audio_path not in saved_files:
+                                    with open(audio_path, 'wb') as f:
+                                        f.write(audio_data)
+                                    saved_files.add(audio_path)
+                                    audios += 1
+                                    total += 1
                         except:
                             pass
             
@@ -1540,10 +1561,26 @@ assets_files = [f for f in all_files if not f.endswith('.bundle')]
 print('Found ' + str(len(assets_files)) + ' asset files')
 print('Found ' + str(len(bundle_files)) + ' bundle files')
 print('Copied ' + str(direct_files) + ' direct files')
-sys.stdout.flush()
 
-# Create directories for bundle extraction
-os.makedirs(os.path.join(output_path, 'bundle_extracted'), exist_ok=True)
+# Calculate bundle sizes
+skip_bundles = False
+if bundle_files:
+    bundle_size = sum(os.path.getsize(f) for f in bundle_files) / (1024 * 1024)
+    print('BUNDLE_CONFIRM:' + str(len(bundle_files)) + ':' + str(int(bundle_size)))
+    sys.stdout.flush()
+    
+    # Check if user wants to skip bundles
+    import time
+    timeout = 30
+    start = time.time()
+    while time.time() - start < timeout:
+        marker_path = os.path.join(os.path.dirname(output_path), '..', '..', 'RpgmvpConverter', 'skip_bundles.txt')
+        if os.path.exists(marker_path):
+            with open(marker_path, 'r') as f:
+                if f.read().strip() == 'skip':
+                    skip_bundles = True
+            break
+        time.sleep(0.5)
 
 # Filter and process .assets files first
 print('Checking assets for content...')
@@ -1588,35 +1625,39 @@ with ThreadPoolExecutor(max_workers=num_workers) as executor:
         print('PROGRESS:' + str(processed) + ':' + str(len(assets_files)))
         sys.stdout.flush()
 
-# Filter and process .bundle files
-print('Checking bundles for content...')
-sys.stdout.flush()
-bundles_with_content = []
-for f in bundle_files:
-    if has_relevant_content(f, extract_mode):
-        bundles_with_content.append(f)
+# Filter and process .bundle files (if not skipped)
+if skip_bundles:
+    print('Bundle extraction skipped')
+    bundle_files = []
+else:
+    print('Checking bundles for content...')
+    sys.stdout.flush()
+    bundles_with_content = []
+    for f in bundle_files:
+        if has_relevant_content(f, extract_mode):
+            bundles_with_content.append(f)
 
-bundle_files = bundles_with_content
+    bundle_files = bundles_with_content
 
-print('Found ' + str(len(bundle_files)) + ' bundles with content')
-sys.stdout.flush()
-print('TOTAL:' + str(len(assets_files) + len(bundle_files)))
-sys.stdout.flush()
+    print('Found ' + str(len(bundle_files)) + ' bundles with content')
+    sys.stdout.flush()
+    print('TOTAL:' + str(len(assets_files) + len(bundle_files)))
+    sys.stdout.flush()
 
-# Process bundles in parallel
-bundle_args = [(f, output_path, extract_mode, True) for f in bundle_files]
+    # Process bundles in parallel
+    bundle_args = [(f, output_path, extract_mode, True) for f in bundle_files]
 
-with ThreadPoolExecutor(max_workers=num_workers) as executor:
-    futures = {executor.submit(process_single_file, arg): arg for arg in bundle_args}
-    for future in as_completed(futures):
-        try:
-            result = future.result()
-            total_extracted += result
-        except Exception as e:
-            pass
-        processed += 1
-        print('PROGRESS:' + str(processed) + ':' + str(len(assets_files) + len(bundle_files)))
-        sys.stdout.flush()
+    with ThreadPoolExecutor(max_workers=num_workers) as executor:
+        futures = {executor.submit(process_single_file, arg): arg for arg in bundle_args}
+        for future in as_completed(futures):
+            try:
+                result = future.result()
+                total_extracted += result
+            except Exception as e:
+                pass
+            processed += 1
+            print('PROGRESS:' + str(processed) + ':' + str(len(assets_files) + len(bundle_files)))
+            sys.stdout.flush()
 
 total_extracted += direct_files
 
