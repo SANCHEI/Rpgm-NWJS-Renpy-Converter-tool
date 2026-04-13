@@ -565,7 +565,7 @@ namespace RpgmvpConverterWinForms
             progressBar.Maximum = files.Count;
             progressBar.Value = 0;
             statusLabel.Text = "Preparing...";
-            statsLabel.Text = string.Format("Processed: 0 / {0} | Speed: 0.00 f/s | ETA: --:--", files.Count);
+            statsLabel.Text = string.Format("Processed: 0 / {0} | Size: -- | ETA: --:--", files.Count);
             pauseButton.Text = "Pause";
 
             WriteLog(string.Format("Started: {0} | threads: {1}", files.Count, workerCount));
@@ -1121,7 +1121,7 @@ print('DONE:' + str(count[0]))
                                                 double speed = elapsed > 0 ? totalExtracted / elapsed : 0;
                                                 int remaining = totalFiles - totalExtracted;
                                                 string eta = speed > 0 ? FormatDuration(remaining / speed) : "--:--";
-                                                statsLabel.Text = "Extracted: " + totalExtracted + " / " + totalFiles + " | " + speed.ToString("N0") + " f/s | ETA: " + eta;
+                                                statsLabel.Text = "Processed: " + totalExtracted + " / " + totalFiles + " | Size: -- | ETA: " + eta;
                                                 statusLabel.Text = "Renpy: " + totalExtracted + " / " + totalFiles;
                                             }
                                         }
@@ -1145,7 +1145,7 @@ print('DONE:' + str(count[0]))
                     statusLabel.Text = "Renpy: Complete";
                     double elapsed = Math.Max((DateTime.UtcNow - startTime).TotalSeconds, 0.1);
                     double speed = elapsed > 0 ? totalExtracted / elapsed : 0;
-                    statsLabel.Text = "Extracted: " + totalExtracted + " | " + speed.ToString("N0") + " f/s";
+                    statsLabel.Text = "Processed: " + totalExtracted + " / " + totalFiles + " | Size: --";
                     MessageBox.Show("Renpy extraction complete!\n\nExtracted: " + totalExtracted + " files\n\nOutput: " + outputDir, "Renpy Extractor", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 });
             }
@@ -1244,9 +1244,12 @@ print('DONE:' + str(count[0]))
                                             progressBar.Value = Math.Min(processedFiles, progressBar.Maximum);
 
                                             double elapsed = Math.Max((DateTime.UtcNow - startTime).TotalSeconds, 0.1);
+                                            double speed = processedFiles / elapsed;
+                                            int remaining = totalFiles - processedFiles;
+                                            string eta = speed > 0 ? FormatDuration(remaining / speed) : "--:--";
                                             string elapsedStr = FormatDuration(elapsed);
                                             string sizeStr = extractedSize > 0 ? (extractedSize / (1024 * 1024)) + " MB" : "--";
-                                            statsLabel.Text = "Processed: " + processedFiles + " / " + totalFiles + " | Size: " + sizeStr + " | Time: " + elapsedStr;
+                                            statsLabel.Text = "Processed: " + processedFiles + " / " + totalFiles + " | Size: " + sizeStr + " | ETA: " + eta + " | Time: " + elapsedStr;
                                             statusLabel.Text = "Unity: " + processedFiles + "/" + totalFiles;
                                         }
                                     }
@@ -1358,37 +1361,13 @@ if not game_path or not output_path:
 
 os.makedirs(output_path, exist_ok=True)
 
-def has_relevant_content(file_path, mode):
-    try:
-        env = UnityPy.load(file_path)
-        for obj in env.objects:
-            if mode in ['textures', 'all'] and obj.type.name in ['Texture2D', 'Sprite', 'Cubemap', 'Texture3D', 'Texture2DArray']:
-                return True
-            if mode in ['videos', 'all'] and obj.type.name == 'VideoClip':
-                return True
-            if mode in ['audios', 'all'] and obj.type.name == 'AudioClip':
-                return True
-            if mode in ['textures', 'all'] and obj.type.name in ['AnimationClip', 'AnimatorController', 'AnimatorOverrideController']:
-                return True
-            if mode in ['textures', 'all'] and obj.type.name in ['MonoBehaviour', 'GameObject', 'Prefab']:
-                return True
-        return False
-    except:
-        return False
-
 def extract_file(file_path, output, mode, is_bundle=False):
     total = 0
     total_size = 0
     saved_files = set()
     
     try:
-        print('Loading: ' + os.path.basename(file_path))
-        sys.stdout.flush()
-        
         env = UnityPy.load(file_path)
-        
-        print('Processing: ' + os.path.basename(file_path) + ' (' + str(len(env.objects)) + ' objects)')
-        sys.stdout.flush()
         
         if is_bundle:
             file_output = os.path.join(output, 'bundle_extracted', os.path.splitext(os.path.basename(file_path))[0])
@@ -1580,32 +1559,23 @@ if bundle_files:
     
     # Check if user wants to skip bundles
     import time
+    import tempfile
     timeout = 30
     start = time.time()
+    marker_path = os.path.join(tempfile.gettempdir(), 'RpgmvpConverter', 'skip_bundles.txt')
     while time.time() - start < timeout:
-        marker_path = os.path.join(os.path.dirname(output_path), '..', '..', 'RpgmvpConverter', 'skip_bundles.txt')
         if os.path.exists(marker_path):
             with open(marker_path, 'r') as f:
-                if f.read().strip() == 'skip':
+                content = f.read().strip()
+                if content == 'skip':
                     skip_bundles = True
+                    print('Bundle skip marker found')
+                    sys.stdout.flush()
             break
-        time.sleep(0.5)
-
-# Filter and process .assets files first
-print('Checking assets for content...')
-sys.stdout.flush()
-assets_with_content = []
-for f in assets_files:
-    if has_relevant_content(f, extract_mode):
-        assets_with_content.append(f)
-
-assets_files = assets_with_content
-
-print('Found ' + str(len(assets_files)) + ' assets with content')
-sys.stdout.flush()
+        time.sleep(0.1)
 
 # Process files in parallel using threads (more stable on Windows)
-num_workers = 4
+num_workers = min(os.cpu_count() or 4, 4)
 
 def process_single_file(args):
     file_path, output, mode, is_bundle = args
@@ -1614,17 +1584,25 @@ def process_single_file(args):
     except Exception as e:
         return 0, 0
 
-# Prepare arguments for parallel processing
-assets_args = [(f, output_path, extract_mode, False) for f in assets_files]
+# Prepare all files for processing (assets + bundles combined)
+all_args = [(f, output_path, extract_mode, False) for f in assets_files]
+
+if not skip_bundles:
+    # Skip content check - just add all bundles directly
+    all_args += [(f, output_path, extract_mode, True) for f in bundle_files]
+
+total_files = len(all_args)
 
 print('Processing with ' + str(num_workers) + ' threads...')
 sys.stdout.flush()
+print('TOTAL:' + str(total_files))
+sys.stdout.flush()
 
-# Process assets in parallel using ThreadPoolExecutor
+# Process all files in parallel using ThreadPoolExecutor
 processed = 0
 total_size = 0
 with ThreadPoolExecutor(max_workers=num_workers) as executor:
-    futures = {executor.submit(process_single_file, arg): arg for arg in assets_args}
+    futures = {executor.submit(process_single_file, arg): arg for arg in all_args}
     for future in as_completed(futures):
         try:
             result, size = future.result()
@@ -1633,42 +1611,8 @@ with ThreadPoolExecutor(max_workers=num_workers) as executor:
         except Exception as e:
             pass
         processed += 1
-        print('PROGRESS:' + str(processed) + ':' + str(len(assets_files)) + ':' + str(total_size))
-        sys.stdout.flush()
-
-# Filter and process .bundle files (if not skipped)
-if skip_bundles:
-    print('Bundle extraction skipped')
-    bundle_files = []
-else:
-    print('Checking bundles for content...')
-    sys.stdout.flush()
-    bundles_with_content = []
-    for f in bundle_files:
-        if has_relevant_content(f, extract_mode):
-            bundles_with_content.append(f)
-
-    bundle_files = bundles_with_content
-
-    print('Found ' + str(len(bundle_files)) + ' bundles with content')
-    sys.stdout.flush()
-    print('TOTAL:' + str(len(assets_files) + len(bundle_files)))
-    sys.stdout.flush()
-
-    # Process bundles in parallel
-    bundle_args = [(f, output_path, extract_mode, True) for f in bundle_files]
-
-    with ThreadPoolExecutor(max_workers=num_workers) as executor:
-        futures = {executor.submit(process_single_file, arg): arg for arg in bundle_args}
-        for future in as_completed(futures):
-            try:
-                result, size = future.result()
-                total_extracted += result
-                total_size += size
-            except Exception as e:
-                pass
-            processed += 1
-            print('PROGRESS:' + str(processed) + ':' + str(len(assets_files) + len(bundle_files)) + ':' + str(total_size))
+        if processed % 10 == 0 or processed == total_files:
+            print('PROGRESS:' + str(processed) + ':' + str(total_files) + ':' + str(total_size))
             sys.stdout.flush()
 
 total_extracted += direct_files
@@ -1747,7 +1691,7 @@ sys.stdout.flush()
             double speed = processed / elapsedSeconds;
             int remaining = currentRun.TotalCount - processed;
             string eta = speed > 0d && !currentRun.IsPaused ? FormatDuration(remaining / speed) : "--:--";
-            statsLabel.Text = string.Format("Processed: {0} / {1} | Speed: {2:N2} f/s | ETA: {3}", processed, currentRun.TotalCount, speed, eta);
+            statsLabel.Text = string.Format("Processed: {0} / {1} | Size: -- | ETA: {2}", processed, currentRun.TotalCount, eta);
         }
 
         private void FinishConversion(bool cancelled)
@@ -1767,13 +1711,13 @@ sys.stdout.flush()
             if (cancelled)
             {
                 statusLabel.Text = "Cancelled";
-                statsLabel.Text = string.Format("Processed: {0} / {1} | Speed: {2:N2} f/s", processed, finished.TotalCount, speed);
+                statsLabel.Text = string.Format("Processed: {0} / {1} | Size: --", processed, finished.TotalCount);
                 WriteLog("Cancelled" + ": " + processed);
                 return;
             }
 
             statusLabel.Text = "Done";
-            statsLabel.Text = string.Format("Processed: {0} / {1} | Speed: {2:N2} f/s | ETA: 00:00", processed, finished.TotalCount, speed);
+            statsLabel.Text = string.Format("Processed: {0} / {1} | Size: --", processed, finished.TotalCount);
 
             if (finished.ErrorCount > 0)
                 WriteLog(string.Format("Errors: {0}. Last error: {1}", finished.ErrorCount, finished.LastError));
@@ -1796,10 +1740,23 @@ sys.stdout.flush()
 
         private void OnFormClosing(object sender, FormClosingEventArgs e)
         {
-            if (currentRun == null) return;
+            if (unityRunning && unityProcess != null && !unityProcess.HasExited)
+            {
+                try
+                {
+                    unityProcess.Kill();
+                    unityProcess.Dispose();
+                }
+                catch { }
+                unityProcess = null;
+                unityRunning = false;
+            }
 
-            e.Cancel = true;
-            MessageBox.Show(this, "Conversion in progress. Stop first.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            if (currentRun != null)
+            {
+                currentRun.Cancel();
+                Thread.Sleep(100);
+            }
         }
 
         private void WriteLog(string message)
