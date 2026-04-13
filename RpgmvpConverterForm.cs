@@ -1391,6 +1391,7 @@ print('-' * 50)
 
 total_extracted = 0
 all_files = []
+direct_files = 0
 
 # Find all *_Data folders and collect files
 data_folders = []
@@ -1407,6 +1408,18 @@ else:
             for f in files:
                 if f.endswith('.assets') and not f.endswith('.resS'):
                     all_files.append(os.path.join(root, f))
+                # Extract direct image/video files
+                elif f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tga', '.tiff', '.mp4', '.webm', '.avi', '.mkv')):
+                    src = os.path.join(root, f)
+                    rel_path = os.path.relpath(src, data_folder)
+                    dst = os.path.join(output_path, 'direct', rel_path)
+                    dst_dir = os.path.dirname(dst)
+                    if dst_dir:
+                        os.makedirs(dst_dir, exist_ok=True)
+                    if not os.path.exists(dst):
+                        import shutil
+                        shutil.copy2(src, dst)
+                        direct_files += 1
         
         # Check standalone paths
         paths_to_check = [
@@ -1428,6 +1441,7 @@ else:
 # Remove duplicates
 all_files = list(set(all_files))
 print('Found ' + str(len(all_files)) + ' asset files')
+print('Copied ' + str(direct_files) + ' direct files')
 sys.stdout.flush()
 
 # Filter files that have relevant content
@@ -1449,6 +1463,8 @@ for i, file_path in enumerate(all_files):
     total_extracted += extract_file(file_path, output_path, extract_mode)
     print('PROGRESS:' + str(i + 1) + ':' + str(len(all_files)))
     sys.stdout.flush()
+
+total_extracted += direct_files
 
 print('-' * 50)
 print('Done! Extracted ' + str(total_extracted) + ' assets')
