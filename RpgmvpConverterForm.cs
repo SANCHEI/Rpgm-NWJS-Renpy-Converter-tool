@@ -1307,7 +1307,7 @@ from __future__ import print_function
 import sys
 import io
 import os
-from multiprocessing import Pool, cpu_count
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 if sys.version_info[0] >= 3:
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
@@ -1558,28 +1558,32 @@ assets_files = assets_with_content
 print('Found ' + str(len(assets_files)) + ' assets with content')
 sys.stdout.flush()
 
-# Process files in parallel for faster extraction
-num_workers = min(cpu_count(), 4)
+# Process files in parallel using threads (more stable on Windows)
+num_workers = 4
 
 def process_single_file(args):
     file_path, output, mode, is_bundle = args
     try:
         return extract_file(file_path, output, mode, is_bundle)
     except Exception as e:
-        print('Error processing ' + os.path.basename(file_path) + ': ' + str(e))
         return 0
 
 # Prepare arguments for parallel processing
 assets_args = [(f, output_path, extract_mode, False) for f in assets_files]
 
-print('Processing with ' + str(num_workers) + ' workers...')
+print('Processing with ' + str(num_workers) + ' threads...')
 sys.stdout.flush()
 
-# Process assets in parallel
+# Process assets in parallel using ThreadPoolExecutor
 processed = 0
-with Pool(num_workers) as pool:
-    for result in pool.imap_unordered(process_single_file, assets_args, chunksize=1):
-        total_extracted += result
+with ThreadPoolExecutor(max_workers=num_workers) as executor:
+    futures = {executor.submit(process_single_file, arg): arg for arg in assets_args}
+    for future in as_completed(futures):
+        try:
+            result = future.result()
+            total_extracted += result
+        except Exception as e:
+            pass
         processed += 1
         print('PROGRESS:' + str(processed) + ':' + str(len(assets_files)))
         sys.stdout.flush()
@@ -1602,9 +1606,14 @@ sys.stdout.flush()
 # Process bundles in parallel
 bundle_args = [(f, output_path, extract_mode, True) for f in bundle_files]
 
-with Pool(num_workers) as pool:
-    for result in pool.imap_unordered(process_single_file, bundle_args, chunksize=1):
-        total_extracted += result
+with ThreadPoolExecutor(max_workers=num_workers) as executor:
+    futures = {executor.submit(process_single_file, arg): arg for arg in bundle_args}
+    for future in as_completed(futures):
+        try:
+            result = future.result()
+            total_extracted += result
+        except Exception as e:
+            pass
         processed += 1
         print('PROGRESS:' + str(processed) + ':' + str(len(assets_files) + len(bundle_files)))
         sys.stdout.flush()
