@@ -1432,7 +1432,10 @@ sys.stdout.flush()
             if (finished.ErrorCount > 0)
                 WriteLog(string.Format("Errors: {0}. Last error: {1}", finished.ErrorCount, finished.LastError));
             else
+            {
                 WriteLog(string.Format("Completed {0} {1} {2}.", processed, "files processed in", FormatDuration(elapsedSeconds)));
+                MessageBox.Show("Conversion complete!\n\nExtracted: " + processed + " files\n\nOutput: " + finished.OutputDir, "RPGMVP Converter", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
         }
 
         private void SetRunningState(bool running)
@@ -1630,6 +1633,7 @@ sys.stdout.flush()
             private readonly int workerCount;
             private readonly ManualResetEventSlim pauseGate;
             private readonly CancellationTokenSource cancellation;
+            private readonly string outputDir;
             private int processedCount;
             private int errorCount;
             private string lastError = string.Empty;
@@ -1641,6 +1645,8 @@ sys.stdout.flush()
                 TotalCount = files.Count;
                 this.keyBytes = keyBytes;
                 this.workerCount = workerCount;
+                outputDir = Path.Combine(rootPath, "extracted");
+                Directory.CreateDirectory(outputDir);
                 queue = new ConcurrentQueue<string>(files);
                 pauseGate = new ManualResetEventSlim(true);
                 cancellation = new CancellationTokenSource();
@@ -1649,6 +1655,7 @@ sys.stdout.flush()
             }
 
             public string RootPath { get; private set; }
+            public string OutputDir { get { return outputDir; } }
             public int TotalCount { get; private set; }
             public int ProcessedCount { get { return processedCount; } }
             public int ErrorCount { get { return errorCount; } }
@@ -1692,10 +1699,17 @@ sys.stdout.flush()
 
                         for (int i = 0; i < 16; i++) data[i] = (byte)(data[i] ^ keyBytes[i]);
 
-                        string outputPath = Path.ChangeExtension(filePath, ".png");
-                        File.WriteAllBytes(outputPath, data);
+                        string relativePath = filePath.Substring(RootPath.Length);
+                        if (relativePath.StartsWith(Path.DirectorySeparatorChar.ToString()))
+                            relativePath = relativePath.Substring(1);
+                        
+                        string outputPath = Path.Combine(outputDir, relativePath);
+                        outputPath = Path.ChangeExtension(outputPath, ".png");
 
-                        if (File.Exists(outputPath)) File.Delete(filePath);
+                        string outDir = Path.GetDirectoryName(outputPath);
+                        if (!string.IsNullOrEmpty(outDir)) Directory.CreateDirectory(outDir);
+
+                        File.WriteAllBytes(outputPath, data);
                     }
                     catch (Exception ex)
                     {
