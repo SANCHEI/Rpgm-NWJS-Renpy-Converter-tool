@@ -1310,7 +1310,7 @@ def has_relevant_content(file_path, mode):
     try:
         env = UnityPy.load(file_path)
         for obj in env.objects:
-            if mode in ['textures', 'all'] and obj.type.name == 'Texture2D':
+            if mode in ['textures', 'all'] and obj.type.name in ['Texture2D', 'Sprite', 'Cubemap', 'Texture3D', 'Texture2DArray']:
                 return True
             if mode in ['videos', 'all'] and obj.type.name == 'VideoClip':
                 return True
@@ -1322,6 +1322,7 @@ def has_relevant_content(file_path, mode):
 
 def extract_file(file_path, output, mode):
     total = 0
+    errors = 0
     try:
         print('Loading: ' + os.path.basename(file_path))
         sys.stdout.flush()
@@ -1337,20 +1338,37 @@ def extract_file(file_path, output, mode):
         textures = 0
         videos = 0
         audios = 0
+        errors = 0
         
         for obj in env.objects:
             try:
                 if mode in ['textures', 'all']:
-                    if obj.type.name == 'Texture2D':
+                    if obj.type.name in ['Texture2D', 'Sprite', 'Cubemap', 'Texture3D', 'Texture2DArray']:
                         data = obj.read()
                         name = getattr(data, 'name', None) or getattr(data, 'm_Name', 'texture_' + str(textures))
                         safe_name = ''.join(c for c in str(name) if c.isalnum() or c in '._- ')
                         
                         if hasattr(data, 'image') and data.image:
                             img_path = os.path.join(file_output, safe_name + '.png')
+                            # Handle duplicate names
+                            counter = 1
+                            base_name = safe_name
+                            while os.path.exists(img_path):
+                                safe_name = base_name + '_' + str(counter)
+                                img_path = os.path.join(file_output, safe_name + '.png')
+                                counter += 1
+                            
                             data.image.save(img_path)
                             textures += 1
                             total += 1
+                        elif obj.type.name == 'Sprite' and hasattr(data, 'texture') and data.texture:
+                            try:
+                                img_path = os.path.join(file_output, safe_name + '.png')
+                                data.texture.image.save(img_path)
+                                textures += 1
+                                total += 1
+                            except:
+                                pass
                 
                 if mode in ['videos', 'all']:
                     if obj.type.name == 'VideoClip':
@@ -1368,13 +1386,24 @@ def extract_file(file_path, output, mode):
                         audio_data = getattr(data, 'audio_data', None) or getattr(data, 'm_AudioData', None)
                         if audio_data:
                             audio_path = os.path.join(file_output, safe_name + '.wav')
+                            # Handle duplicate names
+                            counter = 1
+                            base_name = safe_name
+                            while os.path.exists(audio_path):
+                                safe_name = base_name + '_' + str(counter)
+                                audio_path = os.path.join(file_output, safe_name + '.wav')
+                                counter += 1
+                            
                             with open(audio_path, 'wb') as f:
                                 f.write(audio_data)
                             audios += 1
                             total += 1
             
             except Exception as e:
-                pass
+                errors += 1
+        
+        if errors > 0:
+            print('  Errors: ' + str(errors))
         
         return total
         
