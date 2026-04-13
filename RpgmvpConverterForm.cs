@@ -1316,6 +1316,10 @@ def has_relevant_content(file_path, mode):
                 return True
             if mode in ['audios', 'all'] and obj.type.name == 'AudioClip':
                 return True
+            if mode in ['textures', 'all'] and obj.type.name in ['AnimationClip', 'AnimatorController', 'AnimatorOverrideController']:
+                return True
+            if mode in ['textures', 'all'] and obj.type.name in ['MonoBehaviour', 'GameObject', 'Prefab']:
+                return True
         return False
     except:
         return False
@@ -1425,6 +1429,38 @@ def extract_file(file_path, output, mode):
                                 f.write(audio_data)
                             audios += 1
                             total += 1
+                
+                # Extract AnimationClip data
+                if mode in ['textures', 'all']:
+                    if obj.type.name == 'AnimationClip':
+                        try:
+                            data = obj.read()
+                            name = getattr(data, 'name', None) or getattr(data, 'm_Name', 'anim_' + str(textures))
+                            safe_name = ''.join(c for c in str(name) if c.isalnum() or c in '._- ')
+                            
+                            anim_path = os.path.join(file_output, safe_name + '.anim')
+                            counter = 1
+                            base_name = safe_name
+                            while os.path.exists(anim_path):
+                                safe_name = base_name + '_' + str(counter)
+                                anim_path = os.path.join(file_output, safe_name + '.anim')
+                                counter += 1
+                            
+                            # Save animation metadata as JSON
+                            import json
+                            anim_info = {
+                                'name': name,
+                                'length': getattr(data, 'm_Length', 0),
+                                'wrap_mode': getattr(data, 'wrapMode', 0),
+                                'loop': getattr(data, 'isLooping', False)
+                            }
+                            with open(anim_path.replace('.anim', '.json'), 'w') as f:
+                                json.dump(anim_info, f, indent=2)
+                            
+                            textures += 1
+                            total += 1
+                        except Exception as e:
+                            pass
             
             except Exception as e:
                 errors += 1
@@ -1500,6 +1536,14 @@ else:
             os.path.join(data_folder, 'StreamingAssets', 'aa'),
             os.path.join(data_folder, 'StreamingAssets', 'aa', 'StandaloneWindows64'),
         ]
+        
+        # Scan entire game folder for .bundle files (they can be anywhere)
+        for root, dirs, files in os.walk(game_path):
+            for f in files:
+                if f.endswith('.bundle'):
+                    bundle_path = os.path.join(root, f)
+                    if bundle_path not in all_files:
+                        all_files.append(bundle_path)
         
         for check_path in paths_to_check:
             if os.path.isdir(check_path):
