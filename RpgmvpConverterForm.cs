@@ -497,6 +497,15 @@ namespace RpgmvpConverterWinForms
 
             if (IsRenpyGame(rootPath))
             {
+                if (!IsPythonInstalled())
+                {
+                    var result = MessageBox.Show("Python is required for Renpy extraction.\n\nWould you like to download it now?", "Python Required", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                    if (result == DialogResult.Yes)
+                    {
+                        InstallPython();
+                    }
+                    return;
+                }
                 WriteLog("Renpy game detected - starting file extraction");
                 Task.Run(delegate { RunRenpyExtraction(rootPath); });
                 return;
@@ -654,6 +663,20 @@ namespace RpgmvpConverterWinForms
                 return;
             }
 
+            if (!IsPythonInstalled())
+            {
+                var result = MessageBox.Show("Python is required for Unity extraction.\n\nWould you like to download it now?", "Python Required", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (result == DialogResult.Yes)
+                {
+                    InstallPython();
+                    return;
+                }
+                else
+                {
+                    return;
+                }
+            }
+
             if (!CheckUnityPyInstalled())
             {
                 var result = MessageBox.Show("UnityPy is required for Unity extraction.\n\nWould you like to install it now?", "UnityPy Required", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
@@ -677,6 +700,53 @@ namespace RpgmvpConverterWinForms
             WriteLog("Unity extraction started: " + extractMode);
 
             Task.Run(delegate { RunUnityExtraction(rootPath, extractMode); });
+        }
+
+        private static bool IsPythonInstalled()
+        {
+            try
+            {
+                ProcessStartInfo psi = new ProcessStartInfo();
+                psi.FileName = "python";
+                psi.Arguments = "--version";
+                psi.UseShellExecute = false;
+                psi.RedirectStandardOutput = true;
+                psi.RedirectStandardError = true;
+                psi.CreateNoWindow = true;
+
+                using (Process process = Process.Start(psi))
+                {
+                    process.WaitForExit();
+                    return process.ExitCode == 0;
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private void InstallPython()
+        {
+            try
+            {
+                WriteLog("Installing Python...");
+                statusLabel.Text = "Installing Python...";
+
+                ProcessStartInfo psi = new ProcessStartInfo();
+                psi.FileName = "cmd";
+                psi.Arguments = "/c start https://www.python.org/ftp/python/3.12.0/python-3.12.0-amd64.exe && timeout /t 5";
+                psi.UseShellExecute = true;
+                psi.CreateNoWindow = true;
+
+                Process.Start(psi);
+
+                MessageBox.Show("Python download started.\n\nPlease install Python 3.x and restart the application.", "Python Required", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Failed to open Python download page.\n\nPlease install Python manually:\nhttps://www.python.org/downloads/", "Python Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         private static bool CheckUnityPyInstalled()
