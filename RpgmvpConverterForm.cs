@@ -1372,10 +1372,37 @@ def extract_file(file_path, output, mode):
                 
                 if mode in ['videos', 'all']:
                     if obj.type.name == 'VideoClip':
-                        data = obj.read()
-                        name = getattr(data, 'm_Name', 'video_' + str(videos))
-                        safe_name = ''.join(c for c in str(name) if c.isalnum() or c in '._- ')
-                        videos += 1
+                        try:
+                            data = obj.read()
+                            name = getattr(data, 'm_Name', 'video_' + str(videos)) or 'video_' + str(videos)
+                            safe_name = ''.join(c for c in str(name) if c.isalnum() or c in '._- ')
+                            
+                            # Try to get video data
+                            video_data = getattr(data, 'm_ExternalAssets', None)
+                            if not video_data:
+                                video_data = getattr(data, 'video_data', None)
+                            
+                            if video_data:
+                                ext = '.mp4'
+                                if hasattr(data, 'm_OriginalFileName'):
+                                    fname = getattr(data, 'm_OriginalFileName', '')
+                                    if fname:
+                                        ext = os.path.splitext(fname)[1] or '.mp4'
+                                
+                                video_path = os.path.join(file_output, safe_name + ext)
+                                counter = 1
+                                base_name = safe_name
+                                while os.path.exists(video_path):
+                                    safe_name = base_name + '_' + str(counter)
+                                    video_path = os.path.join(file_output, safe_name + ext)
+                                    counter += 1
+                                
+                                with open(video_path, 'wb') as vf:
+                                    vf.write(video_data)
+                                videos += 1
+                                total += 1
+                        except Exception as e:
+                            pass
                 
                 if mode in ['audios', 'all']:
                     if obj.type.name == 'AudioClip':
@@ -1438,7 +1465,23 @@ else:
                 if f.endswith('.assets') and not f.endswith('.resS'):
                     all_files.append(os.path.join(root, f))
                 # Extract direct image/video files
-                elif f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tga', '.tiff', '.mp4', '.webm', '.avi', '.mkv')):
+                elif f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tga', '.tiff', '.mp4', '.webm', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.3gp')):
+                    src = os.path.join(root, f)
+                    rel_path = os.path.relpath(src, data_folder)
+                    dst = os.path.join(output_path, 'direct', rel_path)
+                    dst_dir = os.path.dirname(dst)
+                    if dst_dir:
+                        os.makedirs(dst_dir, exist_ok=True)
+                    if not os.path.exists(dst):
+                        import shutil
+                        shutil.copy2(src, dst)
+                        direct_files += 1
+        
+        # Also scan StreamingAssets folder for direct media files
+        streaming_assets = os.path.join(data_folder, 'StreamingAssets')
+        if os.path.exists(streaming_assets):
+            for root, dirs, files in os.walk(streaming_assets):
+                for f in files:
                     src = os.path.join(root, f)
                     rel_path = os.path.relpath(src, data_folder)
                     dst = os.path.join(output_path, 'direct', rel_path)
