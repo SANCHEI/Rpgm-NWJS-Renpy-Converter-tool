@@ -1247,14 +1247,23 @@ print('DONE:' + str(count[0]))
                                             statusLabel.Text = "Unity: " + processedFiles + "/" + totalFiles;
                                         }
                                     }
-                                    else if (data.StartsWith("Loading:") || data.StartsWith("Processing:"))
+                                    else
                                     {
-                                        statusLabel.Text = "Unity: " + data;
+                                        WriteLog(data);
+                                        if (data.StartsWith("Loading:") || data.StartsWith("Processing:"))
+                                            statusLabel.Text = "Unity: " + data;
                                     }
                                 });
                             }
                         };
                         process.BeginOutputReadLine();
+                        process.ErrorDataReceived += delegate(object sender2, DataReceivedEventArgs e2)
+                        {
+                            if (!string.IsNullOrEmpty(e2.Data))
+                            {
+                                this.BeginInvoke((MethodInvoker)delegate { WriteLog("ERROR: " + e2.Data); });
+                            }
+                        };
                         process.BeginErrorReadLine();
                         process.WaitForExit();
                     }
@@ -1298,6 +1307,7 @@ from __future__ import print_function
 import sys
 import io
 import os
+from multiprocessing import Pool, cpu_count
 
 if sys.version_info[0] >= 3:
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
@@ -1548,13 +1558,31 @@ assets_files = assets_with_content
 print('Found ' + str(len(assets_files)) + ' assets with content')
 sys.stdout.flush()
 
-# Process files sequentially (more stable)
+# Process files in parallel for faster extraction
+num_workers = min(cpu_count(), 4)
+
+def process_single_file(args):
+    file_path, output, mode, is_bundle = args
+    try:
+        return extract_file(file_path, output, mode, is_bundle)
+    except Exception as e:
+        print('Error processing ' + os.path.basename(file_path) + ': ' + str(e))
+        return 0
+
+# Prepare arguments for parallel processing
+assets_args = [(f, output_path, extract_mode, False) for f in assets_files]
+
+print('Processing with ' + str(num_workers) + ' workers...')
+sys.stdout.flush()
+
+# Process assets in parallel
 processed = 0
-for i, file_path in enumerate(assets_files):
-    total_extracted += extract_file(file_path, output_path, extract_mode, False)
-    processed += 1
-    print('PROGRESS:' + str(processed) + ':' + str(len(assets_files)))
-    sys.stdout.flush()
+with Pool(num_workers) as pool:
+    for result in pool.imap_unordered(process_single_file, assets_args, chunksize=1):
+        total_extracted += result
+        processed += 1
+        print('PROGRESS:' + str(processed) + ':' + str(len(assets_files)))
+        sys.stdout.flush()
 
 # Filter and process .bundle files
 print('Checking bundles for content...')
@@ -1571,11 +1599,15 @@ sys.stdout.flush()
 print('TOTAL:' + str(len(assets_files) + len(bundle_files)))
 sys.stdout.flush()
 
-for i, file_path in enumerate(bundle_files):
-    total_extracted += extract_file(file_path, output_path, extract_mode, True)
-    processed += 1
-    print('PROGRESS:' + str(processed) + ':' + str(len(assets_files) + len(bundle_files)))
-    sys.stdout.flush()
+# Process bundles in parallel
+bundle_args = [(f, output_path, extract_mode, True) for f in bundle_files]
+
+with Pool(num_workers) as pool:
+    for result in pool.imap_unordered(process_single_file, bundle_args, chunksize=1):
+        total_extracted += result
+        processed += 1
+        print('PROGRESS:' + str(processed) + ':' + str(len(assets_files) + len(bundle_files)))
+        sys.stdout.flush()
 
 total_extracted += direct_files
 
