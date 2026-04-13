@@ -806,8 +806,9 @@ namespace RpgmvpConverterWinForms
         {
             try
             {
+                string pythonPath = FindPythonPath();
                 ProcessStartInfo psi = new ProcessStartInfo();
-                psi.FileName = "python";
+                psi.FileName = "\"" + pythonPath + "\"";
                 psi.Arguments = "-c \"import UnityPy; print('ok')\"";
                 psi.UseShellExecute = false;
                 psi.RedirectStandardOutput = true;
@@ -827,6 +828,48 @@ namespace RpgmvpConverterWinForms
             }
         }
 
+        private static string FindPythonPath()
+        {
+            string[] commonPaths = {
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + @"\Programs\Python\Python312\python.exe",
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + @"\Programs\Python\Python311\python.exe",
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + @"\Programs\Python\Python310\python.exe",
+                @"C:\Python312\python.exe",
+                @"C:\Python311\python.exe",
+                @"C:\Python310\python.exe",
+                @"C:\Program Files\Python312\python.exe",
+                @"C:\Program Files\Python311\python.exe",
+                @"C:\Program Files\Python310\python.exe"
+            };
+
+            foreach (string path in commonPaths)
+            {
+                if (File.Exists(path))
+                    return path;
+            }
+
+            try
+            {
+                ProcessStartInfo psi = new ProcessStartInfo();
+                psi.FileName = "cmd";
+                psi.Arguments = "/c where python";
+                psi.UseShellExecute = false;
+                psi.RedirectStandardOutput = true;
+                psi.CreateNoWindow = true;
+
+                using (Process process = Process.Start(psi))
+                {
+                    string output = process.StandardOutput.ReadLine();
+                    process.WaitForExit();
+                    if (!string.IsNullOrWhiteSpace(output) && File.Exists(output.Trim()))
+                        return output.Trim();
+                }
+            }
+            catch { }
+
+            return "python";
+        }
+
         private void InstallUnityPy()
         {
             try
@@ -834,8 +877,10 @@ namespace RpgmvpConverterWinForms
                 WriteLog("Installing UnityPy...");
                 statusLabel.Text = "Installing UnityPy...";
 
+                string pythonPath = FindPythonPath();
+
                 ProcessStartInfo psi = new ProcessStartInfo();
-                psi.FileName = "python";
+                psi.FileName = "\"" + pythonPath + "\"";
                 psi.Arguments = "-m pip install UnityPy";
                 psi.UseShellExecute = false;
                 psi.RedirectStandardOutput = true;
@@ -1026,8 +1071,9 @@ print('DONE:' + str(count[0]))
                     
                     WriteLog("Processing: " + rpaName);
 
+                    string pythonPath = FindPythonPath();
                     ProcessStartInfo psi = new ProcessStartInfo();
-                    psi.FileName = "python";
+                    psi.FileName = "\"" + pythonPath + "\"";
                     psi.Arguments = "\"" + scriptPath + "\"";
                     psi.UseShellExecute = false;
                     psi.RedirectStandardOutput = true;
@@ -1135,8 +1181,9 @@ print('DONE:' + str(count[0]))
                 int totalFiles = 0;
                 int processedFiles = 0;
 
+                string pythonPath = FindPythonPath();
                 ProcessStartInfo psi = new ProcessStartInfo();
-                psi.FileName = "python";
+                psi.FileName = "\"" + pythonPath + "\"";
                 psi.Arguments = "\"" + scriptPath + "\"";
                 psi.UseShellExecute = false;
                 psi.RedirectStandardOutput = true;
@@ -1519,8 +1566,9 @@ sys.stdout.flush()
         {
             try
             {
+                string pythonPath = FindPythonPath();
                 ProcessStartInfo psi = new ProcessStartInfo();
-                psi.FileName = "python";
+                psi.FileName = "\"" + pythonPath + "\"";
                 psi.Arguments = "-c \"from unrpa import UNRPA; print('ok')\"";
                 psi.UseShellExecute = false;
                 psi.RedirectStandardOutput = true;
