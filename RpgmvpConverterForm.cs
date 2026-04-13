@@ -1289,6 +1289,7 @@ from __future__ import print_function
 import sys
 import io
 import os
+from multiprocessing import Pool, cpu_count
 
 if sys.version_info[0] >= 3:
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
@@ -1324,7 +1325,7 @@ def has_relevant_content(file_path, mode):
     except:
         return False
 
-def extract_file(file_path, output, mode):
+def extract_file(file_path, output, mode, is_bundle=False):
     total = 0
     errors = 0
     try:
@@ -1336,7 +1337,10 @@ def extract_file(file_path, output, mode):
         print('Processing: ' + os.path.basename(file_path) + ' (' + str(len(env.objects)) + ' objects)')
         sys.stdout.flush()
         
-        file_output = os.path.join(output, os.path.splitext(os.path.basename(file_path))[0])
+        if is_bundle:
+            file_output = os.path.join(output, 'bundle_extracted', os.path.splitext(os.path.basename(file_path))[0])
+        else:
+            file_output = os.path.join(output, os.path.splitext(os.path.basename(file_path))[0])
         os.makedirs(file_output, exist_ok=True)
         
         textures = 0
@@ -1554,31 +1558,83 @@ else:
                 if check_path not in all_files:
                     all_files.append(check_path)
 
-# Remove duplicates
+# Remove duplicates and separate bundles
 all_files = list(set(all_files))
-print('Found ' + str(len(all_files)) + ' asset files')
+bundle_files = [f for f in all_files if f.endswith('.bundle')]
+assets_files = [f for f in all_files if not f.endswith('.bundle')]
+
+print('Found ' + str(len(assets_files)) + ' asset files')
+print('Found ' + str(len(bundle_files)) + ' bundle files')
 print('Copied ' + str(direct_files) + ' direct files')
 sys.stdout.flush()
 
-# Filter files that have relevant content
-print('Checking for content...')
+# Create directories for bundle extraction
+os.makedirs(os.path.join(output_path, 'bundle_extracted'), exist_ok=True)
+
+# Filter and process .assets files first
+print('Checking assets for content...')
 sys.stdout.flush()
-files_with_content = []
-for f in all_files:
+assets_with_content = []
+for f in assets_files:
     if has_relevant_content(f, extract_mode):
-        files_with_content.append(f)
+        assets_with_content.append(f)
 
-all_files = files_with_content
+assets_files = assets_with_content
 
-print('Found ' + str(len(all_files)) + ' files with content')
-sys.stdout.flush()
-print('TOTAL:' + str(len(all_files)))
+print('Found ' + str(len(assets_files)) + ' assets with content')
 sys.stdout.flush()
 
-for i, file_path in enumerate(all_files):
-    total_extracted += extract_file(file_path, output_path, extract_mode)
-    print('PROGRESS:' + str(i + 1) + ':' + str(len(all_files)))
-    sys.stdout.flush()
+# Process files in parallel for faster extraction
+num_workers = min(cpu_count(), 4)
+
+def process_single_file(args):
+    file_path, output, mode, is_bundle = args
+    try:
+        return extract_file(file_path, output, mode, is_bundle)
+    except Exception as e:
+        print('Error processing ' + os.path.basename(file_path) + ': ' + str(e))
+        return 0
+
+# Prepare arguments for parallel processing
+assets_args = [(f, output_path, extract_mode, False) for f in assets_files]
+
+print('Processing with ' + str(num_workers) + ' workers...')
+sys.stdout.flush()
+
+# Process assets in parallel
+import itertools
+processed = 0
+with Pool(num_workers) as pool:
+    for result in pool.imap_unordered(process_single_file, assets_args, chunksize=1):
+        total_extracted += result
+        processed += 1
+        print('PROGRESS:' + str(processed) + ':' + str(len(assets_files)))
+        sys.stdout.flush()
+
+# Filter and process .bundle files
+print('Checking bundles for content...')
+sys.stdout.flush()
+bundles_with_content = []
+for f in bundle_files:
+    if has_relevant_content(f, extract_mode):
+        bundles_with_content.append(f)
+
+bundle_files = bundles_with_content
+
+print('Found ' + str(len(bundle_files)) + ' bundles with content')
+sys.stdout.flush()
+print('TOTAL:' + str(len(assets_files) + len(bundle_files)))
+sys.stdout.flush()
+
+# Process bundles in parallel
+bundle_args = [(f, output_path, extract_mode, True) for f in bundle_files]
+
+with Pool(num_workers) as pool:
+    for result in pool.imap_unordered(process_single_file, bundle_args, chunksize=1):
+        total_extracted += result
+        processed += 1
+        print('PROGRESS:' + str(processed) + ':' + str(len(assets_files) + len(bundle_files)))
+        sys.stdout.flush()
 
 total_extracted += direct_files
 
