@@ -1402,25 +1402,33 @@ if not data_folders:
     print('No Unity data folders found')
 else:
     for data_folder in data_folders:
-        try:
-            for f in os.listdir(data_folder):
+        # Scan all subfolders for .assets files
+        for root, dirs, files in os.walk(data_folder):
+            for f in files:
                 if f.endswith('.assets') and not f.endswith('.resS'):
-                    all_files.append(os.path.join(data_folder, f))
-        except Exception as e:
-            pass
+                    all_files.append(os.path.join(root, f))
         
-        ggm_path = os.path.join(data_folder, 'globalgamemanagers.assets')
-        if os.path.exists(ggm_path):
-            all_files.append(ggm_path)
+        # Check standalone paths
+        paths_to_check = [
+            os.path.join(data_folder, 'globalgamemanagers.assets'),
+            os.path.join(data_folder, 'StreamingAssets'),
+            os.path.join(data_folder, 'StreamingAssets', 'aa'),
+            os.path.join(data_folder, 'StreamingAssets', 'aa', 'StandaloneWindows64'),
+        ]
         
-        streaming = os.path.join(data_folder, 'StreamingAssets', 'aa', 'StandaloneWindows64')
-        if os.path.exists(streaming):
-            try:
-                for bundle_file in os.listdir(streaming):
-                    if bundle_file.endswith('.bundle'):
-                        all_files.append(os.path.join(streaming, bundle_file))
-            except:
-                pass
+        for check_path in paths_to_check:
+            if os.path.isdir(check_path):
+                for f in os.listdir(check_path):
+                    if f.endswith('.bundle'):
+                        all_files.append(os.path.join(check_path, f))
+            elif os.path.isfile(check_path):
+                if check_path not in all_files:
+                    all_files.append(check_path)
+
+# Remove duplicates
+all_files = list(set(all_files))
+print('Found ' + str(len(all_files)) + ' asset files')
+sys.stdout.flush()
 
 # Filter files that have relevant content
 print('Checking for content...')
