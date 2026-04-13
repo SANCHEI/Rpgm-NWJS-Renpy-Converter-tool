@@ -730,22 +730,38 @@ namespace RpgmvpConverterWinForms
         {
             try
             {
-                WriteLog("Installing Python...");
+                WriteLog("Downloading Python...");
+                statusLabel.Text = "Downloading Python...";
+
+                string tempDir = Path.Combine(Path.GetTempPath(), "GameAssetTool");
+                Directory.CreateDirectory(tempDir);
+                string installerPath = Path.Combine(tempDir, "python-installer.exe");
+
+                using (var client = new System.Net.WebClient())
+                {
+                    client.DownloadFile("https://www.python.org/ftp/python/3.12.0/python-3.12.0-amd64.exe", installerPath);
+                }
+
+                WriteLog("Installing Python silently...");
                 statusLabel.Text = "Installing Python...";
 
                 ProcessStartInfo psi = new ProcessStartInfo();
-                psi.FileName = "cmd";
-                psi.Arguments = "/c start https://www.python.org/ftp/python/3.12.0/python-3.12.0-amd64.exe && timeout /t 5";
-                psi.UseShellExecute = true;
+                psi.FileName = installerPath;
+                psi.Arguments = "/quiet InstallAllUsers=1 PrependPath=1";
+                psi.UseShellExecute = false;
                 psi.CreateNoWindow = true;
 
-                Process.Start(psi);
+                using (Process process = Process.Start(psi))
+                {
+                    process.WaitForExit();
+                }
 
-                MessageBox.Show("Python download started.\n\nPlease install Python 3.x and restart the application.", "Python Required", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                WriteLog("Python installed. Please restart the application.");
+                MessageBox.Show("Python has been installed.\n\nPlease restart the application.", "Python Installed", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Failed to open Python download page.\n\nPlease install Python manually:\nhttps://www.python.org/downloads/", "Python Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Failed to install Python automatically.\n\nPlease install Python manually:\nhttps://www.python.org/downloads/", "Python Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
 
