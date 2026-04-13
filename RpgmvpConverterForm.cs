@@ -704,26 +704,29 @@ namespace RpgmvpConverterWinForms
 
         private static bool IsPythonInstalled()
         {
-            try
-            {
-                ProcessStartInfo psi = new ProcessStartInfo();
-                psi.FileName = "python";
-                psi.Arguments = "--version";
-                psi.UseShellExecute = false;
-                psi.RedirectStandardOutput = true;
-                psi.RedirectStandardError = true;
-                psi.CreateNoWindow = true;
+            string[] pythonPaths = { "python", "python3", @"C:\Python312\python.exe", @"C:\Program Files\Python312\python.exe", @"C:\Users\" + Environment.UserName + @"\AppData\Local\Programs\Python\Python312\python.exe" };
 
-                using (Process process = Process.Start(psi))
-                {
-                    process.WaitForExit();
-                    return process.ExitCode == 0;
-                }
-            }
-            catch
+            foreach (string pyPath in pythonPaths)
             {
-                return false;
+                try
+                {
+                    ProcessStartInfo psi = new ProcessStartInfo();
+                    psi.FileName = pyPath;
+                    psi.Arguments = "--version";
+                    psi.UseShellExecute = false;
+                    psi.RedirectStandardOutput = true;
+                    psi.RedirectStandardError = true;
+                    psi.CreateNoWindow = true;
+
+                    using (Process process = Process.Start(psi))
+                    {
+                        process.WaitForExit();
+                        if (process.ExitCode == 0) return true;
+                    }
+                }
+                catch { }
             }
+            return false;
         }
 
         private void InstallPython()
@@ -757,7 +760,7 @@ namespace RpgmvpConverterWinForms
                 }
 
                 WriteLog("Python installed. Please restart the application.");
-                MessageBox.Show("Python has been installed.\n\nPlease restart the application.", "Python Installed", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show("Python has been installed.\n\nPlease CLOSE and REOPEN this application.", "Python Installed", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
