@@ -57,6 +57,8 @@ namespace RpgmvpConverterWinForms
 
         private System.Windows.Forms.Timer uiTimer;
         private ConversionRun currentRun;
+        private Process unityProcess;
+        private bool unityRunning;
 
         public RpgmvpConverterForm()
         {
@@ -1197,12 +1199,18 @@ print('DONE:' + str(count[0]))
                 psi.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
                 psi.EnvironmentVariables["PYTHONUNBUFFERED"] = "x";
 
-                using (Process process = Process.Start(psi))
+                unityRunning = true;
+                SetUnityRunningState(true);
+
+                Process process = null;
+                try
                 {
+                    process = Process.Start(psi);
+                    unityProcess = process;
+                    
                     if (process != null)
                     {
                         DateTime startTime = DateTime.UtcNow;
-                        string lastStatus = "";
 
                         process.OutputDataReceived += delegate(object sender, DataReceivedEventArgs e)
                         {
@@ -1211,8 +1219,6 @@ print('DONE:' + str(count[0]))
                                 string data = e.Data;
                                 this.BeginInvoke((MethodInvoker)delegate
                                 {
-                                    WriteLog(data);
-
                                     if (data.StartsWith("TOTAL:"))
                                     {
                                         string[] parts = data.Split(':');
@@ -1226,10 +1232,10 @@ print('DONE:' + str(count[0]))
                                     else if (data.StartsWith("PROGRESS:"))
                                     {
                                         string[] parts = data.Split(':');
-                                        if (parts.Length >= 3)
+                                        if (parts.Length >= 2)
                                         {
                                             int.TryParse(parts[1], out processedFiles);
-                                            int.TryParse(parts[2], out totalFiles);
+                                            if (parts.Length >= 3) int.TryParse(parts[2], out totalFiles);
                                             progressBar.Maximum = Math.Max(totalFiles, 1);
                                             progressBar.Value = Math.Min(processedFiles, progressBar.Maximum);
 
@@ -1238,22 +1244,14 @@ print('DONE:' + str(count[0]))
                                             int remaining = totalFiles - processedFiles;
                                             string eta = speed > 0 ? FormatDuration(remaining / speed) : "--:--";
                                             statsLabel.Text = "Processed: " + processedFiles + " / " + totalFiles + " | Speed: " + speed.ToString("N2") + " f/s | ETA: " + eta;
-                                            statusLabel.Text = "Unity: Processing " + processedFiles + "/" + totalFiles + " (" + (totalFiles > 0 ? (processedFiles * 100 / totalFiles).ToString() : "0") + "%)";
+                                            statusLabel.Text = "Unity: " + processedFiles + "/" + totalFiles;
                                         }
                                     }
-                                    else if (data.StartsWith("Processing:") && lastStatus != data)
+                                    else if (data.StartsWith("Loading:") || data.StartsWith("Processing:"))
                                     {
-                                        lastStatus = data;
                                         statusLabel.Text = "Unity: " + data;
                                     }
                                 });
-                            }
-                        };
-                        process.ErrorDataReceived += delegate(object sender, DataReceivedEventArgs e)
-                        {
-                            if (!string.IsNullOrEmpty(e.Data))
-                            {
-                                this.BeginInvoke((MethodInvoker)delegate { WriteLog("ERROR: " + e.Data); });
                             }
                         };
                         process.BeginOutputReadLine();
@@ -1261,15 +1259,17 @@ print('DONE:' + str(count[0]))
                         process.WaitForExit();
                     }
                 }
-
-                this.BeginInvoke((MethodInvoker)delegate
+                finally
                 {
-                    progressBar.Value = progressBar.Maximum;
-                    statusLabel.Text = "Unity: Complete";
-                    statsLabel.Text = "Processed: " + processedFiles + " / " + totalFiles;
-                    WriteLog("Unity extraction complete! Output: " + outputDir);
-                    MessageBox.Show("Unity extraction complete!\n\nExtracted: " + processedFiles + " files\n\nOutput: " + outputDir, "Unity Extractor", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                });
+                    unityRunning = false;
+                    unityProcess = null;
+                    SetUnityRunningState(false);
+
+                    if (process != null)
+                    {
+                        process.Dispose();
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -1282,6 +1282,15 @@ print('DONE:' + str(count[0]))
             }
         }
 
+        private void SetUnityRunningState(bool running)
+        {
+            if (pauseButton != null) pauseButton.Enabled = running;
+            if (cancelButton != null) cancelButton.Enabled = running;
+            if (unityExtractButton != null) unityExtractButton.Enabled = !running;
+            if (unlockerButton != null) unlockerButton.Enabled = !running;
+            if (startButton != null) startButton.Enabled = !running;
+        }
+
         private static string GetUnityExtractionScript()
         {
             return @"# -*- coding: utf-8 -*-
@@ -1289,7 +1298,6 @@ from __future__ import print_function
 import sys
 import io
 import os
-from multiprocessing import Pool, cpu_count
 
 if sys.version_info[0] >= 3:
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
@@ -1327,9 +1335,8 @@ def has_relevant_content(file_path, mode):
 
 def extract_file(file_path, output, mode, is_bundle=False):
     total = 0
-    errors = 0
     try:
-        print('Loading: ' + os.path.basename(file_path) + ' (this may take a while...)')
+        print('Loading: ' + os.path.basename(file_path))
         sys.stdout.flush()
         
         env = UnityPy.load(file_path)
@@ -1346,37 +1353,30 @@ def extract_file(file_path, output, mode, is_bundle=False):
         textures = 0
         videos = 0
         audios = 0
-        errors = 0
         
         for obj in env.objects:
             try:
                 if mode in ['textures', 'all']:
                     if obj.type.name in ['Texture2D', 'Sprite', 'Cubemap', 'Texture3D', 'Texture2DArray']:
-                        data = obj.read()
-                        name = getattr(data, 'name', None) or getattr(data, 'm_Name', 'texture_' + str(textures))
-                        safe_name = ''.join(c for c in str(name) if c.isalnum() or c in '._- ')
-                        
-                        if hasattr(data, 'image') and data.image:
-                            img_path = os.path.join(file_output, safe_name + '.png')
-                            # Handle duplicate names
-                            counter = 1
-                            base_name = safe_name
-                            while os.path.exists(img_path):
-                                safe_name = base_name + '_' + str(counter)
-                                img_path = os.path.join(file_output, safe_name + '.png')
-                                counter += 1
+                        try:
+                            data = obj.read()
+                            name = getattr(data, 'name', None) or getattr(data, 'm_Name', 'texture_' + str(textures))
+                            safe_name = ''.join(c for c in str(name) if c.isalnum() or c in '._- ')
                             
-                            data.image.save(img_path)
-                            textures += 1
-                            total += 1
-                        elif obj.type.name == 'Sprite' and hasattr(data, 'texture') and data.texture:
-                            try:
+                            if hasattr(data, 'image') and data.image:
                                 img_path = os.path.join(file_output, safe_name + '.png')
-                                data.texture.image.save(img_path)
+                                counter = 1
+                                base_name = safe_name
+                                while os.path.exists(img_path):
+                                    safe_name = base_name + '_' + str(counter)
+                                    img_path = os.path.join(file_output, safe_name + '.png')
+                                    counter += 1
+                                
+                                data.image.save(img_path)
                                 textures += 1
                                 total += 1
-                            except:
-                                pass
+                        except:
+                            pass
                 
                 if mode in ['videos', 'all']:
                     if obj.type.name == 'VideoClip':
@@ -1385,7 +1385,6 @@ def extract_file(file_path, output, mode, is_bundle=False):
                             name = getattr(data, 'm_Name', 'video_' + str(videos)) or 'video_' + str(videos)
                             safe_name = ''.join(c for c in str(name) if c.isalnum() or c in '._- ')
                             
-                            # Try to get video data
                             video_data = getattr(data, 'm_ExternalAssets', None)
                             if not video_data:
                                 video_data = getattr(data, 'video_data', None)
@@ -1409,74 +1408,39 @@ def extract_file(file_path, output, mode, is_bundle=False):
                                     vf.write(video_data)
                                 videos += 1
                                 total += 1
-                        except Exception as e:
+                        except:
                             pass
                 
                 if mode in ['audios', 'all']:
                     if obj.type.name == 'AudioClip':
-                        data = obj.read()
-                        name = getattr(data, 'name', None) or getattr(data, 'm_Name', 'audio_' + str(audios))
-                        safe_name = ''.join(c for c in str(name) if c.isalnum() or c in '._- ')
-                        
-                        audio_data = getattr(data, 'audio_data', None) or getattr(data, 'm_AudioData', None)
-                        if audio_data:
-                            audio_path = os.path.join(file_output, safe_name + '.wav')
-                            # Handle duplicate names
-                            counter = 1
-                            base_name = safe_name
-                            while os.path.exists(audio_path):
-                                safe_name = base_name + '_' + str(counter)
-                                audio_path = os.path.join(file_output, safe_name + '.wav')
-                                counter += 1
-                            
-                            with open(audio_path, 'wb') as f:
-                                f.write(audio_data)
-                            audios += 1
-                            total += 1
-                
-                # Extract AnimationClip data
-                if mode in ['textures', 'all']:
-                    if obj.type.name == 'AnimationClip':
                         try:
                             data = obj.read()
-                            name = getattr(data, 'name', None) or getattr(data, 'm_Name', 'anim_' + str(textures))
+                            name = getattr(data, 'name', None) or getattr(data, 'm_Name', 'audio_' + str(audios))
                             safe_name = ''.join(c for c in str(name) if c.isalnum() or c in '._- ')
                             
-                            anim_path = os.path.join(file_output, safe_name + '.anim')
-                            counter = 1
-                            base_name = safe_name
-                            while os.path.exists(anim_path):
-                                safe_name = base_name + '_' + str(counter)
-                                anim_path = os.path.join(file_output, safe_name + '.anim')
-                                counter += 1
-                            
-                            # Save animation metadata as JSON
-                            import json
-                            anim_info = {
-                                'name': name,
-                                'length': getattr(data, 'm_Length', 0),
-                                'wrap_mode': getattr(data, 'wrapMode', 0),
-                                'loop': getattr(data, 'isLooping', False)
-                            }
-                            with open(anim_path.replace('.anim', '.json'), 'w') as f:
-                                json.dump(anim_info, f, indent=2)
-                            
-                            textures += 1
-                            total += 1
-                        except Exception as e:
+                            audio_data = getattr(data, 'audio_data', None) or getattr(data, 'm_AudioData', None)
+                            if audio_data:
+                                audio_path = os.path.join(file_output, safe_name + '.wav')
+                                counter = 1
+                                base_name = safe_name
+                                while os.path.exists(audio_path):
+                                    safe_name = base_name + '_' + str(counter)
+                                    audio_path = os.path.join(file_output, safe_name + '.wav')
+                                    counter += 1
+                                
+                                with open(audio_path, 'wb') as f:
+                                    f.write(audio_data)
+                                audios += 1
+                                total += 1
+                        except:
                             pass
             
-            except Exception as e:
-                errors += 1
-        
-        if errors > 0:
-            print('  Errors: ' + str(errors))
+            except:
+                pass
         
         return total
         
     except Exception as e:
-        print('Error: ' + str(e))
-        sys.stdout.flush()
         return 0
 
 print('Unity Asset Extractor')
@@ -1584,32 +1548,13 @@ assets_files = assets_with_content
 print('Found ' + str(len(assets_files)) + ' assets with content')
 sys.stdout.flush()
 
-# Process files in parallel for faster extraction
-num_workers = min(cpu_count(), 4)
-
-def process_single_file(args):
-    file_path, output, mode, is_bundle = args
-    try:
-        return extract_file(file_path, output, mode, is_bundle)
-    except Exception as e:
-        print('Error processing ' + os.path.basename(file_path) + ': ' + str(e))
-        return 0
-
-# Prepare arguments for parallel processing
-assets_args = [(f, output_path, extract_mode, False) for f in assets_files]
-
-print('Processing with ' + str(num_workers) + ' workers...')
-sys.stdout.flush()
-
-# Process assets in parallel
-import itertools
+# Process files sequentially (more stable)
 processed = 0
-with Pool(num_workers) as pool:
-    for result in pool.imap_unordered(process_single_file, assets_args, chunksize=1):
-        total_extracted += result
-        processed += 1
-        print('PROGRESS:' + str(processed) + ':' + str(len(assets_files)))
-        sys.stdout.flush()
+for i, file_path in enumerate(assets_files):
+    total_extracted += extract_file(file_path, output_path, extract_mode, False)
+    processed += 1
+    print('PROGRESS:' + str(processed) + ':' + str(len(assets_files)))
+    sys.stdout.flush()
 
 # Filter and process .bundle files
 print('Checking bundles for content...')
@@ -1626,15 +1571,11 @@ sys.stdout.flush()
 print('TOTAL:' + str(len(assets_files) + len(bundle_files)))
 sys.stdout.flush()
 
-# Process bundles in parallel
-bundle_args = [(f, output_path, extract_mode, True) for f in bundle_files]
-
-with Pool(num_workers) as pool:
-    for result in pool.imap_unordered(process_single_file, bundle_args, chunksize=1):
-        total_extracted += result
-        processed += 1
-        print('PROGRESS:' + str(processed) + ':' + str(len(assets_files) + len(bundle_files)))
-        sys.stdout.flush()
+for i, file_path in enumerate(bundle_files):
+    total_extracted += extract_file(file_path, output_path, extract_mode, True)
+    processed += 1
+    print('PROGRESS:' + str(processed) + ':' + str(len(assets_files) + len(bundle_files)))
+    sys.stdout.flush()
 
 total_extracted += direct_files
 
@@ -1676,6 +1617,21 @@ sys.stdout.flush()
                 pauseButton.Enabled = false;
                 statusLabel.Text = "Stopping...";
                 WriteLog("Stop requested");
+            }
+
+            if (unityProcess != null && !unityProcess.HasExited)
+            {
+                try
+                {
+                    unityProcess.Kill();
+                    unityProcess.Dispose();
+                }
+                catch { }
+                unityProcess = null;
+                unityRunning = false;
+                SetUnityRunningState(false);
+                statusLabel.Text = "Cancelled";
+                WriteLog("Cancelled");
             }
         }
 
