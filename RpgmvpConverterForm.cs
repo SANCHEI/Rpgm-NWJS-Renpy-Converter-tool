@@ -1236,14 +1236,17 @@ print('DONE:' + str(count[0]))
                                         {
                                             int.TryParse(parts[1], out processedFiles);
                                             if (parts.Length >= 3) int.TryParse(parts[2], out totalFiles);
+                                            
+                                            long extractedSize = 0;
+                                            if (parts.Length >= 4) long.TryParse(parts[3], out extractedSize);
+                                            
                                             progressBar.Maximum = Math.Max(totalFiles, 1);
                                             progressBar.Value = Math.Min(processedFiles, progressBar.Maximum);
 
                                             double elapsed = Math.Max((DateTime.UtcNow - startTime).TotalSeconds, 0.1);
-                                            double speed = processedFiles / elapsed;
-                                            int remaining = totalFiles - processedFiles;
-                                            string eta = speed > 0 ? FormatDuration(remaining / speed) : "--:--";
-                                            statsLabel.Text = "Processed: " + processedFiles + " / " + totalFiles + " | Speed: " + speed.ToString("N2") + " f/s | ETA: " + eta;
+                                            string elapsedStr = FormatDuration(elapsed);
+                                            string sizeStr = extractedSize > 0 ? (extractedSize / (1024 * 1024)) + " MB" : "--";
+                                            statsLabel.Text = "Processed: " + processedFiles + " / " + totalFiles + " | Size: " + sizeStr + " | Time: " + elapsedStr;
                                             statusLabel.Text = "Unity: " + processedFiles + "/" + totalFiles;
                                         }
                                     }
@@ -1375,6 +1378,7 @@ def has_relevant_content(file_path, mode):
 
 def extract_file(file_path, output, mode, is_bundle=False):
     total = 0
+    total_size = 0
     saved_files = set()
     
     try:
@@ -1408,10 +1412,10 @@ def extract_file(file_path, output, mode, is_bundle=False):
                             if hasattr(data, 'image') and data.image:
                                 img_path = os.path.join(file_output, safe_name + '.png')
                                 
-                                # Only save if not already saved (avoid duplicates)
                                 if img_path not in saved_files:
                                     data.image.save(img_path)
                                     saved_files.add(img_path)
+                                    total_size += os.path.getsize(img_path)
                                     textures += 1
                                     total += 1
                         except:
@@ -1441,6 +1445,7 @@ def extract_file(file_path, output, mode, is_bundle=False):
                                     with open(video_path, 'wb') as vf:
                                         vf.write(video_data)
                                     saved_files.add(video_path)
+                                    total_size += len(video_data)
                                     videos += 1
                                     total += 1
                         except:
@@ -1461,6 +1466,7 @@ def extract_file(file_path, output, mode, is_bundle=False):
                                     with open(audio_path, 'wb') as f:
                                         f.write(audio_data)
                                     saved_files.add(audio_path)
+                                    total_size += len(audio_data)
                                     audios += 1
                                     total += 1
                         except:
@@ -1469,10 +1475,10 @@ def extract_file(file_path, output, mode, is_bundle=False):
             except:
                 pass
         
-        return total
+        return total, total_size
         
     except Exception as e:
-        return 0
+        return 0, 0
 
 print('Unity Asset Extractor')
 print('Game: ' + game_path)
@@ -1481,6 +1487,7 @@ print('Mode: ' + extract_mode)
 print('-' * 50)
 
 total_extracted = 0
+total_size = 0
 all_files = []
 direct_files = 0
 
@@ -1511,6 +1518,7 @@ else:
                         import shutil
                         shutil.copy2(src, dst)
                         direct_files += 1
+                        total_size += os.path.getsize(src)
         
         # Also scan StreamingAssets folder for direct media files
         streaming_assets = os.path.join(data_folder, 'StreamingAssets')
@@ -1527,6 +1535,7 @@ else:
                         import shutil
                         shutil.copy2(src, dst)
                         direct_files += 1
+                        total_size += os.path.getsize(src)
         
         # Check standalone paths
         paths_to_check = [
@@ -1603,7 +1612,7 @@ def process_single_file(args):
     try:
         return extract_file(file_path, output, mode, is_bundle)
     except Exception as e:
-        return 0
+        return 0, 0
 
 # Prepare arguments for parallel processing
 assets_args = [(f, output_path, extract_mode, False) for f in assets_files]
@@ -1613,16 +1622,18 @@ sys.stdout.flush()
 
 # Process assets in parallel using ThreadPoolExecutor
 processed = 0
+total_size = 0
 with ThreadPoolExecutor(max_workers=num_workers) as executor:
     futures = {executor.submit(process_single_file, arg): arg for arg in assets_args}
     for future in as_completed(futures):
         try:
-            result = future.result()
+            result, size = future.result()
             total_extracted += result
+            total_size += size
         except Exception as e:
             pass
         processed += 1
-        print('PROGRESS:' + str(processed) + ':' + str(len(assets_files)))
+        print('PROGRESS:' + str(processed) + ':' + str(len(assets_files)) + ':' + str(total_size))
         sys.stdout.flush()
 
 # Filter and process .bundle files (if not skipped)
@@ -1651,18 +1662,19 @@ else:
         futures = {executor.submit(process_single_file, arg): arg for arg in bundle_args}
         for future in as_completed(futures):
             try:
-                result = future.result()
+                result, size = future.result()
                 total_extracted += result
+                total_size += size
             except Exception as e:
                 pass
             processed += 1
-            print('PROGRESS:' + str(processed) + ':' + str(len(assets_files) + len(bundle_files)))
+            print('PROGRESS:' + str(processed) + ':' + str(len(assets_files) + len(bundle_files)) + ':' + str(total_size))
             sys.stdout.flush()
 
 total_extracted += direct_files
 
 print('-' * 50)
-print('Done! Extracted ' + str(total_extracted) + ' assets')
+print('Done! Extracted ' + str(total_extracted) + ' files (' + str(int(total_size / (1024 * 1024))) + ' MB)')
 sys.stdout.flush()
 ";
         }
