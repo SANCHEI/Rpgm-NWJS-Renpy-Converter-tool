@@ -6,7 +6,7 @@
 
 Fast converter for **RPGMVP**, **Unity** and **Gallery Unlocker** for **NWJS/Renpy** games.
 
-![Version](https://img.shields.io/badge/version-1.3.0-blue)
+![Version](https://img.shields.io/badge/version-1.3.1-blue)
 ![.NET](https://img.shields.io/badge/.NET-4.0-blue)
 ![Python](https://img.shields.io/badge/Python-3.x-green)
 
@@ -94,6 +94,12 @@ Requires:
 - CSC compiler
 
 ## Changelog
+
+### v1.3.1
+- No-key decryption for RPGMVP files
+- Automatically reconstructs key from .rpgmvp files
+- Game Root renamed to Game Folder
+- Path/key fields editable after cancel
 
 ### v1.3.0
 - Reduced RAM usage from 15GB to ~4GB
