@@ -131,7 +131,7 @@ namespace RpgmvpConverterWinForms
 
             rootLabel = new Label
             {
-                Text = "Game Root",
+                Text = "Game Folder",
                 Location = new Point(18, y),
                 Size = new Size(100, 20),
                 ForeColor = mutedColor,
@@ -520,59 +520,44 @@ namespace RpgmvpConverterWinForms
                 return;
             }
 
+            byte[] keyBytes = null;
+
             if (string.IsNullOrWhiteSpace(keyBox.Text))
             {
                 string detectedKey = TryFindKey(rootPath);
-                if (string.IsNullOrWhiteSpace(detectedKey))
+                if (!string.IsNullOrWhiteSpace(detectedKey))
                 {
-                    WriteLog("Key not found");
+                    keyBox.Text = detectedKey;
+                    WriteLog("Key found" + ": " + detectedKey);
+                    keyBytes = ParseKey(detectedKey);
+                }
+                else
+                {
+                    WriteLog("Key not found - trying no-key decryption...");
+                    await TryStartNoKeyDecryption(rootPath);
                     return;
                 }
-                keyBox.Text = detectedKey;
-                WriteLog("Key found" + ": " + detectedKey);
+            }
+            else
+            {
+                try
+                {
+                    keyBytes = ParseKey(keyBox.Text);
+                }
+                catch
+                {
+                    WriteLog("Invalid key format");
+                    return;
+                }
             }
 
-            byte[] keyBytes;
-            try
-            {
-                keyBytes = ParseKey(keyBox.Text);
-            }
-            catch
-            {
-                WriteLog("Invalid key format");
-                return;
-            }
-
-            if (keyBytes.Length < 16)
+            if (keyBytes == null || keyBytes.Length < 16)
             {
                 WriteLog("Key too short (min 16 bytes)");
                 return;
             }
 
-            List<string> files = GetFilesToConvert(rootPath);
-            if (files.Count == 0)
-            {
-                WriteLog("No .rpgmvp/.png_ files found");
-                return;
-            }
-
-            int workerCount = Math.Min(Math.Max(Environment.ProcessorCount, 2), 8);
-            workerCount = Math.Min(workerCount, files.Count);
-
-            currentRun = new ConversionRun(rootPath, files, keyBytes, workerCount);
-            SetRunningState(true);
-
-            progressBar.Maximum = files.Count;
-            progressBar.Value = 0;
-            statusLabel.Text = "Preparing...";
-            statsLabel.Text = string.Format("Processed: 0 / {0} | Size: -- | ETA: --:--", files.Count);
-            pauseButton.Text = "Pause";
-
-            WriteLog(string.Format("Started: {0} | threads: {1}", files.Count, workerCount));
-            WriteLog("Skipping: img/tilesets, img/weather");
-
-            uiTimer.Start();
-            currentRun.Start();
+            RunConversionCore(rootPath, keyBytes);
 
             try
             {
@@ -1655,6 +1640,11 @@ sys.stdout.flush()
                 pauseButton.Enabled = false;
                 statusLabel.Text = "Stopping...";
                 WriteLog("Stop requested");
+                
+                pathBox.Enabled = true;
+                keyBox.Enabled = true;
+                browseButton.Enabled = true;
+                startButton.Enabled = true;
             }
 
             if (unityProcess != null && !unityProcess.HasExited)
@@ -1862,6 +1852,94 @@ sys.stdout.flush()
                 return match.Success ? match.Groups[1].Value : string.Empty;
             }
             catch { return string.Empty; }
+        }
+
+        private async Task TryStartNoKeyDecryption(string rootPath)
+        {
+            var files = GetFilesToConvert(rootPath);
+            if (files.Count == 0)
+            {
+                WriteLog("No .rpgmvp/.png_ files found");
+                return;
+            }
+
+            string firstFile = files.FirstOrDefault(f => new FileInfo(f).Length > 32);
+            if (firstFile == null)
+            {
+                WriteLog("No files to decrypt");
+                return;
+            }
+
+            try
+            {
+                byte[] fileBytes = File.ReadAllBytes(firstFile);
+                if (fileBytes.Length < 32)
+                {
+                    WriteLog("File too short for no-key decryption");
+                    return;
+                }
+
+                byte[] encryptedData = new byte[16];
+                Buffer.BlockCopy(fileBytes, 16, encryptedData, 0, 16);
+
+                byte[] pngSignature = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
+                byte[] reconstructedKey = new byte[16];
+
+                for (int i = 0; i < 16; i++)
+                {
+                    reconstructedKey[i] = (byte)(encryptedData[i] ^ pngSignature[i % 8]);
+                }
+
+                var keyHex = BitConverter.ToString(reconstructedKey).Replace("-", "").ToLower();
+                keyBox.Text = keyHex;
+                WriteLog("Key reconstructed: " + keyHex);
+
+                byte[] keyBytes = reconstructedKey;
+                RunConversionCore(rootPath, keyBytes);
+
+                try
+                {
+                    await currentRun.Completion;
+                    FinishConversion(currentRun.CancelRequested);
+                }
+                catch (Exception ex)
+                {
+                    WriteLog("Errors" + ": " + ex.Message);
+                    FinishConversion(true);
+                }
+            }
+            catch (Exception ex)
+            {
+                WriteLog("No-key decryption failed: " + ex.Message);
+            }
+        }
+
+        private void RunConversionCore(string rootPath, byte[] keyBytes)
+        {
+            List<string> files = GetFilesToConvert(rootPath);
+            if (files.Count == 0)
+            {
+                WriteLog("No .rpgmvp/.png_ files found");
+                return;
+            }
+
+            int workerCount = Math.Min(Math.Max(Environment.ProcessorCount, 2), 8);
+            workerCount = Math.Min(workerCount, files.Count);
+
+            currentRun = new ConversionRun(rootPath, files, keyBytes, workerCount);
+            SetRunningState(true);
+
+            progressBar.Maximum = files.Count;
+            progressBar.Value = 0;
+            statusLabel.Text = "Preparing...";
+            statsLabel.Text = string.Format("Processed: 0 / {0} | Size: -- | ETA: --:--", files.Count);
+            pauseButton.Text = "Pause";
+
+            WriteLog(string.Format("Started: {0} | threads: {1}", files.Count, workerCount));
+            WriteLog("Skipping: img/tilesets, img/weather");
+
+            uiTimer.Start();
+            currentRun.Start();
         }
 
         private static string TryFindGameRoot(string path)
