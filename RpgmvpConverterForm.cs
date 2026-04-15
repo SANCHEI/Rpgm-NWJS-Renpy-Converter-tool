@@ -1882,19 +1882,68 @@ sys.stdout.flush()
                 byte[] encryptedData = new byte[16];
                 Buffer.BlockCopy(fileBytes, 16, encryptedData, 0, 16);
 
+                // PNG validation: 
+                // Positions 0-7: PNG signature (89 50 4E 47 0D 0A 1A 0A)
+                // Positions 8-11: IHDR length (00 00 00 0D)
+                // Positions 12-15: IHDR type (49 48 44 52)
                 byte[] pngSignature = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
-                byte[] reconstructedKey = new byte[16];
+                byte[] ihdrLength = new byte[] { 0x00, 0x00, 0x00, 0x0D };
+                byte[] ihdrType = new byte[] { 0x49, 0x48, 0x44, 0x52 };
 
-                for (int i = 0; i < 16; i++)
+                // Width is unknown, so we use zeros for positions 16-19 in our check
+                // We check only 0-15 (signature + length + type)
+                
+                int[] commonWidths = new int[] { 576, 640, 800, 512, 768, 1024, 1280, 256, 1920, 320, 480, 704, 854, 1440, 1600 };
+                byte[] correctKey = null;
+                
+                foreach (int width in commonWidths)
                 {
-                    reconstructedKey[i] = (byte)(encryptedData[i] ^ pngSignature[i % 8]);
+                    byte[] widthBytes = BitConverter.GetBytes(width);
+                    if (BitConverter.IsLittleEndian) Array.Reverse(widthBytes);
+                    
+                    // Build expected: sig + length + type (12 bytes total)
+                    // Positions 0-7: PNG sig, 8-11: IHDR length, 12-15: IHDR type
+                    byte[] expectedHeader = new byte[16];
+                    Array.Copy(pngSignature, 0, expectedHeader, 0, 8);
+                    Array.Copy(ihdrLength, 0, expectedHeader, 8, 4);
+                    Array.Copy(ihdrType, 0, expectedHeader, 12, 4);
+                    // Position 16-19 would be width but we don't check those for validation
+
+                    byte[] testKey = new byte[16];
+                    for (int i = 0; i < 16; i++)
+                        testKey[i] = (byte)(encryptedData[i] ^ expectedHeader[i]);
+
+                    byte[] testDecrypt = new byte[16];
+                    for (int i = 0; i < 16; i++)
+                        testDecrypt[i] = (byte)(encryptedData[i] ^ testKey[i]);
+
+                    bool validSig = testDecrypt[0] == 0x89 && testDecrypt[1] == 0x50 && testDecrypt[2] == 0x4E && 
+                                   testDecrypt[3] == 0x47 && testDecrypt[4] == 0x0D && testDecrypt[5] == 0x0A &&
+                                   testDecrypt[6] == 0x1A && testDecrypt[7] == 0x0A;
+                    bool validLen = testDecrypt[8] == 0x00 && testDecrypt[9] == 0x00 && 
+                                   testDecrypt[10] == 0x00 && testDecrypt[11] == 0x0D;
+                    bool validType = testDecrypt[12] == 0x49 && testDecrypt[13] == 0x48 && 
+                                   testDecrypt[14] == 0x44 && testDecrypt[15] == 0x52;
+
+                    if (validSig && validLen && validType)
+                    {
+                        correctKey = testKey;
+                        WriteLog("Found valid key, width: " + width);
+                        break;
+                    }
                 }
 
-                var keyHex = BitConverter.ToString(reconstructedKey).Replace("-", "").ToLower();
+                if (correctKey == null)
+                {
+                    WriteLog("Could not determine key");
+                    return;
+                }
+
+                var keyHex = BitConverter.ToString(correctKey).Replace("-", "").ToLower();
                 keyBox.Text = keyHex;
                 WriteLog("Key reconstructed: " + keyHex);
 
-                byte[] keyBytes = reconstructedKey;
+                byte[] keyBytes = correctKey;
                 RunConversionCore(rootPath, keyBytes);
 
                 try
@@ -2079,7 +2128,7 @@ sys.stdout.flush()
                         byte[] data = new byte[bytes.Length - 16];
                         Buffer.BlockCopy(bytes, 16, data, 0, data.Length);
 
-                        for (int i = 0; i < 16; i++) data[i] = (byte)(data[i] ^ keyBytes[i]);
+                        for (int i = 0; i < 16 && i < data.Length; i++) data[i] = (byte)(data[i] ^ keyBytes[i]);
 
                         string relativePath = filePath.Substring(RootPath.Length);
                         if (relativePath.StartsWith(Path.DirectorySeparatorChar.ToString()))
