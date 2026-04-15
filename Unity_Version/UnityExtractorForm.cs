@@ -340,6 +340,8 @@ def extract_file(file_path, output, mode):
         
         textures = 0
         audios = 0
+        videos = 0
+        meshes = 0
         
         for obj in env.objects:
             try:
@@ -359,18 +361,85 @@ def extract_file(file_path, output, mode):
                     name = getattr(data, 'name', None) or getattr(data, 'm_Name', 'audio_' + str(audios))
                     safe_name = ''.join(c for c in str(name) if c.isalnum() or c in '._- ')
                     
-                    audio_data = getattr(data, 'audio_data', None) or getattr(data, 'm_AudioData', None)
+                    audio_data = None
+                    
+                    # Try m_Resource (StreamedResource)
+                    res = getattr(data, 'm_Resource', None)
+                    if res and hasattr(res, 'm_Source'):
+                        source_file = os.path.join(os.path.dirname(file_path), res.m_Source)
+                        if os.path.exists(source_file):
+                            with open(source_file, 'rb') as f:
+                                f.seek(res.m_Offset)
+                                audio_data = f.read(res.m_Size)
+                    
+                    # Fallback to embedded
+                    if not audio_data:
+                        audio_data = getattr(data, 'audio_data', None) or getattr(data, 'm_AudioData', None)
+                    
                     if audio_data:
                         audio_path = os.path.join(file_output, safe_name + '.wav')
                         with open(audio_path, 'wb') as f:
                             f.write(audio_data)
                         audios += 1
                         total += 1
+                
+                if mode in ['videos', 'all'] and obj.type.name == 'VideoClip':
+                    data = obj.read()
+                    name = getattr(data, 'm_Name', 'video_' + str(videos)) or 'video_' + str(videos)
+                    safe_name = ''.join(c for c in str(name) if c.isalnum() or c in '._- ')
+                    
+                    video_data = None
+                    ext = '.mp4'
+                    
+                    # Try m_ExternalResources (StreamedResource)
+                    ext_res = getattr(data, 'm_ExternalResources', None)
+                    if ext_res and hasattr(ext_res, 'm_Source'):
+                        source_file = os.path.join(os.path.dirname(file_path), ext_res.m_Source)
+                        if os.path.exists(source_file):
+                            with open(source_file, 'rb') as f:
+                                f.seek(ext_res.m_Offset)
+                                video_data = f.read(ext_res.m_Size)
+                            if hasattr(ext_res, 'm_OriginalPath') and ext_res.m_OriginalPath:
+                                ext = os.path.splitext(ext_res.m_OriginalPath)[1] or '.mp4'
+                    
+                    # Fallback to embedded data
+                    if not video_data:
+                        video_data = getattr(data, 'm_ExternalAssets', None) or getattr(data, 'video_data', None)
+                    
+                    if video_data:
+                        video_path = os.path.join(file_output, safe_name + ext)
+                        with open(video_path, 'wb') as vf:
+                            vf.write(video_data)
+                        videos += 1
+                        total += 1
             except:
                 pass
         
-        if textures > 0 or audios > 0:
-            print('  +' + str(textures) + ' textures, +' + str(audios) + ' audios')
+        if mode in ['meshes', 'all'] and obj.type.name == 'Mesh':
+                    try:
+                        data = obj.read()
+                        name = getattr(data, 'm_Name', 'mesh_' + str(meshes)) or 'mesh_' + str(meshes)
+                        safe_name = ''.join(c for c in str(name) if c.isalnum() or c in '._- ')
+                        
+                        mesh_path = os.path.join(file_output, safe_name + '.obj')
+                        
+                        # Try export method
+                        try:
+                            data.export(mesh_path)
+                            meshes += 1
+                            total += 1
+                        except:
+                            pass
+                    except:
+                        pass
+        
+        if textures > 0 or audios > 0 or videos > 0 or meshes > 0:
+            stats = []
+            if textures > 0: stats.append(str(textures) + ' textures')
+            if audios > 0: stats.append(str(audios) + ' audios')
+            if videos > 0: stats.append(str(videos) + ' videos')
+            if meshes > 0: stats.append(str(meshes) + ' meshes')
+            print('  +' + ', '.join(stats))
             sys.stdout.flush()
         
     except Exception as e:
@@ -394,7 +463,7 @@ for item in os.listdir(game_path):
         
         try:
             for f in os.listdir(data_folder):
-                if f.endswith('.assets') and not f.endswith('.resS'):
+                if f.endswith('.assets'):
                     all_files.append(os.path.join(data_folder, f))
         except: pass
         

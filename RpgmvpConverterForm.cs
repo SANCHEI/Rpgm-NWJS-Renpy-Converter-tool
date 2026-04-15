@@ -1392,17 +1392,23 @@ def extract_file(file_path, output, mode, is_bundle=False):
                             name = getattr(data, 'm_Name', 'video_' + str(videos)) or 'video_' + str(videos)
                             safe_name = ''.join(c for c in str(name) if c.isalnum() or c in '._- ')
                             
-                            video_data = getattr(data, 'm_ExternalAssets', None)
+                            video_data = None
+                            ext = '.mp4'
+                            
+                            ext_res = getattr(data, 'm_ExternalResources', None)
+                            if ext_res and hasattr(ext_res, 'm_Source'):
+                                source_file = os.path.join(os.path.dirname(file_path), ext_res.m_Source)
+                                if os.path.exists(source_file):
+                                    with open(source_file, 'rb') as f:
+                                        f.seek(ext_res.m_Offset)
+                                        video_data = f.read(ext_res.m_Size)
+                                    if hasattr(ext_res, 'm_OriginalPath') and ext_res.m_OriginalPath:
+                                        ext = os.path.splitext(ext_res.m_OriginalPath)[1] or '.mp4'
+                            
                             if not video_data:
-                                video_data = getattr(data, 'video_data', None)
+                                video_data = getattr(data, 'm_ExternalAssets', None) or getattr(data, 'video_data', None)
                             
                             if video_data:
-                                ext = '.mp4'
-                                if hasattr(data, 'm_OriginalFileName'):
-                                    fname = getattr(data, 'm_OriginalFileName', '')
-                                    if fname:
-                                        ext = os.path.splitext(fname)[1] or '.mp4'
-                                
                                 video_path = os.path.join(file_output, safe_name + ext)
                                 
                                 if video_path not in saved_files:
@@ -1422,7 +1428,19 @@ def extract_file(file_path, output, mode, is_bundle=False):
                             name = getattr(data, 'name', None) or getattr(data, 'm_Name', 'audio_' + str(audios))
                             safe_name = ''.join(c for c in str(name) if c.isalnum() or c in '._- ')
                             
-                            audio_data = getattr(data, 'audio_data', None) or getattr(data, 'm_AudioData', None)
+                            audio_data = None
+                            
+                            res = getattr(data, 'm_Resource', None)
+                            if res and hasattr(res, 'm_Source'):
+                                source_file = os.path.join(os.path.dirname(file_path), res.m_Source)
+                                if os.path.exists(source_file):
+                                    with open(source_file, 'rb') as f:
+                                        f.seek(res.m_Offset)
+                                        audio_data = f.read(res.m_Size)
+                            
+                            if not audio_data:
+                                audio_data = getattr(data, 'audio_data', None) or getattr(data, 'm_AudioData', None)
+                            
                             if audio_data:
                                 audio_path = os.path.join(file_output, safe_name + '.wav')
                                 
