@@ -6,7 +6,7 @@
 
 Fast converter for **RPGMVP**, **Unity** and **Gallery Unlocker** for **NWJS/Renpy** games.
 
-![Version](https://img.shields.io/badge/version-1.3.1-blue)
+![Version](https://img.shields.io/badge/version-1.3.2-blue)
 ![.NET](https://img.shields.io/badge/.NET-4.0-blue)
 ![Python](https://img.shields.io/badge/Python-3.x-green)
 
@@ -95,8 +95,13 @@ Requires:
 
 ## Changelog
 
+### v1.3.2
+- Fixed no-key decryption - now correctly reconstructs encryption key
+- Added full PNG header validation (signature + IHDR length + type)
+- Only decrypt first 16 bytes, rest is uncompressed PNG data
+
 ### v1.3.1
-- No-key decryption for RPGMVP files
+- No-key decryption for RPGMVP files (broken)
 - Automatically reconstructs key from .rpgmvp files
 - Game Root renamed to Game Folder
 - Path/key fields editable after cancel
