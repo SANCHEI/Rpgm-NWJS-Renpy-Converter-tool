@@ -81,6 +81,7 @@ internal static class ReleaseInspector
             File.WriteAllBytes(Path.Combine(rootLookup, "data.xp3"), new byte[] { 0 });
             string foundRoot = (string)tryFindGameRoot.Invoke(null, new object[] { nestedLookup });
             bool fastRootLookup = string.Equals(foundRoot, rootLookup, StringComparison.OrdinalIgnoreCase);
+            bool contextualGui = VerifyContextualGui(formType);
 
             Type runtimeType = assembly.GetType("RpgmvpConverterWinForms.PortableRuntime", true);
             MethodInfo ensureRuntime = runtimeType.GetMethod("EnsureExtracted", BindingFlags.Public | BindingFlags.Static);
@@ -135,6 +136,7 @@ internal static class ReleaseInspector
             Console.WriteLine("DetectUnreal=" + unrealEngine);
             Console.WriteLine("FastDetection=" + fastDetection);
             Console.WriteLine("FastRootLookup=" + fastRootLookup);
+            Console.WriteLine("ContextualGui=" + contextualGui);
 
             return hasUnityScript
                 && hasGodotScript
@@ -153,6 +155,7 @@ internal static class ReleaseInspector
                 && unrealEngine == "Unreal"
                 && fastDetection
                 && fastRootLookup
+                && contextualGui
                 ? 0
                 : 1;
         }
@@ -173,5 +176,98 @@ internal static class ReleaseInspector
     {
         object value = detectEngine.Invoke(null, new object[] { path });
         return value.ToString();
+    }
+
+    private static bool VerifyContextualGui(Type formType)
+    {
+        object form = Activator.CreateInstance(formType);
+        try
+        {
+            Type engineType = formType.GetNestedType("GameEngine", BindingFlags.NonPublic);
+            MethodInfo updateContext = formType.GetMethod("UpdateEngineContext", BindingFlags.NonPublic | BindingFlags.Instance);
+            MethodInfo toggleLog = formType.GetMethod("ToggleLog", BindingFlags.NonPublic | BindingFlags.Instance);
+            object startButton = GetField(formType, form, "startButton");
+            object keyBox = GetField(formType, form, "keyBox");
+            object keyLabel = GetField(formType, form, "keyLabel");
+            object unityMode = GetField(formType, form, "unityExtractModeBox");
+            object logPanel = GetField(formType, form, "logPanel");
+            object toggleLogButton = GetField(formType, form, "toggleLogButton");
+            object runtimeStatus = GetField(formType, form, "runtimeStatusLabel");
+
+            bool initial = !GetBool(startButton, "Enabled")
+                && !GetLocalVisible(keyBox)
+                && !GetLocalVisible(unityMode)
+                && !GetLocalVisible(logPanel)
+                && GetString(runtimeStatus, "Text").StartsWith("Runtime:", StringComparison.Ordinal);
+
+            updateContext.Invoke(form, new[] { Enum.Parse(engineType, "Unity") });
+            bool unity = GetBool(startButton, "Enabled")
+                && GetLocalVisible(unityMode)
+                && !GetLocalVisible(keyBox);
+
+            updateContext.Invoke(form, new[] { Enum.Parse(engineType, "RpgMaker") });
+            bool rpgm = GetBool(startButton, "Enabled")
+                && GetLocalVisible(keyBox)
+                && !GetLocalVisible(unityMode)
+                && GetString(keyLabel, "Text") == "RPGM HEX key";
+
+            updateContext.Invoke(form, new[] { Enum.Parse(engineType, "Unreal") });
+            bool unreal = GetBool(startButton, "Enabled")
+                && GetLocalVisible(keyBox)
+                && !GetLocalVisible(unityMode)
+                && GetString(keyLabel, "Text") == "Unreal AES key";
+
+            updateContext.Invoke(form, new[] { Enum.Parse(engineType, "Nwjs") });
+            bool nwjs = !GetBool(startButton, "Enabled");
+
+            int compactHeight = GetSizeHeight(form, "ClientSize");
+            toggleLog.Invoke(form, null);
+            int expandedHeight = GetSizeHeight(form, "ClientSize");
+            bool expanded = GetString(toggleLogButton, "Text") == "Hide Log" && expandedHeight > compactHeight;
+            toggleLog.Invoke(form, null);
+            bool collapsed = GetString(toggleLogButton, "Text") == "Show Log"
+                && GetSizeHeight(form, "ClientSize") == compactHeight;
+
+            return initial && unity && rpgm && unreal && nwjs && expanded && collapsed;
+        }
+        finally
+        {
+            MethodInfo dispose = formType.GetMethod("Dispose", BindingFlags.Public | BindingFlags.Instance);
+            dispose.Invoke(form, null);
+        }
+    }
+
+    private static object GetField(Type type, object instance, string name)
+    {
+        return type.GetField(name, BindingFlags.NonPublic | BindingFlags.Instance).GetValue(instance);
+    }
+
+    private static bool GetBool(object instance, string property)
+    {
+        return (bool)instance.GetType().GetProperty(property).GetValue(instance, null);
+    }
+
+    private static string GetString(object instance, string property)
+    {
+        return (string)instance.GetType().GetProperty(property).GetValue(instance, null);
+    }
+
+    private static int GetSizeHeight(object instance, string property)
+    {
+        object size = instance.GetType().GetProperty(property).GetValue(instance, null);
+        return (int)size.GetType().GetProperty("Height").GetValue(size, null);
+    }
+
+    private static bool GetLocalVisible(object control)
+    {
+        Type current = control.GetType();
+        while (current != null)
+        {
+            MethodInfo getState = current.GetMethod("GetState", BindingFlags.NonPublic | BindingFlags.Instance);
+            if (getState != null)
+                return (bool)getState.Invoke(control, new object[] { 2 });
+            current = current.BaseType;
+        }
+        throw new MissingMethodException("Control.GetState");
     }
 }

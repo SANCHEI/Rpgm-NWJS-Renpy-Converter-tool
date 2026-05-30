@@ -13,6 +13,18 @@ namespace RpgmvpConverterWinForms
         private static readonly object Sync = new object();
         private static string runtimeDirectory;
 
+        public static bool IsReady
+        {
+            get
+            {
+                lock (Sync)
+                {
+                    string pythonPath = GetPythonPath();
+                    return !string.IsNullOrWhiteSpace(pythonPath) && File.Exists(pythonPath);
+                }
+            }
+        }
+
         public static string EnsureExtracted()
         {
             lock (Sync)

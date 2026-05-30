@@ -32,21 +32,26 @@ namespace RpgmvpConverterWinForms
         private TextBox keyBox;
         private ComboBox unlockerModeBox;
         private ComboBox unityExtractModeBox;
+        private Label keyLabel;
+        private Label unityModeLabel;
+        private Label extractionHintLabel;
         private Label detectedEngineLabel;
         private Label scanSummaryLabel;
         private Label statusLabel;
         private Label statsLabel;
+        private Label runtimeStatusLabel;
         private TextBox logBox;
+        private Panel logPanel;
         private ProgressBar progressBar;
         private Button browseButton;
         private Button dryRunButton;
         private Button startButton;
-        private Button unityExtractButton;
         private Button unlockerButton;
         private Button removeUnlockerButton;
         private Button pauseButton;
         private Button cancelButton;
         private Button openOutputButton;
+        private Button toggleLogButton;
 
         private readonly object processSync = new object();
         private readonly object runtimeWarmupSync = new object();
@@ -56,7 +61,12 @@ namespace RpgmvpConverterWinForms
         private Process activeProcess;
         private bool externalRunning;
         private bool closing;
+        private bool logExpanded;
         private string lastOutputDir = "";
+        private GameEngine selectedEngine;
+
+        private const int CompactClientHeight = 570;
+        private const int ExpandedClientHeight = 872;
 
         public RpgmvpConverterForm()
         {
@@ -79,12 +89,11 @@ namespace RpgmvpConverterWinForms
             Font titleFont = new Font("Segoe UI Semibold", 14f, FontStyle.Regular);
             Font logFont = new Font("Consolas", 9.5f, FontStyle.Regular);
 
-            Text = "Game Asset Tool v1.5.2";
+            Text = "Game Asset Tool v1.6.0";
             StartPosition = FormStartPosition.CenterScreen;
-            MinimumSize = new Size(940, 900);
-            Size = new Size(940, 900);
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
+            ClientSize = new Size(928, CompactClientHeight);
             BackColor = formBack;
             ForeColor = textColor;
             Font = uiFont;
@@ -112,6 +121,16 @@ namespace RpgmvpConverterWinForms
                 Size = new Size(700, 20),
                 BackColor = Color.Transparent
             });
+            runtimeStatusLabel = new Label
+            {
+                Text = "Runtime: waiting for a supported folder",
+                ForeColor = mutedColor,
+                Location = new Point(620, 24),
+                Size = new Size(290, 20),
+                TextAlign = ContentAlignment.MiddleRight,
+                BackColor = Color.Transparent
+            };
+            header.Controls.Add(runtimeStatusLabel);
 
             int y = 88;
             Controls.Add(CreateSectionLabel("Game Folder", y));
@@ -171,35 +190,75 @@ namespace RpgmvpConverterWinForms
             scanPanel.Controls.Add(dryRunButton);
             y += 66;
 
-            Panel keyPanel = new Panel
+            Controls.Add(CreateSectionLabel("Extract Assets", y));
+            y += 22;
+
+            Panel extractionPanel = new Panel
             {
                 Location = new Point(18, y),
-                Size = new Size(892, 34),
-                BackColor = inputBack,
-                Padding = new Padding(4)
+                Size = new Size(892, 72),
+                BackColor = panelBack,
+                Padding = new Padding(8)
             };
-            Controls.Add(keyPanel);
-            keyPanel.Controls.Add(new Label
+            Controls.Add(extractionPanel);
+            extractionHintLabel = new Label
+            {
+                Text = "Select a supported game folder to see its extraction options.",
+                Location = new Point(8, 8),
+                Size = new Size(680, 20),
+                ForeColor = mutedColor
+            };
+            extractionPanel.Controls.Add(extractionHintLabel);
+            keyLabel = new Label
             {
                 Text = "Optional key",
-                Location = new Point(8, 8),
+                Location = new Point(8, 40),
                 Size = new Size(100, 20),
-                ForeColor = mutedColor
-            });
+                ForeColor = mutedColor,
+                Visible = false
+            };
+            extractionPanel.Controls.Add(keyLabel);
             keyBox = new TextBox
             {
-                Location = new Point(112, 4),
-                Size = new Size(590, 26),
+                Location = new Point(112, 36),
+                Size = new Size(574, 26),
                 BackColor = inputBack,
                 ForeColor = textColor,
                 BorderStyle = BorderStyle.FixedSingle,
-                Font = uiFont
+                Font = uiFont,
+                Visible = false
             };
-            keyPanel.Controls.Add(keyBox);
-            startButton = CreateButton("Extract Detected", new Point(714, 3), new Size(170, 28), successColor, formBack, uiBold);
+            extractionPanel.Controls.Add(keyBox);
+            unityModeLabel = new Label
+            {
+                Text = "Asset type",
+                Location = new Point(8, 40),
+                Size = new Size(100, 20),
+                ForeColor = mutedColor,
+                Visible = false
+            };
+            extractionPanel.Controls.Add(unityModeLabel);
+            unityExtractModeBox = new ComboBox
+            {
+                Location = new Point(112, 36),
+                Size = new Size(180, 26),
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                BackColor = inputBack,
+                ForeColor = textColor,
+                FlatStyle = FlatStyle.Flat,
+                Visible = false
+            };
+            unityExtractModeBox.Items.Add("Textures");
+            unityExtractModeBox.Items.Add("Videos");
+            unityExtractModeBox.Items.Add("Audio");
+            unityExtractModeBox.Items.Add("Meshes");
+            unityExtractModeBox.Items.Add("All");
+            unityExtractModeBox.SelectedIndex = 4;
+            extractionPanel.Controls.Add(unityExtractModeBox);
+            startButton = CreateButton("Extract Assets", new Point(704, 20), new Size(180, 34), successColor, formBack, uiBold);
             startButton.Click += async delegate { await StartDetectedExtractionAsync(); };
-            keyPanel.Controls.Add(startButton);
-            y += 44;
+            extractionPanel.Controls.Add(startButton);
+            y += 82;
 
             Controls.Add(CreateSectionLabel("Gallery Unlocker for Ren'Py / NWJS", y));
             y += 22;
@@ -224,29 +283,6 @@ namespace RpgmvpConverterWinForms
             Controls.Add(removeUnlockerButton);
             y += 42;
 
-            Controls.Add(CreateSectionLabel("Unity Extractor", y));
-            y += 22;
-            unityExtractModeBox = new ComboBox
-            {
-                Location = new Point(18, y),
-                Size = new Size(150, 26),
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                BackColor = inputBack,
-                ForeColor = textColor,
-                FlatStyle = FlatStyle.Flat
-            };
-            unityExtractModeBox.Items.Add("Textures");
-            unityExtractModeBox.Items.Add("Videos");
-            unityExtractModeBox.Items.Add("Audio");
-            unityExtractModeBox.Items.Add("Meshes");
-            unityExtractModeBox.Items.Add("All");
-            unityExtractModeBox.SelectedIndex = 0;
-            Controls.Add(unityExtractModeBox);
-            unityExtractButton = CreateButton("Extract Unity", new Point(180, y - 3), new Size(170, 30), Color.FromArgb(138, 98, 255), textColor, uiBold);
-            unityExtractButton.Click += async delegate { await StartUnityExtractionAsync(); };
-            Controls.Add(unityExtractButton);
-            y += 46;
-
             pauseButton = CreateButton("Pause", new Point(18, y), new Size(100, 30), warningColor, Color.Black, uiBold);
             pauseButton.Enabled = false;
             pauseButton.Click += delegate { TogglePause(); };
@@ -259,6 +295,9 @@ namespace RpgmvpConverterWinForms
             openOutputButton.Enabled = false;
             openOutputButton.Click += delegate { OpenOutputFolder(); };
             Controls.Add(openOutputButton);
+            toggleLogButton = CreateButton("Show Log", new Point(426, y), new Size(120, 30), Color.FromArgb(45, 50, 60), textColor, uiBold);
+            toggleLogButton.Click += delegate { ToggleLog(); };
+            Controls.Add(toggleLogButton);
             y += 40;
 
             progressBar = new ProgressBar
@@ -289,12 +328,13 @@ namespace RpgmvpConverterWinForms
             Controls.Add(statsLabel);
             y += 26;
 
-            Panel logPanel = new Panel
+            logPanel = new Panel
             {
                 Location = new Point(18, y),
-                Size = new Size(892, 320),
+                Size = new Size(892, 286),
                 BackColor = logBack,
-                BorderStyle = BorderStyle.FixedSingle
+                BorderStyle = BorderStyle.FixedSingle,
+                Visible = false
             };
             Controls.Add(logPanel);
             logPanel.Controls.Add(new Label
@@ -314,7 +354,7 @@ namespace RpgmvpConverterWinForms
                 ScrollBars = ScrollBars.Vertical,
                 ReadOnly = true,
                 Location = new Point(10, 36),
-                Size = new Size(870, 272),
+                Size = new Size(870, 238),
                 BackColor = logBack,
                 ForeColor = textColor,
                 BorderStyle = BorderStyle.None,
@@ -329,6 +369,7 @@ namespace RpgmvpConverterWinForms
 
             uiTimer = new System.Windows.Forms.Timer { Interval = 200 };
             uiTimer.Tick += delegate { UpdateUiFromRun(); };
+            UpdateEngineContext(GameEngine.Unknown);
         }
 
         private Label CreateSectionLabel(string text, int y)
@@ -411,6 +452,7 @@ namespace RpgmvpConverterWinForms
                 detectedEngineLabel.Text = "Engine: not detected";
                 detectedEngineLabel.ForeColor = mutedColor;
                 scanSummaryLabel.Text = "Select a folder or drop it into this window.";
+                UpdateEngineContext(GameEngine.Unknown);
                 return;
             }
 
@@ -419,6 +461,7 @@ namespace RpgmvpConverterWinForms
             detectedEngineLabel.Text = "Engine: " + EngineName(engine);
             detectedEngineLabel.ForeColor = EngineColor(engine);
             scanSummaryLabel.Text = "Ready to scan. Click Dry Run / Scan to inspect files before extraction.";
+            UpdateEngineContext(engine);
             WarmPortableRuntimeInBackground(engine);
         }
 
@@ -443,6 +486,7 @@ namespace RpgmvpConverterWinForms
                     summary.ArchiveCount,
                     summary.FileCount,
                     FormatBytes(summary.TotalBytes));
+                UpdateEngineContext(summary.Engine);
                 if (showLog)
                 {
                     WriteLog("Dry run: " + EngineName(summary.Engine));
@@ -897,15 +941,18 @@ namespace RpgmvpConverterWinForms
             try
             {
                 statusLabel.Text = "Preparing built-in runtime...";
+                SetRuntimeStatus("Runtime: preparing silently...", warningColor);
                 Task warmup;
                 lock (runtimeWarmupSync) warmup = runtimeWarmupTask;
                 if (warmup != null && !warmup.IsCompleted)
                     warmup.Wait();
                 PortableRuntime.EnsureExtracted();
+                SetRuntimeStatus("Runtime: ready", successColor);
                 return true;
             }
             catch (Exception ex)
             {
+                SetRuntimeStatus("Runtime: unavailable", dangerColor);
                 WriteLog("Built-in runtime failed: " + ex.Message);
                 MessageBox.Show(
                     "Could not prepare the built-in extraction runtime.\n\n" + ex.Message,
@@ -1052,12 +1099,12 @@ namespace RpgmvpConverterWinForms
             browseButton.Enabled = !running;
             dryRunButton.Enabled = !running;
             startButton.Enabled = !running;
-            unityExtractButton.Enabled = !running;
             unlockerButton.Enabled = !running;
             removeUnlockerButton.Enabled = !running;
             pauseButton.Enabled = running;
             cancelButton.Enabled = running;
             openOutputButton.Enabled = !running && Directory.Exists(lastOutputDir);
+            if (!running) UpdateEngineContext(selectedEngine);
         }
 
         private void SetExternalRunningState(bool running, string operation)
@@ -1069,7 +1116,6 @@ namespace RpgmvpConverterWinForms
                 browseButton.Enabled = !running;
                 dryRunButton.Enabled = !running;
                 startButton.Enabled = !running;
-                unityExtractButton.Enabled = !running;
                 unlockerButton.Enabled = !running;
                 removeUnlockerButton.Enabled = !running;
                 pauseButton.Enabled = false;
@@ -1082,7 +1128,100 @@ namespace RpgmvpConverterWinForms
                     statusLabel.Text = operation + ": starting...";
                     statsLabel.Text = "";
                 }
+                else
+                {
+                    UpdateEngineContext(selectedEngine);
+                }
             });
+        }
+
+        private void ToggleLog()
+        {
+            logExpanded = !logExpanded;
+            logPanel.Visible = logExpanded;
+            toggleLogButton.Text = logExpanded ? "Hide Log" : "Show Log";
+            ClientSize = new Size(ClientSize.Width, logExpanded ? ExpandedClientHeight : CompactClientHeight);
+        }
+
+        private void UpdateEngineContext(GameEngine engine)
+        {
+            selectedEngine = engine;
+            bool busy = currentRun != null || externalRunning;
+            bool showKey = engine == GameEngine.RpgMaker || engine == GameEngine.Unreal;
+            bool showUnityMode = engine == GameEngine.Unity;
+
+            keyLabel.Visible = showKey;
+            keyBox.Visible = showKey;
+            unityModeLabel.Visible = showUnityMode;
+            unityExtractModeBox.Visible = showUnityMode;
+            startButton.Enabled = !busy && CanExtractAssets(engine);
+
+            switch (engine)
+            {
+                case GameEngine.RpgMaker:
+                    keyLabel.Text = "RPGM HEX key";
+                    extractionHintLabel.Text = "Encrypted image assets. The key is detected automatically when possible.";
+                    break;
+                case GameEngine.Unity:
+                    extractionHintLabel.Text = "Choose the Unity asset types to export.";
+                    break;
+                case GameEngine.Renpy:
+                    extractionHintLabel.Text = "RPA archives will be extracted into separate folders.";
+                    break;
+                case GameEngine.Godot:
+                    extractionHintLabel.Text = "Standard unencrypted PCK archives will be extracted.";
+                    break;
+                case GameEngine.Kirikiri:
+                    extractionHintLabel.Text = "Standard unencrypted XP3 archives will be extracted.";
+                    break;
+                case GameEngine.Unreal:
+                    keyLabel.Text = "Unreal AES key";
+                    extractionHintLabel.Text = "Experimental PAK extraction. AES key is optional; Oodle and IoStore are reported.";
+                    break;
+                case GameEngine.Nwjs:
+                    extractionHintLabel.Text = "No asset extractor selected. Use the Gallery Unlocker tools below.";
+                    break;
+                default:
+                    extractionHintLabel.Text = "Select a supported game folder to see its extraction options.";
+                    break;
+            }
+
+            UpdateRuntimeStatusForEngine(engine);
+        }
+
+        private static bool CanExtractAssets(GameEngine engine)
+        {
+            return engine == GameEngine.RpgMaker
+                || engine == GameEngine.Renpy
+                || engine == GameEngine.Unity
+                || engine == GameEngine.Godot
+                || engine == GameEngine.Kirikiri
+                || engine == GameEngine.Unreal;
+        }
+
+        private void UpdateRuntimeStatusForEngine(GameEngine engine)
+        {
+            if (!UsesPortableRuntime(engine))
+            {
+                SetRuntimeStatus(engine == GameEngine.Unknown ? "Runtime: waiting for a supported folder" : "Runtime: not needed", mutedColor);
+                return;
+            }
+            if (PortableRuntime.IsReady)
+            {
+                SetRuntimeStatus("Runtime: ready", successColor);
+                return;
+            }
+
+            Task warmup;
+            lock (runtimeWarmupSync) warmup = runtimeWarmupTask;
+            SetRuntimeStatus(warmup != null && !warmup.IsCompleted ? "Runtime: preparing silently..." : "Runtime: preparing after selection", warningColor);
+        }
+
+        private void SetRuntimeStatus(string text, Color color)
+        {
+            if (runtimeStatusLabel == null) return;
+            runtimeStatusLabel.Text = text;
+            runtimeStatusLabel.ForeColor = color;
         }
 
         private void OpenOutputFolder()
@@ -1121,13 +1260,28 @@ namespace RpgmvpConverterWinForms
         private void WarmPortableRuntimeInBackground(GameEngine engine)
         {
             if (!UsesPortableRuntime(engine) || closing) return;
+            if (PortableRuntime.IsReady)
+            {
+                SetRuntimeStatus("Runtime: ready", successColor);
+                return;
+            }
             lock (runtimeWarmupSync)
             {
                 if (runtimeWarmupTask != null) return;
+                SetRuntimeStatus("Runtime: preparing silently...", warningColor);
                 runtimeWarmupTask = Task.Run(delegate
                 {
-                    try { PortableRuntime.EnsureExtracted(); }
+                    bool ready = false;
+                    try
+                    {
+                        PortableRuntime.EnsureExtracted();
+                        ready = true;
+                    }
                     catch { }
+                    BeginUi(delegate
+                    {
+                        SetRuntimeStatus(ready ? "Runtime: ready" : "Runtime: unavailable", ready ? successColor : dangerColor);
+                    });
                 });
             }
         }
@@ -1687,7 +1841,7 @@ namespace RpgmvpConverterWinForms
             {
                 return string.Join(Environment.NewLine, new[]
                 {
-                    "Game Asset Tool v1.5.2 report",
+                    "Game Asset Tool v1.6.0 report",
                     "Engine: " + Engine,
                     "Extracted files: " + Extracted,
                     "Extracted size: " + FormatBytes(Bytes),

@@ -11,6 +11,9 @@ Drop a game folder into the window, review the detected engine with **Dry Run / 
 - Automatic engine detection after selecting or dropping a game folder
 - Drag-and-drop folder support
 - Dry Run / Scan preview with archive count, candidate file count and estimated input size
+- Contextual extraction options: the window shows only settings relevant to the detected engine
+- One primary **Extract Assets** action and a collapsible technical log
+- Visible runtime status while the built-in extraction tools are prepared silently
 - Collision-safe output names such as `image (2).png`
 - Extraction summary dialog and saved `GameAssetTool-report.txt`
 - Separate **Install Unlocker** and **Remove Unlocker** buttons

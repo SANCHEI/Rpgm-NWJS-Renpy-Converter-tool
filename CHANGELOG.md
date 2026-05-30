@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.6.0 - 2026-05-30
+
+- Reworked the main window around one `Extract Assets` action.
+- Added contextual extraction settings for the detected engine.
+- Kept Unity asset filters inside the contextual extraction card.
+- Show RPG Maker and Unreal key input only when it is relevant.
+- Added a collapsible log panel and a compact default window height.
+- Added a visible silent-runtime status in the application header.
+
 ## 1.5.2 - 2026-05-30
 
 - Removed recursive game-folder scanning from the first window display.

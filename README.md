@@ -6,7 +6,7 @@
 
 Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **Ren'Py**, **NWJS**, **Unity**, **Godot** and **KiriKiri** games. Experimental Unreal `.pak` extraction is included.
 
-![Version](https://img.shields.io/badge/version-1.5.2-blue)
+![Version](https://img.shields.io/badge/version-1.6.0-blue)
 ![.NET](https://img.shields.io/badge/.NET_Framework-4.7.2-blue)
 ![Runtime](https://img.shields.io/badge/runtime-built--in-green)
 
@@ -15,6 +15,9 @@ Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **Re
 - Detects the selected game engine automatically.
 - Supports drag-and-drop for game folders.
 - Provides a **Dry Run / Scan** before extraction with archive count, candidate file count and estimated input size.
+- Shows only the extraction settings relevant to the detected engine.
+- Uses one primary **Extract Assets** button and a collapsible log panel.
+- Displays the built-in runtime state while it is prepared silently in the background.
 - Converts RPGMVP assets with key auto-detection and key reconstruction.
 - Extracts Ren'Py RPA archives through verified `unrpa==2.3.0`.
 - Extracts Unity textures, videos, audio, meshes and direct media through one built-in workflow.
@@ -30,7 +33,7 @@ Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **Re
 1. Run `GameAssetTool.exe`.
 2. Drop a game folder into the window or click **Browse...**.
 3. Click **Dry Run / Scan** to review detected engine, archive count and estimated size.
-4. Click **Extract Detected**, or use **Extract Unity** to choose a Unity asset filter.
+4. Review the engine-specific options and click **Extract Assets**.
 5. Review the results dialog and open the output folder.
 
 Output is written inside the selected game folder:
@@ -115,7 +118,7 @@ powershell -ExecutionPolicy Bypass -File .\build_release.ps1
 Release output:
 
 ```text
-release/GameAssetTool-v1.5.2.exe
+release/GameAssetTool-v1.6.0.exe
 ```
 
 The release contains one supported executable. Users do not need any neighboring files.

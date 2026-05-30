@@ -1,10 +1,12 @@
-# Game Asset Tool v1.5.2 UI Preview
+# Game Asset Tool v1.6.0 UI Preview
 
 ## Main Window
 
+The default window is compact. Only settings relevant to the detected engine are shown.
+
 ```text
 +--------------------------------------------------------------------------+
-| Game Asset Tool                                                          |
+| Game Asset Tool                                  Runtime: ready           |
 | Drop a game folder here, scan it, then extract or unlock                 |
 +--------------------------------------------------------------------------+
 | Game Folder                                                              |
@@ -13,44 +15,41 @@
 | Engine: Unity                                  [ Dry Run / Scan ]        |
 | 24 archive(s), 731 candidate file(s), estimated input 1.84 GB            |
 |                                                                          |
-| Optional key [........................................] [Extract Detected]|
+| Extract Assets                                                           |
+| Choose the Unity asset types to export.                                  |
+| Asset type [ All v ]                                  [ Extract Assets ] |
 |                                                                          |
 | Gallery Unlocker for Ren'Py / NWJS                                       |
 | [Soft v] [ Install Unlocker ] [ Remove Unlocker ]                        |
 |                                                                          |
-| Unity Extractor                                                          |
-| [All v]  [ Extract Unity ]                                               |
-|                                                                          |
-| [ Pause ] [ Cancel ] [ Open Output Folder ]                              |
+| [ Pause ] [ Cancel ] [ Open Output Folder ] [ Show Log ]                |
 | [========================= 61% =====================]                     |
 | Unity: 42 / 69                                                           |
 | Archives: 42 / 69 | Size: 412.7 MB                                       |
-|                                                                          |
-| Log                                                                      |
-| Processing sharedassets0.assets                                          |
-| Processing resources.assets                                              |
 +--------------------------------------------------------------------------+
 ```
+
+## Expanded Log
+
+The **Show Log** button expands the same fixed-width window vertically.
+
+```text
++--------------------------------------------------------------------------+
+| Log                                                         [ Clear ]    |
+| Processing sharedassets0.assets                                          |
+| Processing resources.assets                                              |
+| ...                                                                      |
++--------------------------------------------------------------------------+
+```
+
+## Contextual Settings
+
+- RPG Maker MV/MZ: RPGM HEX key field.
+- Unity: Textures, Videos, Audio, Meshes or All filter.
+- Unreal: optional Unreal AES key field and experimental-mode notice.
+- Ren'Py, Godot and KiriKiri: extractor description without unnecessary inputs.
+- NWJS: unlocker guidance without an asset extraction action.
 
 ## Results Dialog
 
 Results are shown after extraction and saved as `GameAssetTool-report.txt` in the extractor output folder.
-
-```text
-+-------------------------------------------------------------+
-| Extraction Results                                          |
-+-------------------------------------------------------------+
-| Extraction complete                                         |
-|                                                             |
-| Engine: Unity                                               |
-| Extracted files: 731                                        |
-| Extracted size: 684.2 MB                                    |
-| Renamed conflicts: 8                                        |
-| Errors: 0                                                   |
-| Elapsed: 03:42                                              |
-| Output: D:\Games\Example Game\extracted\unity               |
-| Report: ...\GameAssetTool-report.txt                         |
-|                                                             |
-| [ Open Output Folder ]                              [Close]  |
-+-------------------------------------------------------------+
-```
