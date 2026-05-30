@@ -1,4 +1,4 @@
-# Itch.io Page Content - Game Asset Tool v1.5.1
+# Itch.io Page Content - Game Asset Tool v1.5.2
 
 ## Title
 Game Asset Tool
@@ -16,7 +16,9 @@ Drop a game folder into the app, run **Dry Run / Scan**, then extract assets wit
 
 Watch Demo: https://youtu.be/BnjRjik9fk0
 
-### What's New in v1.5.1
+### What's New in v1.5.2
+- Faster first window display: recursive scanning no longer blocks startup
+- Silent runtime preparation after selecting a supported game folder
 - Smaller single-file EXE for faster startup checks
 - Unreal AES now uses the built-in Windows API instead of a large Python dependency
 - Godot 3/4 PCK extraction for unencrypted archives

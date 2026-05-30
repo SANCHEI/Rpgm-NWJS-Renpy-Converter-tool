@@ -6,7 +6,7 @@
 
 Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **Ren'Py**, **NWJS**, **Unity**, **Godot** and **KiriKiri** games. Experimental Unreal `.pak` extraction is included.
 
-![Version](https://img.shields.io/badge/version-1.5.1-blue)
+![Version](https://img.shields.io/badge/version-1.5.2-blue)
 ![.NET](https://img.shields.io/badge/.NET_Framework-4.7.2-blue)
 ![Runtime](https://img.shields.io/badge/runtime-built--in-green)
 
@@ -96,7 +96,7 @@ Choose **Soft** first. Use **Hard** only when the soft mode is insufficient.
 - No separate Python, package or .NET runtime installation is required on supported Windows versions.
 - No internet connection is required while using the application.
 
-When an extractor needs Python, the built-in runtime is temporarily unpacked under `%LocalAppData%\GameAssetTool\runtime\`. The session folder is removed when the application closes.
+After selecting a supported game folder, the built-in runtime is prepared silently in the background under `%LocalAppData%\GameAssetTool\runtime\`. It does not block the first window display. The session folder is removed when the application closes.
 
 ## Build
 
@@ -115,7 +115,7 @@ powershell -ExecutionPolicy Bypass -File .\build_release.ps1
 Release output:
 
 ```text
-release/GameAssetTool-v1.5.1.exe
+release/GameAssetTool-v1.5.2.exe
 ```
 
 The release contains one supported executable. Users do not need any neighboring files.

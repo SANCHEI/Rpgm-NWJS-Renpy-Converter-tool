@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.5.2 - 2026-05-30
+
+- Removed recursive game-folder scanning from the first window display.
+- Deferred startup folder auto-detection until after the UI is visible.
+- Added fast marker-based detection for path changes and parent-folder lookup.
+- Added silent background runtime preparation after selecting an engine that needs Python.
+- Kept deep scanning behind explicit Dry Run / Scan and extraction actions.
+
 ## 1.5.1 - 2026-05-30
 
 - Reduced the single-file EXE size by pruning runtime files unused by the embedded extractors.

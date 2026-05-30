@@ -1,4 +1,4 @@
-Game Asset Tool v1.5.1 - Convert, Extract, Unlock
+Game Asset Tool v1.5.2 - Convert, Extract, Unlock
 
 Drop a game folder into the app, scan it, then extract assets or install the gallery unlocker.
 
@@ -6,8 +6,10 @@ Drop a game folder into the app, scan it, then extract assets or install the gal
 
 ---
 
-What's new in v1.5.1:
+What's new in v1.5.2:
 
+* Faster first window display: recursive scanning no longer blocks startup
+* Silent runtime preparation after selecting a supported game folder
 * Smaller single-file EXE for faster startup checks
 * Unreal AES now uses the built-in Windows API instead of a large Python dependency
 * Godot 3/4 PCK extraction for unencrypted archives

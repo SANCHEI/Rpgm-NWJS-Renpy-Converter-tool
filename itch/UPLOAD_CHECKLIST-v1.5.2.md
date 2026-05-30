@@ -1,12 +1,12 @@
-# itch.io Upload Checklist - v1.5.1
+# itch.io Upload Checklist - v1.5.2
 
 ## Upload
 
-- File: `release/GameAssetTool-v1.5.1.exe`
-- Display name: `Game Asset Tool v1.5.1 - Windows x64`
+- File: `release/GameAssetTool-v1.5.2.exe`
+- Display name: `Game Asset Tool v1.5.2 - Windows x64`
 - Platform: Windows
 - Architecture: x64
-- SHA-256: `665F007664B5E0E6F79EDE26E703ED0BFB701271850B39CCA68034B8F4894535`
+- SHA-256: `31168DFEE15F77BCF3CB79703D82F872F4AD459E54FC7D9D624D92740DF0CA56`
 
 ## Page Update
 

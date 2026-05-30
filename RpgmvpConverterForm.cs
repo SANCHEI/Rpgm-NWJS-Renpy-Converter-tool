@@ -49,10 +49,13 @@ namespace RpgmvpConverterWinForms
         private Button openOutputButton;
 
         private readonly object processSync = new object();
+        private readonly object runtimeWarmupSync = new object();
         private System.Windows.Forms.Timer uiTimer;
         private ConversionRun currentRun;
+        private Task runtimeWarmupTask;
         private Process activeProcess;
         private bool externalRunning;
+        private bool closing;
         private string lastOutputDir = "";
 
         public RpgmvpConverterForm()
@@ -66,9 +69,7 @@ namespace RpgmvpConverterWinForms
                 catch { }
             }
 
-            string initialRoot = TryFindGameRoot(AppDomain.CurrentDomain.BaseDirectory);
-            if (!string.IsNullOrWhiteSpace(initialRoot))
-                ApplyGamePath(initialRoot, false);
+            Shown += delegate { BeginInvoke((MethodInvoker)TryApplyStartupGamePath); };
         }
 
         private void BuildUi()
@@ -78,7 +79,7 @@ namespace RpgmvpConverterWinForms
             Font titleFont = new Font("Segoe UI Semibold", 14f, FontStyle.Regular);
             Font logFont = new Font("Consolas", 9.5f, FontStyle.Regular);
 
-            Text = "Game Asset Tool v1.5.1";
+            Text = "Game Asset Tool v1.5.2";
             StartPosition = FormStartPosition.CenterScreen;
             MinimumSize = new Size(940, 900);
             Size = new Size(940, 900);
@@ -394,6 +395,14 @@ namespace RpgmvpConverterWinForms
             if (scan) RunDryScan(false);
         }
 
+        private void TryApplyStartupGamePath()
+        {
+            if (closing || IsDisposed) return;
+            string initialRoot = TryFindGameRoot(AppDomain.CurrentDomain.BaseDirectory);
+            if (!string.IsNullOrWhiteSpace(initialRoot))
+                ApplyGamePath(initialRoot, false);
+        }
+
         private void OnPathChanged()
         {
             string path = pathBox.Text.Trim();
@@ -406,10 +415,11 @@ namespace RpgmvpConverterWinForms
             }
 
             TryAutoDetectKey(path);
-            GameEngine engine = DetectEngine(path);
+            GameEngine engine = DetectEngineFast(path);
             detectedEngineLabel.Text = "Engine: " + EngineName(engine);
             detectedEngineLabel.ForeColor = EngineColor(engine);
             scanSummaryLabel.Text = "Ready to scan. Click Dry Run / Scan to inspect files before extraction.";
+            WarmPortableRuntimeInBackground(engine);
         }
 
         private void RunDryScan(bool showLog)
@@ -438,6 +448,7 @@ namespace RpgmvpConverterWinForms
                     WriteLog("Dry run: " + EngineName(summary.Engine));
                     WriteLog("Found: " + summary.ArchiveCount + " archive(s), " + summary.FileCount + " candidate file(s), " + FormatBytes(summary.TotalBytes));
                 }
+                WarmPortableRuntimeInBackground(summary.Engine);
             }
             finally
             {
@@ -886,6 +897,10 @@ namespace RpgmvpConverterWinForms
             try
             {
                 statusLabel.Text = "Preparing built-in runtime...";
+                Task warmup;
+                lock (runtimeWarmupSync) warmup = runtimeWarmupTask;
+                if (warmup != null && !warmup.IsCompleted)
+                    warmup.Wait();
                 PortableRuntime.EnsureExtracted();
                 return true;
             }
@@ -1079,6 +1094,7 @@ namespace RpgmvpConverterWinForms
 
         private void OnFormClosing(object sender, FormClosingEventArgs e)
         {
+            closing = true;
             if (currentRun != null) currentRun.Cancel();
             lock (processSync)
             {
@@ -1092,7 +1108,37 @@ namespace RpgmvpConverterWinForms
                 }
                 catch { }
             }
+            Task warmup;
+            lock (runtimeWarmupSync) warmup = runtimeWarmupTask;
+            if (warmup != null)
+            {
+                try { warmup.Wait(); }
+                catch { }
+            }
             PortableRuntime.Cleanup();
+        }
+
+        private void WarmPortableRuntimeInBackground(GameEngine engine)
+        {
+            if (!UsesPortableRuntime(engine) || closing) return;
+            lock (runtimeWarmupSync)
+            {
+                if (runtimeWarmupTask != null) return;
+                runtimeWarmupTask = Task.Run(delegate
+                {
+                    try { PortableRuntime.EnsureExtracted(); }
+                    catch { }
+                });
+            }
+        }
+
+        private static bool UsesPortableRuntime(GameEngine engine)
+        {
+            return engine == GameEngine.Renpy
+                || engine == GameEngine.Unity
+                || engine == GameEngine.Godot
+                || engine == GameEngine.Kirikiri
+                || engine == GameEngine.Unreal;
         }
 
         private void BeginUi(Action action)
@@ -1116,7 +1162,7 @@ namespace RpgmvpConverterWinForms
         private void TryAutoDetectKey(string path)
         {
             if (!string.IsNullOrWhiteSpace(keyBox.Text)) return;
-            string detected = TryFindKey(path);
+            string detected = TryFindKeyFast(path);
             if (!string.IsNullOrWhiteSpace(detected)) keyBox.Text = detected;
         }
 
@@ -1124,9 +1170,37 @@ namespace RpgmvpConverterWinForms
         {
             try
             {
+                string detected = TryFindKeyFast(rootPath);
+                if (!string.IsNullOrWhiteSpace(detected)) return detected;
                 string systemJson = Directory.EnumerateFiles(rootPath, "System.json", SearchOption.AllDirectories).FirstOrDefault();
-                if (string.IsNullOrWhiteSpace(systemJson)) return "";
-                Match match = Regex.Match(File.ReadAllText(systemJson), "\"encryptionKey\":\"([0-9a-fA-F]+)\"");
+                return ReadEncryptionKey(systemJson);
+            }
+            catch { return ""; }
+        }
+
+        private static string TryFindKeyFast(string rootPath)
+        {
+            if (!Directory.Exists(rootPath)) return "";
+            string[] candidates =
+            {
+                Path.Combine(rootPath, "System.json"),
+                Path.Combine(rootPath, "data", "System.json"),
+                Path.Combine(rootPath, "www", "data", "System.json")
+            };
+            foreach (string candidate in candidates)
+            {
+                string key = ReadEncryptionKey(candidate);
+                if (!string.IsNullOrWhiteSpace(key)) return key;
+            }
+            return "";
+        }
+
+        private static string ReadEncryptionKey(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return "";
+            try
+            {
+                Match match = Regex.Match(File.ReadAllText(path), "\"encryptionKey\":\"([0-9a-fA-F]+)\"");
                 return match.Success ? match.Groups[1].Value : "";
             }
             catch { return ""; }
@@ -1169,6 +1243,19 @@ namespace RpgmvpConverterWinForms
             return GameEngine.Unknown;
         }
 
+        private static GameEngine DetectEngineFast(string rootPath)
+        {
+            if (!Directory.Exists(rootPath)) return GameEngine.Unknown;
+            if (IsUnityGame(rootPath)) return GameEngine.Unity;
+            if (IsRenpyGameFast(rootPath)) return GameEngine.Renpy;
+            if (HasRpgmFilesFast(rootPath)) return GameEngine.RpgMaker;
+            if (IsGodotGameFast(rootPath)) return GameEngine.Godot;
+            if (IsKirikiriGameFast(rootPath)) return GameEngine.Kirikiri;
+            if (IsUnrealGameFast(rootPath)) return GameEngine.Unreal;
+            if (IsRpgmOrNwjsGame(rootPath)) return GameEngine.Nwjs;
+            return GameEngine.Unknown;
+        }
+
         private static bool IsUnityGame(string rootPath)
         {
             try
@@ -1188,6 +1275,15 @@ namespace RpgmvpConverterWinForms
                 || File.Exists(Path.Combine(rootPath, "renpy.exe"));
         }
 
+        private static bool IsRenpyGameFast(string rootPath)
+        {
+            string gameFolder = Path.Combine(rootPath, "game");
+            if (!Directory.Exists(gameFolder)) return false;
+            return EnumerateFilesTopLevelSafe(gameFolder, "*.rpa").Any()
+                || EnumerateFilesTopLevelSafe(gameFolder, "*.rpyc").Any()
+                || File.Exists(Path.Combine(rootPath, "renpy.exe"));
+        }
+
         private static bool IsRpgmOrNwjsGame(string rootPath)
         {
             bool hasGame = Directory.Exists(Path.Combine(rootPath, "game"));
@@ -1201,10 +1297,25 @@ namespace RpgmvpConverterWinForms
             return EnumerateFilesSafe(rootPath, "*.rpgmvp").Any() || EnumerateFilesSafe(rootPath, "*.png_").Any();
         }
 
+        private static bool HasRpgmFilesFast(string rootPath)
+        {
+            return File.Exists(Path.Combine(rootPath, "data", "System.json"))
+                || File.Exists(Path.Combine(rootPath, "www", "data", "System.json"))
+                || EnumerateFilesTopLevelSafe(rootPath, "*.rpgmvp").Any()
+                || EnumerateFilesTopLevelSafe(rootPath, "*.png_").Any();
+        }
+
         private static bool IsGodotGame(string rootPath)
         {
             return File.Exists(Path.Combine(rootPath, "project.godot"))
                 || EnumerateFilesSafe(rootPath, "*.pck").Any()
+                || HasGodotEmbeddedPck(rootPath);
+        }
+
+        private static bool IsGodotGameFast(string rootPath)
+        {
+            return File.Exists(Path.Combine(rootPath, "project.godot"))
+                || EnumerateFilesTopLevelSafe(rootPath, "*.pck").Any()
                 || HasGodotEmbeddedPck(rootPath);
         }
 
@@ -1233,9 +1344,42 @@ namespace RpgmvpConverterWinForms
             return EnumerateFilesSafe(rootPath, "*.xp3").Any();
         }
 
+        private static bool IsKirikiriGameFast(string rootPath)
+        {
+            return EnumerateFilesTopLevelSafe(rootPath, "*.xp3").Any();
+        }
+
         private static bool IsUnrealGame(string rootPath)
         {
             return EnumerateFilesSafe(rootPath, "*.pak").Any() || EnumerateFilesSafe(rootPath, "*.utoc").Any();
+        }
+
+        private static bool IsUnrealGameFast(string rootPath)
+        {
+            if (EnumerateFilesTopLevelSafe(rootPath, "*.pak").Any() || EnumerateFilesTopLevelSafe(rootPath, "*.utoc").Any())
+                return true;
+            foreach (string folder in GetUnrealPakFolders(rootPath))
+            {
+                if (EnumerateFilesTopLevelSafe(folder, "*.pak").Any() || EnumerateFilesTopLevelSafe(folder, "*.utoc").Any())
+                    return true;
+            }
+            return false;
+        }
+
+        private static IEnumerable<string> GetUnrealPakFolders(string rootPath)
+        {
+            List<string> folders = new List<string>
+            {
+                Path.Combine(rootPath, "Content", "Paks"),
+                Path.Combine(rootPath, "Engine", "Content", "Paks")
+            };
+            try
+            {
+                foreach (string folder in Directory.EnumerateDirectories(rootPath, "*", SearchOption.TopDirectoryOnly))
+                    folders.Add(Path.Combine(folder, "Content", "Paks"));
+            }
+            catch { }
+            return folders;
         }
 
         private static ScanSummary BuildScanSummary(string rootPath)
@@ -1312,6 +1456,13 @@ namespace RpgmvpConverterWinForms
             catch { return Enumerable.Empty<string>(); }
         }
 
+        private static IEnumerable<string> EnumerateFilesTopLevelSafe(string rootPath, string pattern)
+        {
+            if (!Directory.Exists(rootPath)) return Enumerable.Empty<string>();
+            try { return Directory.EnumerateFiles(rootPath, pattern, SearchOption.TopDirectoryOnly).ToList(); }
+            catch { return Enumerable.Empty<string>(); }
+        }
+
         private static List<string> FindUnityBundleFiles(string rootPath)
         {
             return EnumerateFilesSafe(rootPath, "*.bundle").Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -1321,13 +1472,14 @@ namespace RpgmvpConverterWinForms
         {
             if (string.IsNullOrWhiteSpace(path)) return null;
             DirectoryInfo current = Directory.Exists(path) ? new DirectoryInfo(path) : new FileInfo(path).Directory;
-            while (current != null)
+            int remainingParents = 6;
+            while (current != null && remainingParents-- > 0)
             {
                 string root = current.FullName;
                 bool known = IsUnityGame(root)
-                    || IsGodotGame(root)
-                    || IsKirikiriGame(root)
-                    || IsUnrealGame(root)
+                    || IsGodotGameFast(root)
+                    || IsKirikiriGameFast(root)
+                    || IsUnrealGameFast(root)
                     || Directory.Exists(Path.Combine(root, "www"))
                     || Directory.Exists(Path.Combine(root, "game"))
                     || File.Exists(Path.Combine(root, "package.json"));
@@ -1535,7 +1687,7 @@ namespace RpgmvpConverterWinForms
             {
                 return string.Join(Environment.NewLine, new[]
                 {
-                    "Game Asset Tool v1.5.1 report",
+                    "Game Asset Tool v1.5.2 report",
                     "Engine: " + Engine,
                     "Extracted files: " + Extracted,
                     "Extracted size: " + FormatBytes(Bytes),

@@ -37,6 +37,8 @@ internal static class ReleaseInspector
 
             Type formType = assembly.GetType("RpgmvpConverterWinForms.RpgmvpConverterForm", true);
             MethodInfo detectEngine = formType.GetMethod("DetectEngine", BindingFlags.NonPublic | BindingFlags.Static);
+            MethodInfo detectEngineFast = formType.GetMethod("DetectEngineFast", BindingFlags.NonPublic | BindingFlags.Static);
+            MethodInfo tryFindGameRoot = formType.GetMethod("TryFindGameRoot", BindingFlags.NonPublic | BindingFlags.Static);
             string unityEngine = DetectEngine(detectEngine, Path.Combine(temp, "unity"), delegate(string path)
             {
                 Directory.CreateDirectory(Path.Combine(path, "Sample_Data"));
@@ -66,6 +68,19 @@ internal static class ReleaseInspector
                 Directory.CreateDirectory(path);
                 File.WriteAllBytes(Path.Combine(path, "pakchunk0-Windows.pak"), new byte[] { 0 });
             });
+            bool fastDetection = DetectExistingEngine(detectEngineFast, Path.Combine(temp, "unity")) == "Unity"
+                && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "renpy")) == "Renpy"
+                && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "rpgm")) == "RpgMaker"
+                && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "godot")) == "Godot"
+                && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "kirikiri")) == "Kirikiri"
+                && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "unreal")) == "Unreal";
+
+            string rootLookup = Path.Combine(temp, "root-lookup");
+            string nestedLookup = Path.Combine(rootLookup, "one", "two");
+            Directory.CreateDirectory(nestedLookup);
+            File.WriteAllBytes(Path.Combine(rootLookup, "data.xp3"), new byte[] { 0 });
+            string foundRoot = (string)tryFindGameRoot.Invoke(null, new object[] { nestedLookup });
+            bool fastRootLookup = string.Equals(foundRoot, rootLookup, StringComparison.OrdinalIgnoreCase);
 
             Type runtimeType = assembly.GetType("RpgmvpConverterWinForms.PortableRuntime", true);
             MethodInfo ensureRuntime = runtimeType.GetMethod("EnsureExtracted", BindingFlags.Public | BindingFlags.Static);
@@ -118,6 +133,8 @@ internal static class ReleaseInspector
             Console.WriteLine("DetectGodot=" + godotEngine);
             Console.WriteLine("DetectKirikiri=" + kirikiriEngine);
             Console.WriteLine("DetectUnreal=" + unrealEngine);
+            Console.WriteLine("FastDetection=" + fastDetection);
+            Console.WriteLine("FastRootLookup=" + fastRootLookup);
 
             return hasUnityScript
                 && hasGodotScript
@@ -134,6 +151,8 @@ internal static class ReleaseInspector
                 && godotEngine == "Godot"
                 && kirikiriEngine == "Kirikiri"
                 && unrealEngine == "Unreal"
+                && fastDetection
+                && fastRootLookup
                 ? 0
                 : 1;
         }
@@ -146,6 +165,12 @@ internal static class ReleaseInspector
     private static string DetectEngine(MethodInfo detectEngine, string path, Action<string> arrange)
     {
         arrange(path);
+        object value = detectEngine.Invoke(null, new object[] { path });
+        return value.ToString();
+    }
+
+    private static string DetectExistingEngine(MethodInfo detectEngine, string path)
+    {
         object value = detectEngine.Invoke(null, new object[] { path });
         return value.ToString();
     }
