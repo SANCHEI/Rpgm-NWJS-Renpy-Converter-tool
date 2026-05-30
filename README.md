@@ -4,125 +4,130 @@
 
 [**Watch Demo Video on YouTube**](https://youtu.be/BnjRjik9fk0)
 
-Fast converter for **RPGMVP**, **Unity** and **Gallery Unlocker** for **NWJS/Renpy** games.
+Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **Ren'Py**, **NWJS**, **Unity**, **Godot** and **KiriKiri** games. Experimental Unreal `.pak` extraction is included.
 
-![Version](https://img.shields.io/badge/version-1.3.4-blue)
-![.NET](https://img.shields.io/badge/.NET-4.0-blue)
-![Python](https://img.shields.io/badge/Python-3.x-green)
+![Version](https://img.shields.io/badge/version-1.5.0-blue)
+![.NET](https://img.shields.io/badge/.NET_Framework-4.7.2-blue)
+![Runtime](https://img.shields.io/badge/runtime-built--in-green)
 
-## Features
+## Highlights
 
-- **RPGMVP to PNG Conversion** - Fast conversion with live progress, ETA and task control (pause/cancel)
-- **Unity Asset Extractor** - Extract textures, videos, audio from Unity games (.assets, .bundle files)
-- **Gallery Unlocker** - Unlock galleries in Renpy/NWJS games
-- **Auto-detection** - Automatically detects game type and root folder
-- **Auto Python Installation** - Downloads and installs Python if not found
-- **Memory Optimized** - Efficient RAM usage (~4GB) for large games
-
-## Requirements
-
-- Windows 7/8/10/11
-- [.NET Framework 4.0](https://www.microsoft.com/en-us/download/details.aspx?id=17718) or higher
-- Python 3.x with UnityPy (auto-installed)
-
-## Download
-
-**Latest Version:** [GameAssetTool.exe](https://github.com/SANCHEI/Rpgm-NWJS-Renpy-Converter-tool/releases/tag/v1.3.4)
-
-## Supported Games
-
-### RPG Maker MV/MZ
-- RPGMVP encryption
-- Custom HEX key support
-- Auto key detection
-- Parallel processing with pause/cancel
-
-### Unity Games
-- Textures (Texture2D, Sprite, Cubemap, Texture3D)
-- Videos (VideoClip) - MP4
-- Audio (AudioClip)
-- Meshes (Mesh) - OBJ
-- Animation metadata
-- .assets and .bundle files
-- Direct media files (png, jpg, gif, mp4, etc)
-- Real-time progress with ETA and elapsed time
-- Bundle confirmation dialog
-- Memory optimized (~4GB max)
-
-### Renpy/NWJS Games
-- Gallery unlocker (soft/hard mode)
-- NWJS process detection
-- RPA extraction
-
-## Supported Engines
-
-- **RPGM** - RPG Maker MV/MZ
-- **NWJS** - Node WebKit Software (Renpy games)
-- **Unity** - Unity games
+- Detects the selected game engine automatically.
+- Supports drag-and-drop for game folders.
+- Provides a **Dry Run / Scan** before extraction with archive count, candidate file count and estimated input size.
+- Converts RPGMVP assets with key auto-detection and key reconstruction.
+- Extracts Ren'Py RPA archives through verified `unrpa==2.3.0`.
+- Extracts Unity textures, videos, audio, meshes and direct media through one built-in workflow.
+- Extracts unencrypted Godot PCK archives for Godot 3 and 4.
+- Extracts standard unencrypted KiriKiri XP3 archives.
+- Extracts Unreal PAK archives in an experimental offline mode.
+- Preserves relative paths and renames collisions with suffixes such as `image (2).png`.
+- Installs and removes the Ren'Py / NWJS gallery unlocker.
+- Writes an extraction summary to the results dialog and `GameAssetTool-report.txt`.
 
 ## Usage
 
-### RPGMVP Conversion
-1. Select game folder (auto-detected)
-2. Enter HEX key (auto-detected for known games)
-3. Click Start
+1. Run `GameAssetTool.exe`.
+2. Drop a game folder into the window or click **Browse...**.
+3. Click **Dry Run / Scan** to review detected engine, archive count and estimated size.
+4. Click **Extract Detected**, or use **Extract Unity** to choose a Unity asset filter.
+5. Review the results dialog and open the output folder.
 
-### Unity Extraction
-1. Select Unity game folder (auto-detected)
-2. Choose extraction mode: Textures / Videos / Audio / All
-3. Click "Extract"
-4. Confirm bundle extraction (optional)
-5. Find extracted files in `game_folder/extracted/` and `game_folder/bundle_extracted/`
+Output is written inside the selected game folder:
 
-### Gallery Unlocker
-1. Select game folder
-2. Choose game type: Soft / Hard
-3. Click "Unlock"
+```text
+extracted/
+  rpgm/
+  renpy/
+  unity/
+  godot/
+  kirikiri/
+  unreal/
+```
 
-## Keyboard Shortcuts
+Each extractor writes `GameAssetTool-report.txt` into its own output folder.
 
-- **Ctrl+A** in logs - Select all
-- **Ctrl+C** in logs - Copy selected
+## Ren'Py
 
-## Building from Source
+Ren'Py extraction uses the maintained [`unrpa`](https://github.com/Lattyware/unrpa) package and supports RPA `2.0`, `3.0`, `3.2` and `4.0` archives. The pinned `unrpa==2.3.0` package is embedded into `GameAssetTool.exe`.
+
+Archives are extracted into separate subfolders to prevent files from different RPA archives overwriting one another.
+
+## Unity
+
+Unity extraction uses [`UnityPy==1.25.0`](https://github.com/K0lb3/UnityPy). The package, its dependencies and the Python source from [`scripts/extract_unity.py`](scripts/extract_unity.py) are embedded into the release executable during the build.
+
+Available filters:
+
+- Textures
+- Videos
+- Audio
+- Meshes (`OBJ`)
+- All
+
+Bundle extraction is confirmed before processing. Direct media files are copied while preserving their relative paths.
+
+## Godot
+
+Godot extraction supports standard unencrypted PCK format versions `1`, `2` and `3`, including PCK data embedded into an executable. Encrypted PCK directories and encrypted PCK files are reported as unsupported.
+
+## KiriKiri
+
+KiriKiri extraction supports standard unencrypted `.xp3` archives, compressed indexes and compressed file segments. Protected game-specific XP3 variants are reported as unsupported.
+
+## Unreal Experimental
+
+Unreal extraction uses [`pyuepak==0.2.7`](https://github.com/stas96111/pyUEpak) inside the built-in runtime. It supports ordinary and Zlib-compressed `.pak` archives and accepts an optional AES key in the shared key field.
+
+The application does not download or redistribute an Oodle DLL. Oodle-compressed archives and IoStore `.utoc/.ucas` containers are reported as unsupported.
+
+## Gallery Unlocker
+
+The unlocker has separate buttons:
+
+- **Install Unlocker**
+- **Remove Unlocker**
+
+Choose **Soft** first. Use **Hard** only when the soft mode is insufficient.
+
+## Requirements
+
+- Windows 10 version 1803 or later, or Windows 11, x64.
+- No separate Python, package or .NET runtime installation is required on supported Windows versions.
+- No internet connection is required while using the application.
+
+When an extractor needs Python, the built-in runtime is temporarily unpacked under `%LocalAppData%\GameAssetTool\runtime\`. The session folder is removed when the application closes.
+
+## Build
+
+Build the main executable. The build machine needs Python 3.12 x64 and internet access the first time the pinned portable runtime is prepared:
 
 ```batch
 build_winforms.bat
 ```
 
-Requires:
-- .NET Framework 4.0 SDK
-- CSC compiler
+Build the single-file release:
 
-## Changelog
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build_release.ps1
+```
 
-### v1.3.4
-- Fixed VideoClip extraction - reads from m_ExternalResources (StreamedResource)
-- Added Mesh extraction - exports 3D models as OBJ files
-- Fixed AudioClip extraction - added m_Resource (StreamedResource) support
-- UnityExtractorForm now processes .resS files
+Release output:
 
-### v1.3.2
-- Fixed no-key decryption - now correctly reconstructs encryption key
-- Added full PNG header validation (signature + IHDR length + type)
-- Only decrypt first 16 bytes, rest is uncompressed PNG data
+```text
+release/GameAssetTool-v1.5.0.exe
+```
 
-### v1.3.1
-- No-key decryption for RPGMVP files (broken)
-- Automatically reconstructs key from .rpgmvp files
-- Game Root renamed to Game Folder
-- Path/key fields editable after cancel
+The release contains one supported executable. Users do not need any neighboring files.
 
-### v1.3.0
-- Reduced RAM usage from 15GB to ~4GB
-- Fixed bundle skip confirmation
-- Added Sprite/Cubemap/Texture3D support
-- Bundle files in separate folder
-- Auto Python and UnityPy installation
-- Unified progress format with elapsed time
+## Project Layout
 
-### v1.2.0
-- Initial Unity Asset Extractor release
+- `RpgmvpConverterForm.cs`: supported WinForms application.
+- `scripts/`: Python sources and the portable-runtime build script.
+- `tools/`: legacy and experimental utilities excluded from the release.
+- `payload/`: generated embedded Python runtime archive, excluded from Git.
+
+See [`docs/ENGINE_SUPPORT.md`](docs/ENGINE_SUPPORT.md) for limits and the next engine priorities.
 
 ## License
 

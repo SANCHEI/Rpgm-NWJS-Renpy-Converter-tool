@@ -1,87 +1,58 @@
-# Itch.io Page Content - Game Asset Tool
-
----
+# Itch.io Page Content - Game Asset Tool v1.5
 
 ## Title
 Game Asset Tool
 
----
-
 ## Project URL
-https://sanchei.itch.io/game-asset-tool
+https://sanchei.itch.io/gameassettool
 
----
+## Short description
+Convert, Extract, Unlock - scan and extract assets from RPG Maker, Ren'Py, NWJS, Unity, Godot and KiriKiri games.
 
-## Short description / Tagline
-Convert, Extract, Unlock - All-in-one game modding utility
+## Description
+Game Asset Tool is a Windows utility for asset extraction and gallery unlocker installation.
 
----
+Drop a game folder into the app, run **Dry Run / Scan**, then extract assets with a clear results report.
 
-## Classification
-- Type: Tools
-- Kind: Downloadable (tools)
-- Release status: Released
+Watch Demo: https://youtu.be/BnjRjik9fk0
 
----
-
-## Details
-
-### Description
-Game Asset Tool is a powerful utility for game modding, asset extraction, and unlocking hidden content.
-
-Watch Demo: https://youtu.be/y7z-_byQjXo
-
-### Features
-- RPGMVP / NWJS Converter - Convert encrypted RPGMVP images to PNG with auto-detect key, live progress, ETA and pause/cancel
-- Unity Asset Extractor - Extract textures from .assets and .bundle files (auto-installs UnityPy)
-- Renpy RPA Extraction - Extract files from Renpy .rpa archives (no Python dependencies required)
-- Gallery Unlocker - Unlock galleries in Renpy/NWJS games
-- Auto-Detection - Automatically detect game type and encryption key
-
-### Supported Games
-- RPG Maker MV/MZ (RPGMVP encryption)
-- NWJS games (Node WebKit)
-- Unity games (all versions with .assets/.bundle)
-- Renpy games (RPA archive extraction + gallery unlocker)
+### What's New in v1.5
+- Godot 3/4 PCK extraction for unencrypted archives
+- Standard unencrypted KiriKiri XP3 extraction
+- Experimental offline Unreal PAK extraction
+- Optional Unreal AES key input
+- Clear warnings for Unreal Oodle compression and IoStore `.utoc/.ucas`
+- One portable `GameAssetTool.exe` with no neighboring files or runtime downloads
 
 ### Requirements
-- Windows 7/8/10/11
-- .NET Framework 4.0
-- Python 3.x (auto-installed for Unity extraction)
-
-### Usage
-1. Run the tool
-2. Select game folder (auto-detected)
-3. Enter HEX key or use auto-detect
-4. Click Start/Extract/Unlock
+- Windows 10 version 1803 or later, or Windows 11, x64
+- No separate Python, package or .NET runtime installation
+- No internet connection required
 
 ### Output
-- RPGMVP/NWJS: Extracted PNGs in original folders
-- Unity: Textures in game_folder/extracted/
-- Renpy RPA: Extracted files in game_folder/extracted/
-- Unlocker: Mod files in game/_mods/
+- RPGM: `game_folder/extracted/rpgm/`
+- Ren'Py: `game_folder/extracted/renpy/`
+- Unity: `game_folder/extracted/unity/`
+- Godot: `game_folder/extracted/godot/`
+- KiriKiri: `game_folder/extracted/kirikiri/`
+- Unreal: `game_folder/extracted/unreal/`
+- Unlocker: `game_folder/game/_mods/`
 
----
+### Known Limits
+- Encrypted Godot PCK and protected XP3 variants are not supported yet
+- Unreal Oodle compression and IoStore `.utoc/.ucas` are reported but not extracted
 
 ## Tags
-unity, rpg-maker, game-modding, modding-tools, asset-extractor, textures, game-tools, renpy, nwjs, free-tool, converter, extractor
-
----
+unity, rpg-maker, godot, game-modding, modding-tools, asset-extractor, game-tools, renpy, nwjs, converter
 
 ## AI Generation Disclosure
 No
 
----
-
 ## Custom Noun
 tool
 
----
-
 ## Community
 Disabled
-
----
 
 ## Visibility
 Public / Draft

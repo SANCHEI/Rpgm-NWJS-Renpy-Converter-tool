@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,86 +28,73 @@ namespace RpgmvpConverterWinForms
         private readonly Color logBack = Color.FromArgb(10, 12, 16);
         private readonly Color pinkColor = Color.FromArgb(255, 105, 180);
 
-        private Label titleLabel;
-        private Label subtitleLabel;
-
-        private Label rootLabel;
         private TextBox pathBox;
-        private Label keyLabelInner;
         private TextBox keyBox;
-        private Label engineRpgmLabel;
-        private Label engineNwjsLabel;
-        private Button browseButton;
-
-        private Label unlockerLabel;
         private ComboBox unlockerModeBox;
-        private Button unlockerButton;
-
-        private Label unityLabel;
         private ComboBox unityExtractModeBox;
-        private Button unityExtractButton;
-
-        private Button startButton;
-        private Button pauseButton;
-        private Button cancelButton;
-
-        private ProgressBar progressBar;
+        private Label detectedEngineLabel;
+        private Label scanSummaryLabel;
         private Label statusLabel;
         private Label statsLabel;
         private TextBox logBox;
+        private ProgressBar progressBar;
+        private Button browseButton;
+        private Button dryRunButton;
+        private Button startButton;
+        private Button unityExtractButton;
+        private Button unlockerButton;
+        private Button removeUnlockerButton;
+        private Button pauseButton;
+        private Button cancelButton;
+        private Button openOutputButton;
 
+        private readonly object processSync = new object();
         private System.Windows.Forms.Timer uiTimer;
         private ConversionRun currentRun;
-        private Process unityProcess;
-        private bool unityRunning;
+        private Process activeProcess;
+        private bool externalRunning;
+        private string lastOutputDir = "";
 
         public RpgmvpConverterForm()
         {
             BuildUi();
-            
-            string exeDir = AppDomain.CurrentDomain.BaseDirectory;
-            string iconPath = Path.Combine(exeDir, "app.ico");
+
+            string iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app.ico");
             if (File.Exists(iconPath))
             {
-                try { Icon = new Icon(iconPath); } catch { }
+                try { Icon = new Icon(iconPath); }
+                catch { }
             }
-            
-            string initialRoot = TryFindGameRoot(exeDir);
+
+            string initialRoot = TryFindGameRoot(AppDomain.CurrentDomain.BaseDirectory);
             if (!string.IsNullOrWhiteSpace(initialRoot))
-            {
-                pathBox.Text = initialRoot;
-                TryAutoDetectKey(initialRoot);
-            }
+                ApplyGamePath(initialRoot, false);
         }
 
         private void BuildUi()
         {
             Font uiFont = new Font("Segoe UI", 9f, FontStyle.Regular);
             Font uiBold = new Font("Segoe UI Semibold", 9f, FontStyle.Regular);
-            Font titleFont = new Font("Segoe UI Semibold", 13f, FontStyle.Regular);
-            Font logFont = new Font("Consolas", 10f, FontStyle.Regular);
+            Font titleFont = new Font("Segoe UI Semibold", 14f, FontStyle.Regular);
+            Font logFont = new Font("Consolas", 9.5f, FontStyle.Regular);
 
-            Text = "Game Asset Tool";
+            Text = "Game Asset Tool v1.5";
             StartPosition = FormStartPosition.CenterScreen;
-            MinimumSize = new Size(900, 850);
-            Size = new Size(900, 850);
+            MinimumSize = new Size(940, 900);
+            Size = new Size(940, 900);
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
             BackColor = formBack;
             ForeColor = textColor;
             Font = uiFont;
-
+            AllowDrop = true;
+            DragEnter += OnDragEnter;
+            DragDrop += OnDragDrop;
             FormClosing += OnFormClosing;
 
-            Panel header = new Panel
-            {
-                Height = 68,
-                BackColor = panelBack,
-                Dock = DockStyle.Top
-            };
+            Panel header = new Panel { Height = 68, BackColor = panelBack, Dock = DockStyle.Top };
             Controls.Add(header);
-
-            titleLabel = new Label
+            header.Controls.Add(new Label
             {
                 Text = "Game Asset Tool",
                 Font = titleFont,
@@ -114,136 +102,111 @@ namespace RpgmvpConverterWinForms
                 Location = new Point(18, 10),
                 Size = new Size(500, 28),
                 BackColor = Color.Transparent
-            };
-            header.Controls.Add(titleLabel);
-
-            subtitleLabel = new Label
+            });
+            header.Controls.Add(new Label
             {
-                Text = "Convert, Extract, Unlock",
+                Text = "Drop a game folder here, scan it, then extract or unlock",
                 ForeColor = mutedColor,
-                Location = new Point(19, 38),
-                Size = new Size(500, 20),
+                Location = new Point(19, 39),
+                Size = new Size(700, 20),
                 BackColor = Color.Transparent
-            };
-            header.Controls.Add(subtitleLabel);
+            });
 
-            int y = 100;
-
-            rootLabel = new Label
-            {
-                Text = "Game Folder",
-                Location = new Point(18, y),
-                Size = new Size(100, 20),
-                ForeColor = mutedColor,
-                BackColor = Color.Transparent
-            };
-            Controls.Add(rootLabel);
-
-            y += 24;
+            int y = 88;
+            Controls.Add(CreateSectionLabel("Game Folder", y));
+            y += 22;
 
             Panel pathPanel = new Panel
             {
                 Location = new Point(18, y),
-                Size = new Size(852, 34),
+                Size = new Size(892, 34),
                 BackColor = inputBack,
-                BorderStyle = BorderStyle.None,
                 Padding = new Padding(4)
             };
             Controls.Add(pathPanel);
-
             pathBox = new TextBox
             {
                 Location = new Point(8, 4),
-                Size = new Size(660, 26),
+                Size = new Size(710, 26),
                 BackColor = inputBack,
                 ForeColor = textColor,
                 BorderStyle = BorderStyle.FixedSingle,
                 Font = uiFont
             };
-            pathBox.TextChanged += delegate(object sender, EventArgs e) { OnPathChanged(); };
+            pathBox.TextChanged += delegate { OnPathChanged(); };
             pathPanel.Controls.Add(pathBox);
-
-            browseButton = CreateButton("...", new Point(676, 3), new Size(168, 28), accentColor, formBack, uiBold);
+            browseButton = CreateButton("Browse...", new Point(730, 3), new Size(154, 28), accentColor, formBack, uiBold);
             browseButton.Click += delegate { BrowseFolder(); };
             pathPanel.Controls.Add(browseButton);
-
             y += 42;
+
+            Panel scanPanel = new Panel
+            {
+                Location = new Point(18, y),
+                Size = new Size(892, 56),
+                BackColor = panelBack,
+                Padding = new Padding(8)
+            };
+            Controls.Add(scanPanel);
+            detectedEngineLabel = new Label
+            {
+                Text = "Engine: not detected",
+                Location = new Point(10, 8),
+                Size = new Size(300, 20),
+                ForeColor = accentColor,
+                Font = uiBold
+            };
+            scanPanel.Controls.Add(detectedEngineLabel);
+            scanSummaryLabel = new Label
+            {
+                Text = "Select a folder or drop it into this window.",
+                Location = new Point(10, 30),
+                Size = new Size(690, 20),
+                ForeColor = mutedColor
+            };
+            scanPanel.Controls.Add(scanSummaryLabel);
+            dryRunButton = CreateButton("Dry Run / Scan", new Point(718, 13), new Size(158, 30), Color.FromArgb(45, 50, 60), textColor, uiBold);
+            dryRunButton.Click += delegate { RunDryScan(true); };
+            scanPanel.Controls.Add(dryRunButton);
+            y += 66;
 
             Panel keyPanel = new Panel
             {
                 Location = new Point(18, y),
-                Size = new Size(852, 34),
+                Size = new Size(892, 34),
                 BackColor = inputBack,
-                BorderStyle = BorderStyle.None,
                 Padding = new Padding(4)
             };
             Controls.Add(keyPanel);
-
-            keyLabelInner = new Label
+            keyPanel.Controls.Add(new Label
             {
-                Text = "HEX key",
+                Text = "Optional key",
                 Location = new Point(8, 8),
-                Size = new Size(70, 20),
-                ForeColor = mutedColor,
-                BackColor = Color.Transparent
-            };
-            keyPanel.Controls.Add(keyLabelInner);
-
+                Size = new Size(100, 20),
+                ForeColor = mutedColor
+            });
             keyBox = new TextBox
             {
-                Location = new Point(80, 4),
-                Size = new Size(520, 26),
+                Location = new Point(112, 4),
+                Size = new Size(590, 26),
                 BackColor = inputBack,
                 ForeColor = textColor,
                 BorderStyle = BorderStyle.FixedSingle,
                 Font = uiFont
             };
             keyPanel.Controls.Add(keyBox);
-
-            engineRpgmLabel = new Label
-            {
-                Text = "RPGM",
-                Location = new Point(610, 8),
-                Size = new Size(45, 20),
-                ForeColor = Color.FromArgb(68, 197, 255),
-                BackColor = Color.Transparent,
-                Font = uiBold
-            };
-            keyPanel.Controls.Add(engineRpgmLabel);
-
-            engineNwjsLabel = new Label
-            {
-                Text = "NWJS",
-                Location = new Point(660, 8),
-                Size = new Size(45, 20),
-                ForeColor = Color.FromArgb(255, 105, 180),
-                BackColor = Color.Transparent,
-                Font = uiBold
-            };
-            keyPanel.Controls.Add(engineNwjsLabel);
-
-            startButton = CreateButton("Start", new Point(715, 3), new Size(125, 28), successColor, formBack, uiBold);
-            startButton.Click += async delegate { await StartConversionAsync(); };
+            startButton = CreateButton("Extract Detected", new Point(714, 3), new Size(170, 28), successColor, formBack, uiBold);
+            startButton.Click += async delegate { await StartDetectedExtractionAsync(); };
             keyPanel.Controls.Add(startButton);
+            y += 44;
 
-            y += 38;
-
-            unlockerLabel = new Label
-            {
-                Text = "Gallery Unlocker",
-                Location = new Point(18, y),
-                Size = new Size(300, 20),
-                ForeColor = mutedColor,
-                BackColor = Color.Transparent
-            };
-            Controls.Add(unlockerLabel);
-
-            y += 24;
-
+            Controls.Add(CreateSectionLabel("Gallery Unlocker for Ren'Py / NWJS", y));
+            y += 22;
             unlockerModeBox = new ComboBox
             {
                 Location = new Point(18, y),
                 Size = new Size(100, 26),
+                DropDownStyle = ComboBoxStyle.DropDownList,
                 BackColor = inputBack,
                 ForeColor = textColor,
                 FlatStyle = FlatStyle.Flat
@@ -252,158 +215,114 @@ namespace RpgmvpConverterWinForms
             unlockerModeBox.Items.Add("Hard");
             unlockerModeBox.SelectedIndex = 0;
             Controls.Add(unlockerModeBox);
-
-            unlockerButton = CreateButton("Unlock", new Point(130, y - 3), new Size(160, 30), pinkColor, formBack, uiBold);
-            unlockerButton.Click += delegate { StartUnlocker(); };
+            unlockerButton = CreateButton("Install Unlocker", new Point(130, y - 3), new Size(170, 30), pinkColor, formBack, uiBold);
+            unlockerButton.Click += delegate { InstallUnlocker(); };
             Controls.Add(unlockerButton);
-
+            removeUnlockerButton = CreateButton("Remove Unlocker", new Point(310, y - 3), new Size(170, 30), Color.FromArgb(95, 65, 80), textColor, uiBold);
+            removeUnlockerButton.Click += delegate { RemoveUnlocker(); };
+            Controls.Add(removeUnlockerButton);
             y += 42;
 
-            unityLabel = new Label
-            {
-                Text = "Unity Extractor",
-                Location = new Point(18, y),
-                Size = new Size(300, 20),
-                ForeColor = mutedColor,
-                BackColor = Color.Transparent
-            };
-            Controls.Add(unityLabel);
-
-            y += 24;
-
+            Controls.Add(CreateSectionLabel("Unity Extractor", y));
+            y += 22;
             unityExtractModeBox = new ComboBox
             {
                 Location = new Point(18, y),
                 Size = new Size(150, 26),
+                DropDownStyle = ComboBoxStyle.DropDownList,
                 BackColor = inputBack,
                 ForeColor = textColor,
                 FlatStyle = FlatStyle.Flat
             };
             unityExtractModeBox.Items.Add("Textures");
             unityExtractModeBox.Items.Add("Videos");
+            unityExtractModeBox.Items.Add("Audio");
+            unityExtractModeBox.Items.Add("Meshes");
             unityExtractModeBox.Items.Add("All");
             unityExtractModeBox.SelectedIndex = 0;
             Controls.Add(unityExtractModeBox);
-
-            unityExtractButton = CreateButton("Extract", new Point(180, y - 3), new Size(160, 30), Color.FromArgb(138, 98, 255), formBack, uiBold);
-            unityExtractButton.Click += delegate { StartUnityExtraction(); };
+            unityExtractButton = CreateButton("Extract Unity", new Point(180, y - 3), new Size(170, 30), Color.FromArgb(138, 98, 255), textColor, uiBold);
+            unityExtractButton.Click += async delegate { await StartUnityExtractionAsync(); };
             Controls.Add(unityExtractButton);
-
-            y += 42;
+            y += 46;
 
             pauseButton = CreateButton("Pause", new Point(18, y), new Size(100, 30), warningColor, Color.Black, uiBold);
             pauseButton.Enabled = false;
             pauseButton.Click += delegate { TogglePause(); };
             Controls.Add(pauseButton);
-
             cancelButton = CreateButton("Cancel", new Point(126, y), new Size(100, 30), dangerColor, textColor, uiBold);
             cancelButton.Enabled = false;
-            cancelButton.Click += delegate { CancelConversion(); };
+            cancelButton.Click += delegate { CancelOperation(); };
             Controls.Add(cancelButton);
-
-            y += 38;
+            openOutputButton = CreateButton("Open Output Folder", new Point(236, y), new Size(180, 30), Color.FromArgb(45, 50, 60), textColor, uiBold);
+            openOutputButton.Enabled = false;
+            openOutputButton.Click += delegate { OpenOutputFolder(); };
+            Controls.Add(openOutputButton);
+            y += 40;
 
             progressBar = new ProgressBar
             {
                 Location = new Point(18, y),
-                Size = new Size(852, 24),
+                Size = new Size(892, 24),
                 Style = ProgressBarStyle.Continuous
             };
             Controls.Add(progressBar);
-
-            y += 32;
-
+            y += 30;
             statusLabel = new Label
             {
                 Text = "Waiting to start",
                 Location = new Point(18, y),
-                Size = new Size(852, 20),
+                Size = new Size(892, 20),
                 ForeColor = textColor,
-                BackColor = Color.Transparent,
                 Font = uiBold
             };
             Controls.Add(statusLabel);
-
-            y += 24;
-
+            y += 22;
             statsLabel = new Label
             {
-                Text = "Processed: 0 / 0 | Speed: 0.00 f/s | ETA: --:--",
+                Text = "Processed: 0 / 0 | Size: -- | ETA: --:--",
                 Location = new Point(18, y),
-                Size = new Size(852, 20),
-                ForeColor = mutedColor,
-                BackColor = Color.Transparent
+                Size = new Size(892, 20),
+                ForeColor = mutedColor
             };
             Controls.Add(statsLabel);
-
-            y += 28;
+            y += 26;
 
             Panel logPanel = new Panel
             {
                 Location = new Point(18, y),
-                Size = new Size(852, 330),
+                Size = new Size(892, 320),
                 BackColor = logBack,
                 BorderStyle = BorderStyle.FixedSingle
             };
             Controls.Add(logPanel);
-
-            Label logHeader = new Label
+            logPanel.Controls.Add(new Label
             {
                 Text = "Log",
                 Location = new Point(10, 10),
                 Size = new Size(60, 20),
                 ForeColor = mutedColor,
-                BackColor = Color.Transparent,
-                Font = new Font("Segoe UI", 9f, FontStyle.Bold)
-            };
-            logPanel.Controls.Add(logHeader);
-
-            Button clearLogButton = new Button
-            {
-                Text = "Clear",
-                Location = new Point(75, 8),
-                Size = new Size(80, 24),
-                BackColor = Color.FromArgb(45, 50, 60),
-                ForeColor = textColor,
-                FlatStyle = FlatStyle.Flat,
-                Font = uiFont
-            };
-            clearLogButton.FlatAppearance.BorderSize = 0;
+                Font = uiBold
+            });
+            Button clearLogButton = CreateButton("Clear", new Point(75, 8), new Size(80, 24), Color.FromArgb(45, 50, 60), textColor, uiFont);
             clearLogButton.Click += delegate { logBox.Clear(); };
             logPanel.Controls.Add(clearLogButton);
-
             logBox = new TextBox
             {
                 Multiline = true,
                 ScrollBars = ScrollBars.Vertical,
                 ReadOnly = true,
                 Location = new Point(10, 36),
-                Size = new Size(830, 282),
+                Size = new Size(870, 272),
                 BackColor = logBack,
                 ForeColor = textColor,
                 BorderStyle = BorderStyle.None,
                 Font = logFont
             };
-            logBox.TextChanged += delegate(object sender, EventArgs e) 
-            { 
-                logBox.SelectionStart = logBox.Text.Length; 
-                logBox.ScrollToCaret(); 
-            };
-            logBox.KeyDown += delegate(object sender, KeyEventArgs e)
+            logBox.TextChanged += delegate
             {
-                if (e.Control && e.KeyCode == Keys.A)
-                {
-                    logBox.SelectAll();
-                    e.SuppressKeyPress = true;
-                }
-                else if (e.Control && e.KeyCode == Keys.C)
-                {
-                    if (logBox.SelectionLength > 0)
-                    {
-                        Clipboard.SetText(logBox.SelectedText);
-                    }
-                    e.SuppressKeyPress = true;
-                }
+                logBox.SelectionStart = logBox.Text.Length;
+                logBox.ScrollToCaret();
             };
             logPanel.Controls.Add(logBox);
 
@@ -411,27 +330,15 @@ namespace RpgmvpConverterWinForms
             uiTimer.Tick += delegate { UpdateUiFromRun(); };
         }
 
-        private void TryAutoDetectKey(string path)
+        private Label CreateSectionLabel(string text, int y)
         {
-            if (string.IsNullOrWhiteSpace(keyBox.Text))
+            return new Label
             {
-                string detectedKey = TryFindKey(path);
-                if (!string.IsNullOrWhiteSpace(detectedKey))
-                {
-                    keyBox.Text = detectedKey;
-                }
-            }
-        }
-
-        private TextBox CreateInputBox(Point location, Size size)
-        {
-            return new TextBox
-            {
-                Location = location,
-                Size = size,
-                BackColor = inputBack,
-                ForeColor = textColor,
-                BorderStyle = BorderStyle.FixedSingle
+                Text = text,
+                Location = new Point(18, y),
+                Size = new Size(500, 20),
+                ForeColor = mutedColor,
+                BackColor = Color.Transparent
             };
         }
 
@@ -448,48 +355,65 @@ namespace RpgmvpConverterWinForms
                 FlatStyle = FlatStyle.Flat,
                 Cursor = Cursors.Hand
             };
-            button.FlatAppearance.BorderSize = 1;
             button.FlatAppearance.BorderColor = border;
+            button.FlatAppearance.BorderSize = 1;
             return button;
         }
 
         private void BrowseFolder()
         {
-            using (OpenFileDialog dialog = new OpenFileDialog())
+            using (FolderBrowserDialog dialog = new FolderBrowserDialog())
             {
-                dialog.Title = "Select Game Folder";
-                dialog.CheckFileExists = false;
-                dialog.CheckPathExists = true;
-                dialog.FileName = "Select Folder";
-                dialog.Filter = "Folders|*.folder";
-                dialog.InitialDirectory = Directory.Exists(pathBox.Text) ? pathBox.Text : Environment.GetFolderPath(Environment.SpecialFolder.MyComputer);
-
+                dialog.Description = "Select game folder";
+                dialog.SelectedPath = Directory.Exists(pathBox.Text) ? pathBox.Text : "";
                 if (dialog.ShowDialog(this) == DialogResult.OK)
-                {
-                    string folderPath = Path.GetDirectoryName(dialog.FileName);
-                    if (string.IsNullOrEmpty(folderPath) || !Directory.Exists(folderPath))
-                    {
-                        folderPath = dialog.FileName;
-                    }
-                    pathBox.Text = folderPath;
-                    TryAutoDetectKey(folderPath);
-                }
+                    ApplyGamePath(dialog.SelectedPath, true);
             }
+        }
+
+        private void OnDragEnter(object sender, DragEventArgs e)
+        {
+            if (e.Data != null && e.Data.GetDataPresent(DataFormats.FileDrop))
+                e.Effect = DragDropEffects.Copy;
+        }
+
+        private void OnDragDrop(object sender, DragEventArgs e)
+        {
+            string[] paths = e.Data == null ? null : e.Data.GetData(DataFormats.FileDrop) as string[];
+            if (paths == null || paths.Length == 0) return;
+            string path = Directory.Exists(paths[0]) ? paths[0] : Path.GetDirectoryName(paths[0]);
+            if (!string.IsNullOrWhiteSpace(path))
+                ApplyGamePath(path, true);
+        }
+
+        private void ApplyGamePath(string path, bool scan)
+        {
+            string detectedRoot = TryFindGameRoot(path);
+            pathBox.Text = string.IsNullOrWhiteSpace(detectedRoot) ? path : detectedRoot;
+            TryAutoDetectKey(pathBox.Text);
+            if (scan) RunDryScan(false);
         }
 
         private void OnPathChanged()
         {
             string path = pathBox.Text.Trim();
-            if (Directory.Exists(path))
+            if (!Directory.Exists(path))
             {
-                TryAutoDetectKey(path);
+                detectedEngineLabel.Text = "Engine: not detected";
+                detectedEngineLabel.ForeColor = mutedColor;
+                scanSummaryLabel.Text = "Select a folder or drop it into this window.";
+                return;
             }
+
+            TryAutoDetectKey(path);
+            GameEngine engine = DetectEngine(path);
+            detectedEngineLabel.Text = "Engine: " + EngineName(engine);
+            detectedEngineLabel.ForeColor = EngineColor(engine);
+            scanSummaryLabel.Text = "Ready to scan. Click Dry Run / Scan to inspect files before extraction.";
         }
 
-        private async Task StartConversionAsync()
+        private void RunDryScan(bool showLog)
         {
-            if (currentRun != null) return;
-
             string rootPath = pathBox.Text.Trim();
             if (!Directory.Exists(rootPath))
             {
@@ -497,1274 +421,690 @@ namespace RpgmvpConverterWinForms
                 return;
             }
 
-            if (IsRenpyGame(rootPath))
+            Cursor previous = Cursor;
+            Cursor = Cursors.WaitCursor;
+            try
             {
-                if (!IsPythonInstalled())
+                ScanSummary summary = BuildScanSummary(rootPath);
+                detectedEngineLabel.Text = "Engine: " + EngineName(summary.Engine);
+                detectedEngineLabel.ForeColor = EngineColor(summary.Engine);
+                scanSummaryLabel.Text = string.Format(
+                    "{0} archive(s), {1} candidate file(s), estimated input {2}",
+                    summary.ArchiveCount,
+                    summary.FileCount,
+                    FormatBytes(summary.TotalBytes));
+                if (showLog)
                 {
-                    var result = MessageBox.Show("Python is required for Renpy extraction.\n\nWould you like to download it now?", "Python Required", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-                    if (result == DialogResult.Yes)
-                    {
-                        InstallPython();
-                    }
-                    return;
+                    WriteLog("Dry run: " + EngineName(summary.Engine));
+                    WriteLog("Found: " + summary.ArchiveCount + " archive(s), " + summary.FileCount + " candidate file(s), " + FormatBytes(summary.TotalBytes));
                 }
-                WriteLog("Renpy game detected - starting file extraction");
-                Task.Run(delegate { RunRenpyExtraction(rootPath); });
-                return;
             }
-
-            if (IsUnityGame(rootPath))
+            finally
             {
-                WriteLog("Unity game detected - use Unity Extractor");
-                MessageBox.Show("Unity game detected.\n\nPlease use the 'Extract' button for Unity extraction.", "Game Asset Tool", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                Cursor = previous;
+            }
+        }
+
+        private async Task StartDetectedExtractionAsync()
+        {
+            string rootPath = pathBox.Text.Trim();
+            if (!Directory.Exists(rootPath))
+            {
+                WriteLog("Invalid path");
                 return;
             }
 
-            byte[] keyBytes = null;
+            GameEngine engine = DetectEngine(rootPath);
+            if (engine == GameEngine.Unity)
+            {
+                await StartUnityExtractionAsync();
+                return;
+            }
+            if (engine == GameEngine.Renpy)
+            {
+                await StartRenpyExtractionAsync();
+                return;
+            }
+            if (engine == GameEngine.Godot)
+            {
+                await StartPortableScriptExtractionAsync("Godot", "godot", "extract_godot.py", "RpgmvpConverterWinForms.scripts.extract_godot.py");
+                return;
+            }
+            if (engine == GameEngine.Kirikiri)
+            {
+                await StartPortableScriptExtractionAsync("KiriKiri XP3", "kirikiri", "extract_xp3.py", "RpgmvpConverterWinForms.scripts.extract_xp3.py");
+                return;
+            }
+            if (engine == GameEngine.Unreal)
+            {
+                await StartPortableScriptExtractionAsync("Unreal experimental", "unreal", "extract_unreal.py", "RpgmvpConverterWinForms.scripts.extract_unreal.py");
+                return;
+            }
+            if (engine != GameEngine.RpgMaker && engine != GameEngine.Nwjs)
+            {
+                MessageBox.Show("No supported game assets found. Run Dry Run / Scan and check the selected folder.", "Game Asset Tool", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
 
+            await StartRpgmExtractionAsync(rootPath);
+        }
+
+        private async Task StartRpgmExtractionAsync(string rootPath)
+        {
+            if (currentRun != null || externalRunning) return;
+
+            byte[] keyBytes;
             if (string.IsNullOrWhiteSpace(keyBox.Text))
             {
                 string detectedKey = TryFindKey(rootPath);
-                if (!string.IsNullOrWhiteSpace(detectedKey))
+                if (string.IsNullOrWhiteSpace(detectedKey))
+                    detectedKey = TryReconstructKey(rootPath);
+                if (string.IsNullOrWhiteSpace(detectedKey))
                 {
-                    keyBox.Text = detectedKey;
-                    WriteLog("Key found" + ": " + detectedKey);
-                    keyBytes = ParseKey(detectedKey);
-                }
-                else
-                {
-                    WriteLog("Key not found - trying no-key decryption...");
-                    await TryStartNoKeyDecryption(rootPath);
+                    WriteLog("Could not determine RPGM encryption key.");
                     return;
                 }
-            }
-            else
-            {
-                try
-                {
-                    keyBytes = ParseKey(keyBox.Text);
-                }
-                catch
-                {
-                    WriteLog("Invalid key format");
-                    return;
-                }
+                keyBox.Text = detectedKey;
             }
 
-            if (keyBytes == null || keyBytes.Length < 16)
+            try { keyBytes = ParseKey(keyBox.Text); }
+            catch
             {
-                WriteLog("Key too short (min 16 bytes)");
+                WriteLog("Invalid HEX key format.");
                 return;
             }
 
-            RunConversionCore(rootPath, keyBytes);
+            List<string> files = GetFilesToConvert(rootPath);
+            if (files.Count == 0)
+            {
+                WriteLog("No .rpgmvp/.png_ files found.");
+                return;
+            }
 
+            currentRun = new ConversionRun(rootPath, files, keyBytes);
+            lastOutputDir = currentRun.OutputDir;
+            SetRpgmRunningState(true);
+            progressBar.Maximum = Math.Max(files.Count, 1);
+            progressBar.Value = 0;
+            statusLabel.Text = "RPGM: preparing...";
+            statsLabel.Text = "Processed: 0 / " + files.Count + " | Size: -- | ETA: --:--";
+            WriteLog("RPGM extraction started: " + files.Count + " file(s)");
+            uiTimer.Start();
+            currentRun.Start();
+
+            ConversionRun finished = currentRun;
             try
             {
-                await currentRun.Completion;
-                FinishConversion(currentRun.CancelRequested);
+                await finished.Completion;
             }
-            catch (Exception ex)
+            catch (OperationCanceledException) { }
+            finally
             {
-                WriteLog("Errors" + ": " + ex.Message);
-                FinishConversion(true);
+                FinishRpgmExtraction(finished);
             }
         }
 
-        private void StartUnlocker()
+        private async Task StartRenpyExtractionAsync()
         {
+            if (currentRun != null || externalRunning) return;
+
+            string rootPath = pathBox.Text.Trim();
+            string gameFolder = Path.Combine(rootPath, "game");
+            List<string> archives = EnumerateFilesSafe(gameFolder, "*.rpa").ToList();
+            if (archives.Count == 0)
+            {
+                MessageBox.Show("No RPA archives found in the game folder.", "Ren'Py Extractor", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (!EnsurePortableRuntimeAvailable()) return;
+
+            string outputDir = Path.Combine(rootPath, "extracted", "renpy");
+            lastOutputDir = outputDir;
+            SetExternalRunningState(true, "Ren'Py");
+            progressBar.Maximum = Math.Max(archives.Count, 1);
+            progressBar.Value = 0;
+            WriteLog("Ren'Py extraction started with unrpa 2.3.0: " + archives.Count + " archive(s)");
+
+            OperationResult result;
+            try
+            {
+                result = await Task.Run(delegate { return RunRenpyExtraction(rootPath, archives, outputDir); });
+            }
+            catch (Exception ex)
+            {
+                result = OperationResult.Failed("Ren'Py", outputDir, ex.Message);
+            }
+            SetExternalRunningState(false, "Ren'Py");
+            CompleteExternalOperation(result);
+        }
+
+        private OperationResult RunRenpyExtraction(string rootPath, List<string> archives, string outputDir)
+        {
+            DateTime start = DateTime.UtcNow;
+            int errors = 0;
+            int renamed = 0;
+            Directory.CreateDirectory(outputDir);
+            string gameFolder = Path.Combine(rootPath, "game");
+
+            for (int i = 0; i < archives.Count; i++)
+            {
+                string archive = archives[i];
+                string relative = MakeRelativePath(gameFolder, archive);
+                string subfolder = Path.ChangeExtension(relative, null);
+                string archiveOutput = Path.Combine(outputDir, SanitizeRelativePath(subfolder));
+                bool pathRenamed;
+                archiveOutput = GetUniqueDirectoryPath(archiveOutput, out pathRenamed);
+                if (pathRenamed) renamed++;
+                Directory.CreateDirectory(archiveOutput);
+
+                BeginUi(delegate
+                {
+                    statusLabel.Text = "Ren'Py: " + Path.GetFileName(archive);
+                    progressBar.Value = Math.Min(i, progressBar.Maximum);
+                    statsLabel.Text = "Archives: " + i + " / " + archives.Count;
+                });
+                SafeLog("Processing RPA: " + relative);
+
+                ProcessStartInfo psi = CreatePythonProcessInfo();
+                psi.Arguments = "-m unrpa -m -p " + QuoteArg(archiveOutput) + " " + QuoteArg(archive);
+                int exitCode = RunExternalProcess(psi, delegate(string line) { SafeLog(line); });
+                if (exitCode != 0) errors++;
+            }
+
+            FileStats stats = GetFileStats(outputDir);
+            return new OperationResult("Ren'Py", outputDir, stats.Count, stats.Bytes, errors, renamed, DateTime.UtcNow - start);
+        }
+
+        private async Task StartUnityExtractionAsync()
+        {
+            if (currentRun != null || externalRunning) return;
+
+            string rootPath = pathBox.Text.Trim();
+            if (!Directory.Exists(rootPath) || !IsUnityGame(rootPath))
+            {
+                MessageBox.Show("No Unity game found. Select a folder containing *_Data or UnityPlayer.dll.", "Unity Extractor", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (!EnsurePortableRuntimeAvailable()) return;
+
+            List<string> bundles = FindUnityBundleFiles(rootPath);
+            bool includeBundles = true;
+            if (bundles.Count > 0)
+            {
+                long bytes = bundles.Sum(delegate(string file) { return SafeFileLength(file); });
+                includeBundles = MessageBox.Show(
+                    "Found " + bundles.Count + " bundle file(s), " + FormatBytes(bytes) + ".\n\nExtract bundles too?",
+                    "Unity Bundles",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question) == DialogResult.Yes;
+            }
+
+            string mode = UnityModeValue();
+            string outputDir = Path.Combine(rootPath, "extracted", "unity");
+            lastOutputDir = outputDir;
+            SetExternalRunningState(true, "Unity");
+            WriteLog("Unity extraction started: " + mode + (includeBundles ? " with bundles" : " without bundles"));
+
+            OperationResult result;
+            try
+            {
+                result = await Task.Run(delegate { return RunUnityExtraction(rootPath, outputDir, mode, includeBundles); });
+            }
+            catch (Exception ex)
+            {
+                result = OperationResult.Failed("Unity", outputDir, ex.Message);
+            }
+            SetExternalRunningState(false, "Unity");
+            CompleteExternalOperation(result);
+        }
+
+        private OperationResult RunUnityExtraction(string rootPath, string outputDir, string mode, bool includeBundles)
+        {
+            DateTime start = DateTime.UtcNow;
+            Directory.CreateDirectory(outputDir);
+            string scriptPath = PortableRuntime.CreateSessionFilePath("extract_unity.py");
+            File.WriteAllText(scriptPath, EmbeddedScripts.ReadText("RpgmvpConverterWinForms.scripts.extract_unity.py"), new UTF8Encoding(false));
+
+            int extracted = 0;
+            long bytes = 0;
+            int errors = 0;
+            int renamed = 0;
+
+            ProcessStartInfo psi = CreatePythonProcessInfo();
+            psi.Arguments = QuoteArg(scriptPath);
+            psi.EnvironmentVariables["GAME_PATH"] = rootPath;
+            psi.EnvironmentVariables["OUTPUT_PATH"] = outputDir;
+            psi.EnvironmentVariables["EXTRACT_MODE"] = mode;
+            psi.EnvironmentVariables["INCLUDE_BUNDLES"] = includeBundles ? "1" : "0";
+            psi.EnvironmentVariables["MAX_WORKERS"] = "4";
+
+            int exitCode = RunExternalProcess(psi, delegate(string line)
+            {
+                if (line.StartsWith("TOTAL:", StringComparison.Ordinal))
+                {
+                    int total = ParseInt(line, 1);
+                    BeginUi(delegate
+                    {
+                        progressBar.Maximum = Math.Max(total, 1);
+                        progressBar.Value = 0;
+                        statusLabel.Text = "Unity: found " + total + " archive(s)";
+                    });
+                }
+                else if (line.StartsWith("PROGRESS:", StringComparison.Ordinal))
+                {
+                    int processed = ParseInt(line, 1);
+                    int total = ParseInt(line, 2);
+                    long currentBytes = ParseLong(line, 3);
+                    BeginUi(delegate
+                    {
+                        progressBar.Maximum = Math.Max(total, 1);
+                        progressBar.Value = Math.Min(processed, progressBar.Maximum);
+                        statusLabel.Text = "Unity: " + processed + " / " + total;
+                        statsLabel.Text = "Archives: " + processed + " / " + total + " | Size: " + FormatBytes(currentBytes);
+                    });
+                }
+                else if (line.StartsWith("RESULT:", StringComparison.Ordinal))
+                {
+                    extracted = ParseInt(line, 1);
+                    bytes = ParseLong(line, 2);
+                    errors = ParseInt(line, 3);
+                    renamed = ParseInt(line, 4);
+                }
+                else
+                {
+                    SafeLog(line);
+                }
+            });
+
+            if (exitCode != 0 && errors == 0) errors = 1;
+            return new OperationResult("Unity", outputDir, extracted, bytes, errors, renamed, DateTime.UtcNow - start);
+        }
+
+        private async Task StartPortableScriptExtractionAsync(string engineName, string outputFolder, string scriptFile, string resourceName)
+        {
+            if (currentRun != null || externalRunning) return;
+
             string rootPath = pathBox.Text.Trim();
             if (!Directory.Exists(rootPath))
             {
                 WriteLog("Invalid path");
                 return;
             }
+            if (!EnsurePortableRuntimeAvailable()) return;
 
-            if (!IsRpgmOrNwjsGame(rootPath))
+            string outputDir = Path.Combine(rootPath, "extracted", outputFolder);
+            lastOutputDir = outputDir;
+            SetExternalRunningState(true, engineName);
+            WriteLog(engineName + " extraction started");
+
+            OperationResult result;
+            try
             {
-                WriteLog("Unlocker only works with RPGM/NWJS games.");
-                MessageBox.Show("Unlocker only works with RPGM/NWJS games.", "Unlocker", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                string optionalKey = keyBox.Text.Trim();
+                result = await Task.Run(delegate
+                {
+                    return RunPortableScriptExtraction(rootPath, outputDir, engineName, scriptFile, resourceName, optionalKey);
+                });
+            }
+            catch (Exception ex)
+            {
+                result = OperationResult.Failed(engineName, outputDir, ex.Message);
+            }
+            SetExternalRunningState(false, engineName);
+            CompleteExternalOperation(result);
+        }
+
+        private OperationResult RunPortableScriptExtraction(string rootPath, string outputDir, string engineName, string scriptFile, string resourceName, string optionalKey)
+        {
+            DateTime start = DateTime.UtcNow;
+            Directory.CreateDirectory(outputDir);
+            string scriptPath = PortableRuntime.CreateSessionFilePath(scriptFile);
+            File.WriteAllText(scriptPath, EmbeddedScripts.ReadText(resourceName), new UTF8Encoding(false));
+
+            int extracted = 0;
+            long bytes = 0;
+            int errors = 0;
+            int renamed = 0;
+
+            ProcessStartInfo psi = CreatePythonProcessInfo();
+            psi.Arguments = QuoteArg(scriptPath);
+            psi.EnvironmentVariables["GAME_PATH"] = rootPath;
+            psi.EnvironmentVariables["OUTPUT_PATH"] = outputDir;
+            psi.EnvironmentVariables["OPTIONAL_KEY"] = optionalKey;
+
+            int exitCode = RunExternalProcess(psi, delegate(string line)
+            {
+                if (line.StartsWith("TOTAL:", StringComparison.Ordinal))
+                {
+                    int total = ParseInt(line, 1);
+                    BeginUi(delegate
+                    {
+                        progressBar.Maximum = Math.Max(total, 1);
+                        progressBar.Value = 0;
+                        statusLabel.Text = engineName + ": found " + total + " archive(s)";
+                    });
+                }
+                else if (line.StartsWith("PROGRESS:", StringComparison.Ordinal))
+                {
+                    int processed = ParseInt(line, 1);
+                    int total = ParseInt(line, 2);
+                    long currentBytes = ParseLong(line, 3);
+                    BeginUi(delegate
+                    {
+                        progressBar.Maximum = Math.Max(total, 1);
+                        progressBar.Value = Math.Min(processed, progressBar.Maximum);
+                        statusLabel.Text = engineName + ": " + processed + " / " + total;
+                        statsLabel.Text = "Archives: " + processed + " / " + total + " | Size: " + FormatBytes(currentBytes);
+                    });
+                }
+                else if (line.StartsWith("RESULT:", StringComparison.Ordinal))
+                {
+                    extracted = ParseInt(line, 1);
+                    bytes = ParseLong(line, 2);
+                    errors = ParseInt(line, 3);
+                    renamed = ParseInt(line, 4);
+                }
+                else
+                {
+                    SafeLog(line);
+                }
+            });
+
+            if (exitCode != 0 && errors == 0) errors = 1;
+            return new OperationResult(engineName, outputDir, extracted, bytes, errors, renamed, DateTime.UtcNow - start);
+        }
+
+        private void InstallUnlocker()
+        {
+            string rootPath = pathBox.Text.Trim();
+            if (!Directory.Exists(rootPath) || !IsRpgmOrNwjsGame(rootPath))
+            {
+                MessageBox.Show("Unlocker works with Ren'Py / NWJS-style game folders.", "Unlocker", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            string modsPath = Path.Combine(rootPath, "game", "_mods");
+            Directory.CreateDirectory(modsPath);
+            if (GetUnlockerDirectories(rootPath).Any())
+            {
+                MessageBox.Show("Unlocker is already installed. Remove it before switching mode.", "Unlocker", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
             string mode = unlockerModeBox.SelectedIndex == 0 ? "soft" : "hard";
-
+            string destination = Path.Combine(modsPath, "ZLZK_UGU_" + mode);
             try
             {
-                string modsPath = Path.Combine(rootPath, "game", "_mods");
-                Directory.CreateDirectory(modsPath);
-
-                string[] existingMods = Directory.GetDirectories(modsPath, "ZLZK_UGU_*");
-                if (existingMods.Length > 0)
-                {
-                    WriteLog("Unlocker already installed");
-                    MessageBox.Show("Unlocker already installed", "Unlocker", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-
-                string modName = "ZLZK_UGU_" + mode;
-                string destPath = Path.Combine(modsPath, modName);
-                UnlockerResources.ExtractUnlocker(mode, destPath);
-
-                if (Directory.Exists(destPath))
-                {
-                    WriteLog("Unlocker installed successfully");
-                    WriteLog("Installed to" + ": " + destPath);
-                    MessageBox.Show("Unlocker installed successfully" + "\n\n" + "Run game to activate. Remove for uninstall.", "Unlocker", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
-                else
-                {
-                    WriteLog("Installation error");
-                }
+                UnlockerResources.ExtractUnlocker(mode, destination);
+                if (!Directory.EnumerateFiles(destination, "*.rpy", SearchOption.AllDirectories).Any())
+                    throw new InvalidDataException("Unlocker files were not created.");
+                WriteLog("Unlocker installed: " + destination);
+                MessageBox.Show("Unlocker installed.\n\nRun the game to activate it.", "Unlocker", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                    WriteLog("Installation error" + ": " + ex.Message);
+                WriteLog("Unlocker installation failed: " + ex.Message);
+                MessageBox.Show("Unlocker installation failed:\n" + ex.Message, "Unlocker", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
-        private static bool IsRpgmOrNwjsGame(string rootPath)
-        {
-            bool hasGame = Directory.Exists(Path.Combine(rootPath, "game"));
-            bool hasExe = Directory.EnumerateFiles(rootPath, "*.exe", SearchOption.TopDirectoryOnly).Any();
-            bool hasPackage = File.Exists(Path.Combine(rootPath, "package.json"));
-            bool hasWww = Directory.Exists(Path.Combine(rootPath, "www"));
-            bool hasData = Directory.Exists(Path.Combine(rootPath, "data")) || Directory.Exists(Path.Combine(rootPath, "www", "data"));
-
-            return (hasGame && hasExe) || (hasPackage && hasWww) || (hasWww && hasData);
-        }
-
-        private void StartUnityExtraction()
+        private void RemoveUnlocker()
         {
             string rootPath = pathBox.Text.Trim();
-            if (!Directory.Exists(rootPath))
+            List<string> directories = GetUnlockerDirectories(rootPath).ToList();
+            if (directories.Count == 0)
             {
-                WriteLog("Invalid path");
+                MessageBox.Show("Unlocker is not installed.", "Unlocker", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
-            if (!IsUnityGame(rootPath))
-            {
-                WriteLog("Unity extraction: No Unity game found.");
-                MessageBox.Show("Unity extraction: No Unity game found.\n\nLook for folders with *_Data, StreamingAssets, or UnityPlayer.dll", "Unity Extractor", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            if (MessageBox.Show("Remove installed unlocker files?", "Remove Unlocker", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
                 return;
-            }
 
-            if (!IsPythonInstalled())
+            string modsPath = Path.GetFullPath(Path.Combine(rootPath, "game", "_mods")) + Path.DirectorySeparatorChar;
+            foreach (string directory in directories)
             {
-                var result = MessageBox.Show("Python is required for Unity extraction.\n\nWould you like to download it now?", "Python Required", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-                if (result == DialogResult.Yes)
-                {
-                    InstallPython();
-                    return;
-                }
-                else
-                {
-                    return;
-                }
+                string fullPath = Path.GetFullPath(directory);
+                if (!fullPath.StartsWith(modsPath, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Refusing to remove a folder outside game\\_mods.");
+                Directory.Delete(fullPath, true);
+                WriteLog("Unlocker removed: " + fullPath);
             }
-
-            if (!CheckUnityPyInstalled())
-            {
-                var result = MessageBox.Show("UnityPy is required for Unity extraction.\n\nWould you like to install it now?", "UnityPy Required", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-                if (result == DialogResult.Yes)
-                {
-                    InstallUnityPy();
-                    if (!CheckUnityPyInstalled())
-                    {
-                        WriteLog("UnityPy installation failed");
-                        MessageBox.Show("Failed to install UnityPy.\n\nPlease run: pip install UnityPy", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        return;
-                    }
-                }
-                else
-                {
-                    return;
-                }
-            }
-
-            string extractMode = unityExtractModeBox.SelectedIndex == 0 ? "textures" : (unityExtractModeBox.SelectedIndex == 1 ? "videos" : "all");
-            WriteLog("Unity extraction started: " + extractMode);
-
-            Task.Run(delegate { RunUnityExtraction(rootPath, extractMode); });
         }
 
-        private static bool IsPythonInstalled()
+        private IEnumerable<string> GetUnlockerDirectories(string rootPath)
+        {
+            string modsPath = Path.Combine(rootPath, "game", "_mods");
+            if (!Directory.Exists(modsPath)) return Enumerable.Empty<string>();
+            return Directory.EnumerateDirectories(modsPath, "ZLZK_UGU_*", SearchOption.TopDirectoryOnly).ToList();
+        }
+
+        private bool EnsurePortableRuntimeAvailable()
         {
             try
             {
-                ProcessStartInfo psi = new ProcessStartInfo();
-                psi.FileName = "cmd";
-                psi.Arguments = "/c where python";
-                psi.UseShellExecute = false;
-                psi.RedirectStandardOutput = true;
-                psi.RedirectStandardError = true;
-                psi.CreateNoWindow = true;
-
-                using (Process process = Process.Start(psi))
-                {
-                    string output = process.StandardOutput.ReadToEnd();
-                    process.WaitForExit();
-                    if (process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output))
-                        return true;
-                }
-            }
-            catch { }
-
-            string[] commonPaths = {
-                @"C:\Python312\python.exe",
-                @"C:\Python311\python.exe",
-                @"C:\Python310\python.exe",
-                @"C:\Program Files\Python312\python.exe",
-                @"C:\Program Files\Python311\python.exe",
-                @"C:\Program Files\Python310\python.exe",
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + @"\Programs\Python\Python312\python.exe",
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + @"\Programs\Python\Python311\python.exe",
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + @"\Programs\Python\Python310\python.exe"
-            };
-
-            foreach (string path in commonPaths)
-            {
-                if (File.Exists(path))
-                {
-                    try
-                    {
-                        ProcessStartInfo psi = new ProcessStartInfo();
-                        psi.FileName = "\"" + path + "\"";
-                        psi.Arguments = "--version";
-                        psi.UseShellExecute = false;
-                        psi.RedirectStandardOutput = true;
-                        psi.RedirectStandardError = true;
-                        psi.CreateNoWindow = true;
-
-                        using (Process process = Process.Start(psi))
-                        {
-                            process.WaitForExit();
-                            if (process.ExitCode == 0) return true;
-                        }
-                    }
-                    catch { }
-                }
-            }
-
-            return false;
-        }
-
-        private void InstallPython()
-        {
-            try
-            {
-                WriteLog("Downloading Python...");
-                statusLabel.Text = "Downloading Python...";
-
-                string tempDir = Path.Combine(Path.GetTempPath(), "GameAssetTool");
-                Directory.CreateDirectory(tempDir);
-                string installerPath = Path.Combine(tempDir, "python-installer.exe");
-
-                using (var client = new System.Net.WebClient())
-                {
-                    client.DownloadFile("https://www.python.org/ftp/python/3.12.0/python-3.12.0-amd64.exe", installerPath);
-                }
-
-                WriteLog("Installing Python silently...");
-                statusLabel.Text = "Installing Python...";
-
-                ProcessStartInfo psi = new ProcessStartInfo();
-                psi.FileName = "\"" + installerPath + "\"";
-                psi.Arguments = "/quiet InstallAllUsers=0 PrependPath=1";
-                psi.UseShellExecute = false;
-                psi.CreateNoWindow = true;
-
-                using (Process process = Process.Start(psi))
-                {
-                    process.WaitForExit();
-                }
-
-                WriteLog("Python installed. Please restart the application.");
-                MessageBox.Show("Python has been installed.\n\nPlease CLOSE and REOPEN this application.", "Python Installed", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                statusLabel.Text = "Preparing built-in runtime...";
+                PortableRuntime.EnsureExtracted();
+                return true;
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Failed to install Python automatically.\n\nPlease install Python manually:\nhttps://www.python.org/downloads/", "Python Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            }
-        }
-
-        private static bool CheckUnityPyInstalled()
-        {
-            try
-            {
-                string pythonPath = FindPythonPath();
-                ProcessStartInfo psi = new ProcessStartInfo();
-                psi.FileName = "\"" + pythonPath + "\"";
-                psi.Arguments = "-c \"import UnityPy; print('ok')\"";
-                psi.UseShellExecute = false;
-                psi.RedirectStandardOutput = true;
-                psi.CreateNoWindow = true;
-                psi.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
-
-                using (Process process = Process.Start(psi))
-                {
-                    string output = process.StandardOutput.ReadToEnd();
-                    process.WaitForExit();
-                    return output.Trim().Contains("ok");
-                }
-            }
-            catch
-            {
+                WriteLog("Built-in runtime failed: " + ex.Message);
+                MessageBox.Show(
+                    "Could not prepare the built-in extraction runtime.\n\n" + ex.Message,
+                    "Built-in Runtime",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
                 return false;
             }
         }
 
-        private static string FindPythonPath()
+        private static ProcessStartInfo CreatePythonProcessInfo()
         {
-            string[] commonPaths = {
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + @"\Programs\Python\Python312\python.exe",
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + @"\Programs\Python\Python311\python.exe",
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + @"\Programs\Python\Python310\python.exe",
-                @"C:\Python312\python.exe",
-                @"C:\Python311\python.exe",
-                @"C:\Python310\python.exe",
-                @"C:\Program Files\Python312\python.exe",
-                @"C:\Program Files\Python311\python.exe",
-                @"C:\Program Files\Python310\python.exe"
-            };
-
-            foreach (string path in commonPaths)
-            {
-                if (File.Exists(path))
-                    return path;
-            }
-
-            try
-            {
-                ProcessStartInfo psi = new ProcessStartInfo();
-                psi.FileName = "cmd";
-                psi.Arguments = "/c where python";
-                psi.UseShellExecute = false;
-                psi.RedirectStandardOutput = true;
-                psi.CreateNoWindow = true;
-
-                using (Process process = Process.Start(psi))
-                {
-                    string output = process.StandardOutput.ReadLine();
-                    process.WaitForExit();
-                    if (!string.IsNullOrWhiteSpace(output) && File.Exists(output.Trim()))
-                        return output.Trim();
-                }
-            }
-            catch { }
-
-            return "python";
+            return PortableRuntime.CreatePythonProcessInfo();
         }
 
-        private void InstallUnityPy()
+        private int RunExternalProcess(ProcessStartInfo psi, Action<string> onLine)
         {
-            try
+            using (Process process = new Process { StartInfo = psi })
             {
-                WriteLog("Installing UnityPy...");
-                statusLabel.Text = "Installing UnityPy...";
-
-                string pythonPath = FindPythonPath();
-
-                ProcessStartInfo psi = new ProcessStartInfo();
-                psi.FileName = "\"" + pythonPath + "\"";
-                psi.Arguments = "-m pip install UnityPy";
-                psi.UseShellExecute = false;
-                psi.RedirectStandardOutput = true;
-                psi.RedirectStandardError = true;
-                psi.CreateNoWindow = true;
-                psi.StandardOutputEncoding = System.Text.Encoding.UTF8;
-                psi.StandardErrorEncoding = System.Text.Encoding.UTF8;
-                psi.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
-
-                using (Process process = Process.Start(psi))
+                process.OutputDataReceived += delegate(object sender, DataReceivedEventArgs e)
                 {
-                    string output = process.StandardOutput.ReadToEnd();
-                    string error = process.StandardError.ReadToEnd();
-                    process.WaitForExit();
-
-                    if (process.ExitCode == 0)
-                    {
-                        WriteLog("UnityPy installed successfully");
-                    }
-                    else
-                    {
-                        WriteLog("UnityPy install error: " + error);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                WriteLog("Install error: " + ex.Message);
-            }
-        }
-
-        private static bool IsUnityGame(string rootPath)
-        {
-            bool hasDataFolder = Directory.Exists(Path.Combine(rootPath, "*_Data"));
-            bool hasStreamingAssets = Directory.Exists(Path.Combine(rootPath, "StreamingAssets"));
-            bool hasUnityPlayer = File.Exists(Path.Combine(rootPath, "UnityPlayer.dll"));
-            bool hasManaged = Directory.Exists(Path.Combine(rootPath, "Managed"));
-
-            return hasStreamingAssets || hasUnityPlayer || (hasManaged && hasDataFolder);
-        }
-
-        private static bool IsRenpyGame(string rootPath)
-        {
-            string gameFolder = Path.Combine(rootPath, "game");
-            
-            bool hasGameFolder = Directory.Exists(gameFolder);
-            if (!hasGameFolder) return false;
-
-            bool hasRpa = Directory.GetFiles(gameFolder, "*.rpa", SearchOption.TopDirectoryOnly).Length > 0;
-            bool hasRpyc = Directory.GetFiles(gameFolder, "*.rpyc", SearchOption.TopDirectoryOnly).Length > 0;
-            bool hasRpy = Directory.GetFiles(gameFolder, "*.rpy", SearchOption.AllDirectories).Length > 0;
-            bool hasRenpyExe = File.Exists(Path.Combine(rootPath, "renpy.exe"));
-            bool hasGameExe = File.Exists(Path.Combine(rootPath, "game.exe"));
-            bool hasLauncherScript = File.Exists(Path.Combine(rootPath, "launcher.sh")) || File.Exists(Path.Combine(rootPath, "game", "launcher.py"));
-
-            return hasRpa || hasRpyc || hasRpy || hasRenpyExe || hasGameExe || hasLauncherScript;
-        }
-
-        private void RunRenpyExtraction(string rootPath)
-        {
-            try
-            {
-                string gameFolder = Path.Combine(rootPath, "game");
-                string outputDir = Path.Combine(rootPath, "extracted");
-                Directory.CreateDirectory(outputDir);
-
-                this.BeginInvoke((MethodInvoker)delegate
+                    if (!string.IsNullOrWhiteSpace(e.Data)) onLine(e.Data);
+                };
+                process.ErrorDataReceived += delegate(object sender, DataReceivedEventArgs e)
                 {
-                    progressBar.Maximum = 100;
-                    progressBar.Value = 0;
-                    statusLabel.Text = "Renpy: Finding archives...";
-                    statsLabel.Text = "";
-                });
+                    if (!string.IsNullOrWhiteSpace(e.Data)) onLine("ERROR: " + e.Data);
+                };
 
-                var rpaFiles = new List<string>();
-                foreach (string rpa in Directory.GetFiles(gameFolder, "*.rpa", SearchOption.AllDirectories))
-                    rpaFiles.Add(rpa);
-
-                if (rpaFiles.Count == 0)
-                {
-                    this.BeginInvoke((MethodInvoker)delegate
-                    {
-                        statusLabel.Text = "Renpy: No RPA files found";
-                        WriteLog("No RPA files found");
-                    });
-                    return;
-                }
-
-                WriteLog("Found " + rpaFiles.Count + " RPA archives");
-
-                string tempDir = Path.Combine(Path.GetTempPath(), "RpgmvpConverter");
-                Directory.CreateDirectory(tempDir);
-                string scriptPath = Path.Combine(tempDir, "extract_rpa.py");
-
-                string script = @"
-import struct
-import zlib
-import pickle
-import os
-import sys
-
-def extract_rpa(rpa_path, output_dir):
-    with open(rpa_path, 'rb') as f:
-        header = f.readline().decode('ascii').strip()
-        
-        if header.startswith('RPA-3.0'):
-            parts = header.split()
-            index_offset = int(parts[1], 16)
-            key = int(parts[2], 16)
-        elif header.startswith('RPA-2.0'):
-            parts = header.split()
-            index_offset = int(parts[1], 16)
-            key = 0
-        else:
-            print('ERROR: Unknown RPA format')
-            return 0, 0
-        
-        f.seek(index_offset)
-        compressed = f.read()
-        index_data = zlib.decompress(compressed)
-        index = pickle.loads(index_data)
-        
-        total = sum(len(entries) for entries in index.values())
-        print('TOTAL:' + str(total))
-        sys.stdout.flush()
-        
-        count = 0
-        for filename, entries in index.items():
-            for entry in entries:
-                if len(entry) == 2:
-                    offset, length = entry
-                    start = 0
-                else:
-                    offset, length, start = entry
-                
-                if key != 0:
-                    offset ^= key
-                    length ^= key
-                
-                f.seek(offset)
-                data = f.read(length)
-                
-                out_path = os.path.join(output_dir, filename.replace('/', os.sep))
-                out_dir = os.path.dirname(out_path)
-                if out_dir:
-                    os.makedirs(out_dir, exist_ok=True)
-                
-                with open(out_path, 'wb') as out:
-                    out.write(data)
-                
-                count += 1
-                if count % 500 == 0:
-                    print('PROGRESS:' + str(count) + ':' + str(total))
-                    sys.stdout.flush()
-        
-        print('PROGRESS:' + str(count) + ':' + str(total))
-        return count, total
-
-rpa_file = os.environ.get('RPA_PATH', '')
-output_dir = os.environ.get('OUTPUT_PATH', '')
-
-if not rpa_file or not os.path.exists(rpa_file):
-    print('ERROR: RPA file not found')
-    sys.exit(1)
-
-count = extract_rpa(rpa_file, output_dir)
-print('DONE:' + str(count[0]))
-";
-
-                File.WriteAllText(scriptPath, script, new System.Text.UTF8Encoding(false));
-
-                int totalExtracted = 0;
-                int totalFiles = 1;
-                DateTime startTime = DateTime.UtcNow;
-
-                this.BeginInvoke((MethodInvoker)delegate
-                {
-                    progressBar.Maximum = 100;
-                    progressBar.Value = 0;
-                    statusLabel.Text = "Renpy: Starting...";
-                    statsLabel.Text = "ETA: --:--";
-                });
-
-                for (int i = 0; i < rpaFiles.Count; i++)
-                {
-                    string rpaFile = rpaFiles[i];
-                    string rpaName = Path.GetFileName(rpaFile);
-                    
-                    WriteLog("Processing: " + rpaName);
-
-                    string pythonPath = FindPythonPath();
-                    ProcessStartInfo psi = new ProcessStartInfo();
-                    psi.FileName = "\"" + pythonPath + "\"";
-                    psi.Arguments = "\"" + scriptPath + "\"";
-                    psi.UseShellExecute = false;
-                    psi.RedirectStandardOutput = true;
-                    psi.RedirectStandardError = true;
-                    psi.CreateNoWindow = true;
-                    psi.StandardOutputEncoding = System.Text.Encoding.UTF8;
-                    psi.EnvironmentVariables["RPA_PATH"] = rpaFile;
-                    psi.EnvironmentVariables["OUTPUT_PATH"] = outputDir;
-                    psi.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
-
-                    using (Process process = Process.Start(psi))
-                    {
-                        if (process != null)
-                        {
-                            process.OutputDataReceived += delegate(object sender, DataReceivedEventArgs e)
-                            {
-                                if (!string.IsNullOrEmpty(e.Data))
-                                {
-                                    this.BeginInvoke((MethodInvoker)delegate
-                                    {
-                                        string data = e.Data;
-
-                                        if (data.StartsWith("TOTAL:"))
-                                        {
-                                            string[] parts = data.Split(':');
-                                            if (parts.Length >= 2)
-                                            {
-                                                int.TryParse(parts[1], out totalFiles);
-                                                progressBar.Maximum = Math.Max(totalFiles, 1);
-                                            }
-                                        }
-                                        else if (data.StartsWith("PROGRESS:"))
-                                        {
-                                            string[] parts = data.Split(':');
-                                            if (parts.Length >= 3)
-                                            {
-                                                int.TryParse(parts[1], out totalExtracted);
-                                                int.TryParse(parts[2], out totalFiles);
-                                                progressBar.Maximum = Math.Max(totalFiles, 1);
-                                                progressBar.Value = Math.Min(totalExtracted, progressBar.Maximum);
-
-                                                double elapsed = Math.Max((DateTime.UtcNow - startTime).TotalSeconds, 0.1);
-                                                double speed = elapsed > 0 ? totalExtracted / elapsed : 0;
-                                                int remaining = totalFiles - totalExtracted;
-                                                string eta = speed > 0 ? FormatDuration(remaining / speed) : "--:--";
-                                                statsLabel.Text = "Processed: " + totalExtracted + " / " + totalFiles + " | Size: -- | ETA: " + eta;
-                                                statusLabel.Text = "Renpy: " + totalExtracted + " / " + totalFiles;
-                                            }
-                                        }
-                                        else if (data.StartsWith("ERROR:"))
-                                        {
-                                            WriteLog(data);
-                                            statusLabel.Text = "Renpy: Error";
-                                        }
-                                    });
-                                }
-                            };
-                            process.BeginOutputReadLine();
-                            process.WaitForExit();
-                        }
-                    }
-                }
-
-                this.BeginInvoke((MethodInvoker)delegate
-                {
-                    progressBar.Value = progressBar.Maximum;
-                    statusLabel.Text = "Renpy: Complete";
-                    double elapsed = Math.Max((DateTime.UtcNow - startTime).TotalSeconds, 0.1);
-                    double speed = elapsed > 0 ? totalExtracted / elapsed : 0;
-                    statsLabel.Text = "Processed: " + totalExtracted + " / " + totalFiles + " | Size: --";
-                    MessageBox.Show("Renpy extraction complete!\n\nExtracted: " + totalExtracted + " files\n\nOutput: " + outputDir, "Renpy Extractor", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                });
-            }
-            catch (Exception ex)
-            {
-                this.BeginInvoke((MethodInvoker)delegate
-                {
-                    progressBar.Value = 0;
-                    statusLabel.Text = "Renpy: Error";
-                    WriteLog("Error: " + ex.Message);
-                });
-            }
-        }
-
-        private void RunUnityExtraction(string rootPath, string extractMode)
-        {
-            try
-            {
-                string exeDir = AppDomain.CurrentDomain.BaseDirectory;
-                string tempDir = Path.Combine(Path.GetTempPath(), "RpgmvpConverter");
-                Directory.CreateDirectory(tempDir);
-                string scriptPath = Path.Combine(tempDir, "extract_unity.py");
-
-                string script = GetUnityExtractionScript();
-                File.WriteAllText(scriptPath, script, new System.Text.UTF8Encoding(false));
-
-                string outputDir = Path.Combine(rootPath, "extracted");
-                Directory.CreateDirectory(outputDir);
-
-                progressBar.Maximum = 100;
-                progressBar.Value = 0;
-                statusLabel.Text = "Unity: Scanning...";
-                statsLabel.Text = "ETA: --:--";
-
-                int totalFiles = 0;
-                int processedFiles = 0;
-
-                string pythonPath = FindPythonPath();
-                ProcessStartInfo psi = new ProcessStartInfo();
-                psi.FileName = "\"" + pythonPath + "\"";
-                psi.Arguments = "\"" + scriptPath + "\"";
-                psi.UseShellExecute = false;
-                psi.RedirectStandardOutput = true;
-                psi.RedirectStandardError = true;
-                psi.CreateNoWindow = true;
-                psi.StandardOutputEncoding = System.Text.Encoding.UTF8;
-                psi.StandardErrorEncoding = System.Text.Encoding.UTF8;
-                psi.EnvironmentVariables["GAME_PATH"] = rootPath;
-                psi.EnvironmentVariables["OUTPUT_PATH"] = outputDir;
-                psi.EnvironmentVariables["EXTRACT_MODE"] = extractMode;
-                psi.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
-                psi.EnvironmentVariables["PYTHONUNBUFFERED"] = "x";
-
-                unityRunning = true;
-                SetUnityRunningState(true);
-
-                Process process = null;
+                lock (processSync) activeProcess = process;
                 try
                 {
-                    process = Process.Start(psi);
-                    unityProcess = process;
-                    
-                    if (process != null)
-                    {
-                        DateTime startTime = DateTime.UtcNow;
-
-                        process.OutputDataReceived += delegate(object sender, DataReceivedEventArgs e)
-                        {
-                            if (!string.IsNullOrEmpty(e.Data))
-                            {
-                                string data = e.Data;
-                                this.BeginInvoke((MethodInvoker)delegate
-                                {
-                                    if (data.StartsWith("TOTAL:"))
-                                    {
-                                        string[] parts = data.Split(':');
-                                        if (parts.Length >= 2)
-                                        {
-                                            int.TryParse(parts[1], out totalFiles);
-                                            progressBar.Maximum = Math.Max(totalFiles, 1);
-                                            statusLabel.Text = "Unity: Found " + totalFiles + " files";
-                                        }
-                                    }
-                                    else if (data.StartsWith("PROGRESS:"))
-                                    {
-                                        string[] parts = data.Split(':');
-                                        if (parts.Length >= 2)
-                                        {
-                                            int.TryParse(parts[1], out processedFiles);
-                                            if (parts.Length >= 3) int.TryParse(parts[2], out totalFiles);
-                                            
-                                            long extractedSize = 0;
-                                            if (parts.Length >= 4) long.TryParse(parts[3], out extractedSize);
-                                            
-                                            progressBar.Maximum = Math.Max(totalFiles, 1);
-                                            progressBar.Value = Math.Min(processedFiles, progressBar.Maximum);
-
-                                            double elapsed = Math.Max((DateTime.UtcNow - startTime).TotalSeconds, 0.1);
-                                            double speed = processedFiles / elapsed;
-                                            int remaining = totalFiles - processedFiles;
-                                            string eta = speed > 0 ? FormatDuration(remaining / speed) : "--:--";
-                                            string elapsedStr = FormatDuration(elapsed);
-                                            string sizeStr = extractedSize > 0 ? (extractedSize / (1024 * 1024)) + " MB" : "--";
-                                            statsLabel.Text = "Processed: " + processedFiles + " / " + totalFiles + " | Size: " + sizeStr + " | ETA: " + eta + " | Time: " + elapsedStr;
-                                            statusLabel.Text = "Unity: " + processedFiles + "/" + totalFiles;
-                                        }
-                                    }
-                                    else if (data.StartsWith("BUNDLE_CONFIRM:"))
-                                    {
-                                        string[] parts = data.Split(':');
-                                        if (parts.Length >= 3)
-                                        {
-                                            int bundleCount = 0;
-                                            int bundleSize = 0;
-                                            int.TryParse(parts[1], out bundleCount);
-                                            int.TryParse(parts[2], out bundleSize);
-                                            
-                                            var result = MessageBox.Show(
-                                                "Found " + bundleCount + " bundle files (" + bundleSize + " MB total).\n\nExtract bundles?",
-                                                "Bundle Extraction",
-                                                MessageBoxButtons.YesNo,
-                                                MessageBoxIcon.Question);
-                                            
-                                            string markerPath = Path.Combine(Path.GetTempPath(), "RpgmvpConverter", "skip_bundles.txt");
-                                            
-                                            if (result == DialogResult.No)
-                                            {
-                                                File.WriteAllText(markerPath, "skip");
-                                                WriteLog("Bundle extraction skipped by user");
-                                            }
-                                            else
-                                            {
-                                                if (File.Exists(markerPath)) File.Delete(markerPath);
-                                                WriteLog("Processing bundles...");
-                                            }
-                                        }
-                                    }
-                                    else
-                                    {
-                                        WriteLog(data);
-                                        if (data.StartsWith("Loading:") || data.StartsWith("Processing:"))
-                                            statusLabel.Text = "Unity: " + data;
-                                    }
-                                });
-                            }
-                        };
-                        process.BeginOutputReadLine();
-                        process.ErrorDataReceived += delegate(object sender2, DataReceivedEventArgs e2)
-                        {
-                            if (!string.IsNullOrEmpty(e2.Data))
-                            {
-                                this.BeginInvoke((MethodInvoker)delegate { WriteLog("ERROR: " + e2.Data); });
-                            }
-                        };
-                        process.BeginErrorReadLine();
-                        process.WaitForExit();
-                    }
+                    process.Start();
+                    process.BeginOutputReadLine();
+                    process.BeginErrorReadLine();
+                    process.WaitForExit();
+                    return process.ExitCode;
+                }
+                catch
+                {
+                    if (process.HasExited) return process.ExitCode;
+                    throw;
                 }
                 finally
                 {
-                    unityRunning = false;
-                    unityProcess = null;
-                    SetUnityRunningState(false);
-
-                    if (process != null)
+                    lock (processSync)
                     {
-                        process.Dispose();
+                        if (ReferenceEquals(activeProcess, process)) activeProcess = null;
                     }
                 }
             }
-            catch (Exception ex)
-            {
-                this.BeginInvoke((MethodInvoker)delegate
-                {
-                    progressBar.Value = 0;
-                    statusLabel.Text = "Unity: Error";
-                    WriteLog("Unity extraction error: " + ex.Message);
-                });
-            }
-        }
-
-        private void SetUnityRunningState(bool running)
-        {
-            if (pauseButton != null) pauseButton.Enabled = running;
-            if (cancelButton != null) cancelButton.Enabled = running;
-            if (unityExtractButton != null) unityExtractButton.Enabled = !running;
-            if (unlockerButton != null) unlockerButton.Enabled = !running;
-            if (startButton != null) startButton.Enabled = !running;
-        }
-
-        private static string GetUnityExtractionScript()
-        {
-            return @"# -*- coding: utf-8 -*-
-from __future__ import print_function
-import sys
-import io
-import os
-from concurrent.futures import ThreadPoolExecutor, as_completed
-
-if sys.version_info[0] >= 3:
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
-
-import UnityPy
-
-game_path = os.environ.get('GAME_PATH', '')
-output_path = os.environ.get('OUTPUT_PATH', '')
-extract_mode = os.environ.get('EXTRACT_MODE', 'all')
-
-if not game_path or not output_path:
-    print('ERROR: GAME_PATH or OUTPUT_PATH not set in environment', file=sys.stderr)
-    sys.exit(1)
-
-os.makedirs(output_path, exist_ok=True)
-
-def extract_file(file_path, output, mode, is_bundle=False):
-    total = 0
-    total_size = 0
-    saved_files = set()
-    
-    try:
-        env = UnityPy.load(file_path)
-        
-        if is_bundle:
-            file_output = os.path.join(output, 'bundle_extracted', os.path.splitext(os.path.basename(file_path))[0])
-        else:
-            file_output = os.path.join(output, os.path.splitext(os.path.basename(file_path))[0])
-        os.makedirs(file_output, exist_ok=True)
-        
-        textures = 0
-        videos = 0
-        audios = 0
-        
-        for obj in env.objects:
-            try:
-                if mode in ['textures', 'all']:
-                    if obj.type.name in ['Texture2D', 'Sprite', 'Cubemap', 'Texture3D', 'Texture2DArray']:
-                        try:
-                            data = obj.read()
-                            name = getattr(data, 'name', None) or getattr(data, 'm_Name', 'texture_' + str(textures))
-                            safe_name = ''.join(c for c in str(name) if c.isalnum() or c in '._- ')
-                            
-                            if hasattr(data, 'image') and data.image:
-                                img_path = os.path.join(file_output, safe_name + '.png')
-                                
-                                if img_path not in saved_files:
-                                    data.image.save(img_path)
-                                    saved_files.add(img_path)
-                                    total_size += os.path.getsize(img_path)
-                                    textures += 1
-                                    total += 1
-                        except:
-                            pass
-                
-                if mode in ['videos', 'all']:
-                    if obj.type.name == 'VideoClip':
-                        try:
-                            data = obj.read()
-                            name = getattr(data, 'm_Name', 'video_' + str(videos)) or 'video_' + str(videos)
-                            safe_name = ''.join(c for c in str(name) if c.isalnum() or c in '._- ')
-                            
-                            video_data = None
-                            ext = '.mp4'
-                            
-                            ext_res = getattr(data, 'm_ExternalResources', None)
-                            if ext_res and hasattr(ext_res, 'm_Source'):
-                                source_file = os.path.join(os.path.dirname(file_path), ext_res.m_Source)
-                                if os.path.exists(source_file):
-                                    with open(source_file, 'rb') as f:
-                                        f.seek(ext_res.m_Offset)
-                                        video_data = f.read(ext_res.m_Size)
-                                    if hasattr(ext_res, 'm_OriginalPath') and ext_res.m_OriginalPath:
-                                        ext = os.path.splitext(ext_res.m_OriginalPath)[1] or '.mp4'
-                            
-                            if not video_data:
-                                video_data = getattr(data, 'm_ExternalAssets', None) or getattr(data, 'video_data', None)
-                            
-                            if video_data:
-                                video_path = os.path.join(file_output, safe_name + ext)
-                                
-                                if video_path not in saved_files:
-                                    with open(video_path, 'wb') as vf:
-                                        vf.write(video_data)
-                                    saved_files.add(video_path)
-                                    total_size += len(video_data)
-                                    videos += 1
-                                    total += 1
-                        except:
-                            pass
-                
-                if mode in ['audios', 'all']:
-                    if obj.type.name == 'AudioClip':
-                        try:
-                            data = obj.read()
-                            name = getattr(data, 'name', None) or getattr(data, 'm_Name', 'audio_' + str(audios))
-                            safe_name = ''.join(c for c in str(name) if c.isalnum() or c in '._- ')
-                            
-                            audio_data = None
-                            
-                            res = getattr(data, 'm_Resource', None)
-                            if res and hasattr(res, 'm_Source'):
-                                source_file = os.path.join(os.path.dirname(file_path), res.m_Source)
-                                if os.path.exists(source_file):
-                                    with open(source_file, 'rb') as f:
-                                        f.seek(res.m_Offset)
-                                        audio_data = f.read(res.m_Size)
-                            
-                            if not audio_data:
-                                audio_data = getattr(data, 'audio_data', None) or getattr(data, 'm_AudioData', None)
-                            
-                            if audio_data:
-                                audio_path = os.path.join(file_output, safe_name + '.wav')
-                                
-                                if audio_path not in saved_files:
-                                    with open(audio_path, 'wb') as f:
-                                        f.write(audio_data)
-                                    saved_files.add(audio_path)
-                                    total_size += len(audio_data)
-                                    audios += 1
-                                    total += 1
-                        except:
-                            pass
-            
-            except:
-                pass
-        
-        return total, total_size
-        
-    except Exception as e:
-        return 0, 0
-
-print('Unity Asset Extractor')
-print('Game: ' + game_path)
-print('Output: ' + output_path)
-print('Mode: ' + extract_mode)
-print('-' * 50)
-
-total_extracted = 0
-total_size = 0
-all_files = []
-direct_files = 0
-
-# Find all *_Data folders and collect files
-data_folders = []
-for item in os.listdir(game_path):
-    if item.endswith('_Data'):
-        data_folders.append(os.path.join(game_path, item))
-
-if not data_folders:
-    print('No Unity data folders found')
-else:
-    for data_folder in data_folders:
-        # Scan all subfolders for .assets files
-        for root, dirs, files in os.walk(data_folder):
-            for f in files:
-                if f.endswith('.assets') and not f.endswith('.resS'):
-                    all_files.append(os.path.join(root, f))
-                # Extract direct image/video files
-                elif f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tga', '.tiff', '.mp4', '.webm', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.3gp')):
-                    src = os.path.join(root, f)
-                    rel_path = os.path.relpath(src, data_folder)
-                    dst = os.path.join(output_path, 'direct', rel_path)
-                    dst_dir = os.path.dirname(dst)
-                    if dst_dir:
-                        os.makedirs(dst_dir, exist_ok=True)
-                    if not os.path.exists(dst):
-                        import shutil
-                        shutil.copy2(src, dst)
-                        direct_files += 1
-                        total_size += os.path.getsize(src)
-        
-        # Also scan StreamingAssets folder for direct media files
-        streaming_assets = os.path.join(data_folder, 'StreamingAssets')
-        if os.path.exists(streaming_assets):
-            for root, dirs, files in os.walk(streaming_assets):
-                for f in files:
-                    src = os.path.join(root, f)
-                    rel_path = os.path.relpath(src, data_folder)
-                    dst = os.path.join(output_path, 'direct', rel_path)
-                    dst_dir = os.path.dirname(dst)
-                    if dst_dir:
-                        os.makedirs(dst_dir, exist_ok=True)
-                    if not os.path.exists(dst):
-                        import shutil
-                        shutil.copy2(src, dst)
-                        direct_files += 1
-                        total_size += os.path.getsize(src)
-        
-        # Check standalone paths
-        paths_to_check = [
-            os.path.join(data_folder, 'globalgamemanagers.assets'),
-            os.path.join(data_folder, 'StreamingAssets'),
-            os.path.join(data_folder, 'StreamingAssets', 'aa'),
-            os.path.join(data_folder, 'StreamingAssets', 'aa', 'StandaloneWindows64'),
-        ]
-        
-        # Scan entire game folder for .bundle files (they can be anywhere)
-        for root, dirs, files in os.walk(game_path):
-            for f in files:
-                if f.endswith('.bundle'):
-                    bundle_path = os.path.join(root, f)
-                    if bundle_path not in all_files:
-                        all_files.append(bundle_path)
-        
-        for check_path in paths_to_check:
-            if os.path.isdir(check_path):
-                for f in os.listdir(check_path):
-                    if f.endswith('.bundle'):
-                        all_files.append(os.path.join(check_path, f))
-            elif os.path.isfile(check_path):
-                if check_path not in all_files:
-                    all_files.append(check_path)
-
-# Remove duplicates and separate bundles
-all_files = list(set(all_files))
-bundle_files = [f for f in all_files if f.endswith('.bundle')]
-assets_files = [f for f in all_files if not f.endswith('.bundle')]
-
-print('Found ' + str(len(assets_files)) + ' asset files')
-print('Found ' + str(len(bundle_files)) + ' bundle files')
-print('Copied ' + str(direct_files) + ' direct files')
-
-# Calculate bundle sizes
-skip_bundles = False
-if bundle_files:
-    bundle_size = sum(os.path.getsize(f) for f in bundle_files) / (1024 * 1024)
-    print('BUNDLE_CONFIRM:' + str(len(bundle_files)) + ':' + str(int(bundle_size)))
-    sys.stdout.flush()
-    
-    # Check if user wants to skip bundles
-    import time
-    import tempfile
-    timeout = 30
-    start = time.time()
-    marker_path = os.path.join(tempfile.gettempdir(), 'RpgmvpConverter', 'skip_bundles.txt')
-    while time.time() - start < timeout:
-        if os.path.exists(marker_path):
-            with open(marker_path, 'r') as f:
-                content = f.read().strip()
-                if content == 'skip':
-                    skip_bundles = True
-                    print('Bundle skip marker found')
-                    sys.stdout.flush()
-            break
-        time.sleep(0.1)
-
-# Process files in parallel using threads (more stable on Windows)
-num_workers = min(os.cpu_count() or 4, 4)
-
-def process_single_file(args):
-    file_path, output, mode, is_bundle = args
-    try:
-        return extract_file(file_path, output, mode, is_bundle)
-    except Exception as e:
-        return 0, 0
-
-# Prepare all files for processing (assets + bundles combined)
-all_args = [(f, output_path, extract_mode, False) for f in assets_files]
-
-if not skip_bundles:
-    # Skip content check - just add all bundles directly
-    all_args += [(f, output_path, extract_mode, True) for f in bundle_files]
-
-total_files = len(all_args)
-
-print('Processing with ' + str(num_workers) + ' threads...')
-sys.stdout.flush()
-print('TOTAL:' + str(total_files))
-sys.stdout.flush()
-
-# Process all files in parallel using ThreadPoolExecutor
-processed = 0
-total_size = 0
-with ThreadPoolExecutor(max_workers=num_workers) as executor:
-    futures = {executor.submit(process_single_file, arg): arg for arg in all_args}
-    for future in as_completed(futures):
-        try:
-            result, size = future.result()
-            total_extracted += result
-            total_size += size
-        except Exception as e:
-            pass
-        processed += 1
-        if processed % 10 == 0 or processed == total_files:
-            print('PROGRESS:' + str(processed) + ':' + str(total_files) + ':' + str(total_size))
-            sys.stdout.flush()
-
-total_extracted += direct_files
-
-print('-' * 50)
-print('Done! Extracted ' + str(total_extracted) + ' files (' + str(int(total_size / (1024 * 1024))) + ' MB)')
-sys.stdout.flush()
-";
         }
 
         private void TogglePause()
         {
             if (currentRun == null) return;
-
             if (currentRun.IsPaused)
             {
                 currentRun.Resume();
                 pauseButton.Text = "Pause";
-                pauseButton.BackColor = warningColor;
-                pauseButton.ForeColor = Color.Black;
-                WriteLog("Processing resumed");
+                WriteLog("RPGM extraction resumed.");
             }
             else
             {
                 currentRun.Pause();
                 pauseButton.Text = "Resume";
-                pauseButton.BackColor = accentColor;
-                pauseButton.ForeColor = textColor;
                 statusLabel.Text = "Paused";
-                WriteLog("Pause enabled");
+                WriteLog("RPGM extraction paused.");
             }
         }
 
-        private void CancelConversion()
+        private void CancelOperation()
         {
-            if (currentRun != null)
+            if (currentRun != null) currentRun.Cancel();
+            lock (processSync)
             {
-                currentRun.Cancel();
-                cancelButton.Enabled = false;
-                pauseButton.Enabled = false;
-                statusLabel.Text = "Stopping...";
-                WriteLog("Stop requested");
-                
-                pathBox.Enabled = true;
-                keyBox.Enabled = true;
-                browseButton.Enabled = true;
-                startButton.Enabled = true;
-            }
-
-            if (unityProcess != null && !unityProcess.HasExited)
-            {
-                try
+                if (activeProcess != null)
                 {
-                    unityProcess.Kill();
-                    unityProcess.Dispose();
+                    try
+                    {
+                        if (!activeProcess.HasExited) activeProcess.Kill();
+                    }
+                    catch { }
                 }
-                catch { }
-                unityProcess = null;
-                unityRunning = false;
-                SetUnityRunningState(false);
-                statusLabel.Text = "Cancelled";
-                WriteLog("Cancelled");
             }
+            cancelButton.Enabled = false;
+            statusLabel.Text = "Stopping...";
+            WriteLog("Stop requested.");
         }
 
         private void UpdateUiFromRun()
         {
             if (currentRun == null) return;
-
             int processed = Math.Min(currentRun.ProcessedCount, currentRun.TotalCount);
+            progressBar.Maximum = Math.Max(currentRun.TotalCount, 1);
             progressBar.Value = Math.Min(processed, progressBar.Maximum);
-
-            if (currentRun.CancelRequested)
-                statusLabel.Text = "Stopping...";
-            else if (currentRun.IsPaused)
-                statusLabel.Text = "Paused";
-            else
-                statusLabel.Text = "Processing" + ": " + (string.IsNullOrWhiteSpace(currentRun.CurrentFile) ? "..." : currentRun.CurrentFile);
-
-            double elapsedSeconds = Math.Max((DateTime.UtcNow - currentRun.StartUtc).TotalSeconds, 0.001d);
-            double speed = processed / elapsedSeconds;
-            int remaining = currentRun.TotalCount - processed;
-            string eta = speed > 0d && !currentRun.IsPaused ? FormatDuration(remaining / speed) : "--:--";
-            statsLabel.Text = string.Format("Processed: {0} / {1} | Size: -- | ETA: {2}", processed, currentRun.TotalCount, eta);
+            double elapsed = Math.Max((DateTime.UtcNow - currentRun.StartUtc).TotalSeconds, 0.1);
+            double speed = processed / elapsed;
+            string eta = speed > 0 && !currentRun.IsPaused ? FormatDuration((currentRun.TotalCount - processed) / speed) : "--:--";
+            statusLabel.Text = currentRun.IsPaused ? "Paused" : "RPGM: " + processed + " / " + currentRun.TotalCount;
+            statsLabel.Text = "Processed: " + processed + " / " + currentRun.TotalCount + " | Size: " + FormatBytes(currentRun.TotalBytes) + " | ETA: " + eta;
         }
 
-        private void FinishConversion(bool cancelled)
+        private void FinishRpgmExtraction(ConversionRun finished)
         {
-            if (currentRun == null) return;
-
-            ConversionRun finished = currentRun;
+            if (!ReferenceEquals(currentRun, finished)) return;
             currentRun = null;
             uiTimer.Stop();
-            SetRunningState(false);
-
-            int processed = Math.Min(finished.ProcessedCount, finished.TotalCount);
-            progressBar.Value = Math.Min(processed, progressBar.Maximum);
-            double elapsedSeconds = Math.Max((DateTime.UtcNow - finished.StartUtc).TotalSeconds, 0.001d);
-            double speed = processed / elapsedSeconds;
-
-            if (cancelled)
-            {
-                statusLabel.Text = "Cancelled";
-                statsLabel.Text = string.Format("Processed: {0} / {1} | Size: --", processed, finished.TotalCount);
-                WriteLog("Cancelled" + ": " + processed);
-                return;
-            }
-
-            statusLabel.Text = "Done";
-            statsLabel.Text = string.Format("Processed: {0} / {1} | Size: --", processed, finished.TotalCount);
-
-            if (finished.ErrorCount > 0)
-                WriteLog(string.Format("Errors: {0}. Last error: {1}", finished.ErrorCount, finished.LastError));
-            else
-            {
-                WriteLog(string.Format("Completed {0} {1} {2}.", processed, "files processed in", FormatDuration(elapsedSeconds)));
-                MessageBox.Show("Conversion complete!\n\nExtracted: " + processed + " files\n\nOutput: " + finished.OutputDir, "RPGMVP Converter", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
+            SetRpgmRunningState(false);
+            OperationResult result = new OperationResult(
+                "RPG Maker",
+                finished.OutputDir,
+                finished.ProcessedCount,
+                finished.TotalBytes,
+                finished.ErrorCount,
+                finished.RenamedCount,
+                DateTime.UtcNow - finished.StartUtc);
+            CompleteExternalOperation(result);
         }
 
-        private void SetRunningState(bool running)
+        private void CompleteExternalOperation(OperationResult result)
+        {
+            lastOutputDir = result.OutputDir;
+            openOutputButton.Enabled = Directory.Exists(lastOutputDir);
+            progressBar.Value = progressBar.Maximum;
+            statusLabel.Text = result.Errors == 0 ? "Complete" : "Complete with warnings";
+            statsLabel.Text = "Extracted: " + result.Extracted + " | Size: " + FormatBytes(result.Bytes) + " | Errors: " + result.Errors;
+            string reportPath = SaveReport(result);
+            WriteLog("Report: " + reportPath);
+            using (ResultsDialog dialog = new ResultsDialog(result, reportPath))
+                dialog.ShowDialog(this);
+        }
+
+        private static string SaveReport(OperationResult result)
+        {
+            Directory.CreateDirectory(result.OutputDir);
+            string reportPath = Path.Combine(result.OutputDir, "GameAssetTool-report.txt");
+            File.WriteAllText(reportPath, result.ToReport(), new UTF8Encoding(false));
+            return reportPath;
+        }
+
+        private void SetRpgmRunningState(bool running)
         {
             pathBox.Enabled = !running;
-            keyBox.Enabled = !running;
             browseButton.Enabled = !running;
+            dryRunButton.Enabled = !running;
             startButton.Enabled = !running;
+            unityExtractButton.Enabled = !running;
+            unlockerButton.Enabled = !running;
+            removeUnlockerButton.Enabled = !running;
             pauseButton.Enabled = running;
             cancelButton.Enabled = running;
+            openOutputButton.Enabled = !running && Directory.Exists(lastOutputDir);
+        }
+
+        private void SetExternalRunningState(bool running, string operation)
+        {
+            externalRunning = running;
+            BeginUi(delegate
+            {
+                pathBox.Enabled = !running;
+                browseButton.Enabled = !running;
+                dryRunButton.Enabled = !running;
+                startButton.Enabled = !running;
+                unityExtractButton.Enabled = !running;
+                unlockerButton.Enabled = !running;
+                removeUnlockerButton.Enabled = !running;
+                pauseButton.Enabled = false;
+                cancelButton.Enabled = running;
+                openOutputButton.Enabled = !running && Directory.Exists(lastOutputDir);
+                if (running)
+                {
+                    progressBar.Maximum = 1;
+                    progressBar.Value = 0;
+                    statusLabel.Text = operation + ": starting...";
+                    statsLabel.Text = "";
+                }
+            });
+        }
+
+        private void OpenOutputFolder()
+        {
+            if (!Directory.Exists(lastOutputDir)) return;
+            try { Process.Start(new ProcessStartInfo { FileName = lastOutputDir, UseShellExecute = true }); }
+            catch (Exception ex) { WriteLog("Could not open output folder: " + ex.Message); }
         }
 
         private void OnFormClosing(object sender, FormClosingEventArgs e)
         {
-            if (unityRunning && unityProcess != null && !unityProcess.HasExited)
+            if (currentRun != null) currentRun.Cancel();
+            lock (processSync)
             {
                 try
                 {
-                    unityProcess.Kill();
-                    unityProcess.Dispose();
+                    if (activeProcess != null && !activeProcess.HasExited)
+                    {
+                        activeProcess.Kill();
+                        activeProcess.WaitForExit(2000);
+                    }
                 }
                 catch { }
-                unityProcess = null;
-                unityRunning = false;
             }
+            PortableRuntime.Cleanup();
+        }
 
-            if (currentRun != null)
-            {
-                currentRun.Cancel();
-                Thread.Sleep(100);
-            }
+        private void BeginUi(Action action)
+        {
+            if (IsDisposed) return;
+            if (InvokeRequired) BeginInvoke((MethodInvoker)delegate { action(); });
+            else action();
+        }
+
+        private void SafeLog(string message)
+        {
+            BeginUi(delegate { WriteLog(message); });
         }
 
         private void WriteLog(string message)
@@ -1773,90 +1113,11 @@ sys.stdout.flush()
             logBox.AppendText(message);
         }
 
-        private static bool CheckUnrpaInstalled()
+        private void TryAutoDetectKey(string path)
         {
-            try
-            {
-                string pythonPath = FindPythonPath();
-                ProcessStartInfo psi = new ProcessStartInfo();
-                psi.FileName = "\"" + pythonPath + "\"";
-                psi.Arguments = "-c \"from unrpa import UNRPA; print('ok')\"";
-                psi.UseShellExecute = false;
-                psi.RedirectStandardOutput = true;
-                psi.CreateNoWindow = true;
-                psi.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
-
-                using (Process process = Process.Start(psi))
-                {
-                    string output = process.StandardOutput.ReadToEnd();
-                    process.WaitForExit();
-                    return output.Trim().Contains("ok");
-                }
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private void InstallUnrpa()
-        {
-            try
-            {
-                WriteLog("Installing unrpa...");
-                statusLabel.Text = "Installing unrpa...";
-
-                ProcessStartInfo psi = new ProcessStartInfo();
-                psi.FileName = "cmd";
-                psi.Arguments = "/c pip install unrpa";
-                psi.UseShellExecute = false;
-                psi.RedirectStandardOutput = true;
-                psi.RedirectStandardError = true;
-                psi.CreateNoWindow = true;
-
-                using (Process process = Process.Start(psi))
-                {
-                    string output = process.StandardOutput.ReadToEnd();
-                    string error = process.StandardError.ReadToEnd();
-                    process.WaitForExit();
-
-                    if (process.ExitCode == 0)
-                    {
-                        WriteLog("unrpa installed successfully");
-                        MessageBox.Show("unrpa installed successfully!\n\nClick Start again to extract RPA files.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    }
-                    else
-                    {
-                        WriteLog("Failed to install unrpa");
-                        MessageBox.Show("Failed to install unrpa.\n\nError: " + error, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                WriteLog("Install error: " + ex.Message);
-            }
-        }
-
-        private static string FormatDuration(double seconds)
-        {
-            if (double.IsNaN(seconds) || double.IsInfinity(seconds) || seconds < 0d) return "--:--";
-            TimeSpan span = TimeSpan.FromSeconds(Math.Ceiling(seconds));
-            if (span.TotalHours >= 1d)
-                return string.Format("{0:00}:{1:00}:{2:00}", (int)span.TotalHours, span.Minutes, span.Seconds);
-            return string.Format("{0:00}:{1:00}", span.Minutes, span.Seconds);
-        }
-
-        private static byte[] ParseKey(string input)
-        {
-            string key = input.Trim();
-            if (key.Length % 2 != 0)
-                throw new InvalidOperationException("Invalid HEX key");
-
-            byte[] bytes = new byte[key.Length / 2];
-            for (int i = 0; i < key.Length; i += 2)
-                bytes[i / 2] = Convert.ToByte(key.Substring(i, 2), 16);
-            return bytes;
+            if (!string.IsNullOrWhiteSpace(keyBox.Text)) return;
+            string detected = TryFindKey(path);
+            if (!string.IsNullOrWhiteSpace(detected)) keyBox.Text = detected;
         }
 
         private static string TryFindKey(string rootPath)
@@ -1864,264 +1125,532 @@ sys.stdout.flush()
             try
             {
                 string systemJson = Directory.EnumerateFiles(rootPath, "System.json", SearchOption.AllDirectories).FirstOrDefault();
-                if (string.IsNullOrWhiteSpace(systemJson)) return string.Empty;
-                string json = File.ReadAllText(systemJson);
-                Match match = Regex.Match(json, "\"encryptionKey\":\"([0-9a-fA-F]+)\"");
-                return match.Success ? match.Groups[1].Value : string.Empty;
+                if (string.IsNullOrWhiteSpace(systemJson)) return "";
+                Match match = Regex.Match(File.ReadAllText(systemJson), "\"encryptionKey\":\"([0-9a-fA-F]+)\"");
+                return match.Success ? match.Groups[1].Value : "";
             }
-            catch { return string.Empty; }
+            catch { return ""; }
         }
 
-        private async Task TryStartNoKeyDecryption(string rootPath)
+        private string TryReconstructKey(string rootPath)
         {
-            var files = GetFilesToConvert(rootPath);
-            if (files.Count == 0)
-            {
-                WriteLog("No .rpgmvp/.png_ files found");
-                return;
-            }
+            string file = GetFilesToConvert(rootPath).FirstOrDefault(delegate(string path) { return SafeFileLength(path) > 32; });
+            if (file == null) return "";
+            byte[] bytes = File.ReadAllBytes(file);
+            byte[] expected = { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52 };
+            byte[] key = new byte[16];
+            for (int i = 0; i < key.Length; i++) key[i] = (byte)(bytes[16 + i] ^ expected[i]);
+            string value = BitConverter.ToString(key).Replace("-", "").ToLowerInvariant();
+            WriteLog("RPGM key reconstructed: " + value);
+            return value;
+        }
 
-            string firstFile = files.FirstOrDefault(f => new FileInfo(f).Length > 32);
-            if (firstFile == null)
-            {
-                WriteLog("No files to decrypt");
-                return;
-            }
+        private static byte[] ParseKey(string input)
+        {
+            string key = input.Trim();
+            if (key.Length < 32 || key.Length % 2 != 0)
+                throw new InvalidOperationException("Invalid HEX key.");
+            byte[] bytes = new byte[key.Length / 2];
+            for (int i = 0; i < key.Length; i += 2)
+                bytes[i / 2] = Convert.ToByte(key.Substring(i, 2), 16);
+            return bytes;
+        }
 
+        private static GameEngine DetectEngine(string rootPath)
+        {
+            if (!Directory.Exists(rootPath)) return GameEngine.Unknown;
+            if (IsUnityGame(rootPath)) return GameEngine.Unity;
+            if (IsRenpyGame(rootPath)) return GameEngine.Renpy;
+            if (HasRpgmFiles(rootPath)) return GameEngine.RpgMaker;
+            if (IsGodotGame(rootPath)) return GameEngine.Godot;
+            if (IsKirikiriGame(rootPath)) return GameEngine.Kirikiri;
+            if (IsUnrealGame(rootPath)) return GameEngine.Unreal;
+            if (IsRpgmOrNwjsGame(rootPath)) return GameEngine.Nwjs;
+            return GameEngine.Unknown;
+        }
+
+        private static bool IsUnityGame(string rootPath)
+        {
             try
             {
-                byte[] fileBytes = File.ReadAllBytes(firstFile);
-                if (fileBytes.Length < 32)
+                bool hasDataFolder = Directory.EnumerateDirectories(rootPath, "*_Data", SearchOption.TopDirectoryOnly).Any();
+                return hasDataFolder || File.Exists(Path.Combine(rootPath, "UnityPlayer.dll"));
+            }
+            catch { return false; }
+        }
+
+        private static bool IsRenpyGame(string rootPath)
+        {
+            string gameFolder = Path.Combine(rootPath, "game");
+            if (!Directory.Exists(gameFolder)) return false;
+            return EnumerateFilesSafe(gameFolder, "*.rpa").Any()
+                || EnumerateFilesSafe(gameFolder, "*.rpyc").Any()
+                || File.Exists(Path.Combine(rootPath, "renpy.exe"));
+        }
+
+        private static bool IsRpgmOrNwjsGame(string rootPath)
+        {
+            bool hasGame = Directory.Exists(Path.Combine(rootPath, "game"));
+            bool hasWww = Directory.Exists(Path.Combine(rootPath, "www"));
+            bool hasPackage = File.Exists(Path.Combine(rootPath, "package.json"));
+            return hasGame || hasWww || hasPackage;
+        }
+
+        private static bool HasRpgmFiles(string rootPath)
+        {
+            return EnumerateFilesSafe(rootPath, "*.rpgmvp").Any() || EnumerateFilesSafe(rootPath, "*.png_").Any();
+        }
+
+        private static bool IsGodotGame(string rootPath)
+        {
+            return File.Exists(Path.Combine(rootPath, "project.godot"))
+                || EnumerateFilesSafe(rootPath, "*.pck").Any()
+                || HasGodotEmbeddedPck(rootPath);
+        }
+
+        private static bool HasGodotEmbeddedPck(string rootPath)
+        {
+            try
+            {
+                foreach (string executable in Directory.EnumerateFiles(rootPath, "*.exe", SearchOption.TopDirectoryOnly))
                 {
-                    WriteLog("File too short for no-key decryption");
-                    return;
-                }
-
-                byte[] encryptedData = new byte[16];
-                Buffer.BlockCopy(fileBytes, 16, encryptedData, 0, 16);
-
-                // PNG validation: 
-                // Positions 0-7: PNG signature (89 50 4E 47 0D 0A 1A 0A)
-                // Positions 8-11: IHDR length (00 00 00 0D)
-                // Positions 12-15: IHDR type (49 48 44 52)
-                byte[] pngSignature = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
-                byte[] ihdrLength = new byte[] { 0x00, 0x00, 0x00, 0x0D };
-                byte[] ihdrType = new byte[] { 0x49, 0x48, 0x44, 0x52 };
-
-                // Width is unknown, so we use zeros for positions 16-19 in our check
-                // We check only 0-15 (signature + length + type)
-                
-                int[] commonWidths = new int[] { 576, 640, 800, 512, 768, 1024, 1280, 256, 1920, 320, 480, 704, 854, 1440, 1600 };
-                byte[] correctKey = null;
-                
-                foreach (int width in commonWidths)
-                {
-                    byte[] widthBytes = BitConverter.GetBytes(width);
-                    if (BitConverter.IsLittleEndian) Array.Reverse(widthBytes);
-                    
-                    // Build expected: sig + length + type (12 bytes total)
-                    // Positions 0-7: PNG sig, 8-11: IHDR length, 12-15: IHDR type
-                    byte[] expectedHeader = new byte[16];
-                    Array.Copy(pngSignature, 0, expectedHeader, 0, 8);
-                    Array.Copy(ihdrLength, 0, expectedHeader, 8, 4);
-                    Array.Copy(ihdrType, 0, expectedHeader, 12, 4);
-                    // Position 16-19 would be width but we don't check those for validation
-
-                    byte[] testKey = new byte[16];
-                    for (int i = 0; i < 16; i++)
-                        testKey[i] = (byte)(encryptedData[i] ^ expectedHeader[i]);
-
-                    byte[] testDecrypt = new byte[16];
-                    for (int i = 0; i < 16; i++)
-                        testDecrypt[i] = (byte)(encryptedData[i] ^ testKey[i]);
-
-                    bool validSig = testDecrypt[0] == 0x89 && testDecrypt[1] == 0x50 && testDecrypt[2] == 0x4E && 
-                                   testDecrypt[3] == 0x47 && testDecrypt[4] == 0x0D && testDecrypt[5] == 0x0A &&
-                                   testDecrypt[6] == 0x1A && testDecrypt[7] == 0x0A;
-                    bool validLen = testDecrypt[8] == 0x00 && testDecrypt[9] == 0x00 && 
-                                   testDecrypt[10] == 0x00 && testDecrypt[11] == 0x0D;
-                    bool validType = testDecrypt[12] == 0x49 && testDecrypt[13] == 0x48 && 
-                                   testDecrypt[14] == 0x44 && testDecrypt[15] == 0x52;
-
-                    if (validSig && validLen && validType)
+                    using (FileStream stream = File.OpenRead(executable))
                     {
-                        correctKey = testKey;
-                        WriteLog("Found valid key, width: " + width);
-                        break;
+                        if (stream.Length < 4) continue;
+                        stream.Seek(-4, SeekOrigin.End);
+                        byte[] footer = new byte[4];
+                        if (stream.Read(footer, 0, footer.Length) == footer.Length && Encoding.ASCII.GetString(footer) == "GDPC")
+                            return true;
                     }
                 }
-
-                if (correctKey == null)
-                {
-                    WriteLog("Could not determine key");
-                    return;
-                }
-
-                var keyHex = BitConverter.ToString(correctKey).Replace("-", "").ToLower();
-                keyBox.Text = keyHex;
-                WriteLog("Key reconstructed: " + keyHex);
-
-                byte[] keyBytes = correctKey;
-                RunConversionCore(rootPath, keyBytes);
-
-                try
-                {
-                    await currentRun.Completion;
-                    FinishConversion(currentRun.CancelRequested);
-                }
-                catch (Exception ex)
-                {
-                    WriteLog("Errors" + ": " + ex.Message);
-                    FinishConversion(true);
-                }
             }
-            catch (Exception ex)
-            {
-                WriteLog("No-key decryption failed: " + ex.Message);
-            }
+            catch { }
+            return false;
         }
 
-        private void RunConversionCore(string rootPath, byte[] keyBytes)
+        private static bool IsKirikiriGame(string rootPath)
         {
-            List<string> files = GetFilesToConvert(rootPath);
-            if (files.Count == 0)
-            {
-                WriteLog("No .rpgmvp/.png_ files found");
-                return;
-            }
-
-            int workerCount = Math.Min(Math.Max(Environment.ProcessorCount, 2), 8);
-            workerCount = Math.Min(workerCount, files.Count);
-
-            currentRun = new ConversionRun(rootPath, files, keyBytes, workerCount);
-            SetRunningState(true);
-
-            progressBar.Maximum = files.Count;
-            progressBar.Value = 0;
-            statusLabel.Text = "Preparing...";
-            statsLabel.Text = string.Format("Processed: 0 / {0} | Size: -- | ETA: --:--", files.Count);
-            pauseButton.Text = "Pause";
-
-            WriteLog(string.Format("Started: {0} | threads: {1}", files.Count, workerCount));
-            WriteLog("Skipping: img/tilesets, img/weather");
-
-            uiTimer.Start();
-            currentRun.Start();
+            return EnumerateFilesSafe(rootPath, "*.xp3").Any();
         }
 
-        private static string TryFindGameRoot(string path)
+        private static bool IsUnrealGame(string rootPath)
         {
-            List<string> candidates = new List<string>();
-            if (!string.IsNullOrWhiteSpace(path)) candidates.Add(path.Trim());
-            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            if (!string.IsNullOrWhiteSpace(baseDir)) candidates.Add(baseDir);
+            return EnumerateFilesSafe(rootPath, "*.pak").Any() || EnumerateFilesSafe(rootPath, "*.utoc").Any();
+        }
 
-            foreach (string candidate in candidates.Distinct(StringComparer.OrdinalIgnoreCase))
+        private static ScanSummary BuildScanSummary(string rootPath)
+        {
+            GameEngine engine = DetectEngine(rootPath);
+            IEnumerable<string> files;
+            int archives;
+            if (engine == GameEngine.Unity)
             {
-                if (!Directory.Exists(candidate) && !File.Exists(candidate)) continue;
-
-                DirectoryInfo current = Directory.Exists(candidate)
-                    ? new DirectoryInfo(candidate)
-                    : new FileInfo(candidate).Directory;
-
-                while (current != null)
+                files = EnumerateFilesSafe(rootPath, "*.*").Where(delegate(string path)
                 {
-                    bool hasWww = Directory.Exists(Path.Combine(current.FullName, "www"));
-                    bool hasPackage = File.Exists(Path.Combine(current.FullName, "package.json"));
-                    bool hasWwwData = Directory.Exists(Path.Combine(current.FullName, "www", "data"));
-                    bool hasData = Directory.Exists(Path.Combine(current.FullName, "data"));
-                    bool hasImg = Directory.Exists(Path.Combine(current.FullName, "img"));
-                    bool hasGame = Directory.Exists(Path.Combine(current.FullName, "game"));
-                    bool hasExe = Directory.EnumerateFiles(current.FullName, "*.exe", SearchOption.TopDirectoryOnly).Any();
-                    bool hasUnityData = Directory.GetDirectories(current.FullName, "*_Data", SearchOption.TopDirectoryOnly).Any();
-                    bool hasUnityPlayer = File.Exists(Path.Combine(current.FullName, "UnityPlayer.dll"));
-                    bool hasManaged = Directory.Exists(Path.Combine(current.FullName, "Managed"));
-
-                    if (string.Equals(current.Name, "Game", StringComparison.OrdinalIgnoreCase) ||
-                        (hasWww && (hasPackage || hasWwwData || hasExe)) ||
-                        (hasPackage && hasData && hasImg) ||
-                        (hasGame && hasExe) ||
-                        (hasUnityData && hasExe) ||
-                        (hasUnityPlayer && hasManaged))
-                        return current.FullName;
-
-                    current = current.Parent;
-                }
+                    string ext = Path.GetExtension(path).ToLowerInvariant();
+                    return ext == ".assets" || ext == ".bundle" || ext == ".ress"
+                        || ext == ".png" || ext == ".jpg" || ext == ".jpeg"
+                        || ext == ".mp4" || ext == ".webm" || ext == ".ogg" || ext == ".wav";
+                }).ToList();
+                archives = files.Count(delegate(string path)
+                {
+                    string ext = Path.GetExtension(path).ToLowerInvariant();
+                    return ext == ".assets" || ext == ".bundle";
+                });
             }
-            return null;
+            else if (engine == GameEngine.Renpy)
+            {
+                files = EnumerateFilesSafe(Path.Combine(rootPath, "game"), "*.rpa").ToList();
+                archives = files.Count();
+            }
+            else if (engine == GameEngine.Godot)
+            {
+                files = EnumerateFilesSafe(rootPath, "*.pck").ToList();
+                archives = files.Count();
+            }
+            else if (engine == GameEngine.Kirikiri)
+            {
+                files = EnumerateFilesSafe(rootPath, "*.xp3").ToList();
+                archives = files.Count();
+            }
+            else if (engine == GameEngine.Unreal)
+            {
+                files = EnumerateFilesSafe(rootPath, "*.pak").Concat(EnumerateFilesSafe(rootPath, "*.utoc")).ToList();
+                archives = files.Count();
+            }
+            else
+            {
+                files = GetFilesToConvert(rootPath);
+                archives = 0;
+            }
+            long bytes = files.Sum(delegate(string path) { return SafeFileLength(path); });
+            return new ScanSummary(engine, files.Count(), archives, bytes);
         }
 
         private static List<string> GetFilesToConvert(string rootPath)
         {
-            string tilesetsPath1 = Path.Combine(rootPath, "www", "img", "tilesets");
-            string weatherPath1 = Path.Combine(rootPath, "www", "img", "weather");
-            string tilesetsPath2 = Path.Combine(rootPath, "img", "tilesets");
-            string weatherPath2 = Path.Combine(rootPath, "img", "weather");
-
-            return Directory.EnumerateFiles(rootPath, "*.*", SearchOption.AllDirectories)
-                .Where(path =>
-                    (path.EndsWith(".rpgmvp", StringComparison.OrdinalIgnoreCase) ||
-                     path.EndsWith(".png_", StringComparison.OrdinalIgnoreCase)) &&
-                    !path.StartsWith(tilesetsPath1, StringComparison.OrdinalIgnoreCase) &&
-                    !path.StartsWith(weatherPath1, StringComparison.OrdinalIgnoreCase) &&
-                    !path.StartsWith(tilesetsPath2, StringComparison.OrdinalIgnoreCase) &&
-                    !path.StartsWith(weatherPath2, StringComparison.OrdinalIgnoreCase))
+            string[] skipped =
+            {
+                Path.Combine(rootPath, "www", "img", "tilesets") + Path.DirectorySeparatorChar,
+                Path.Combine(rootPath, "www", "img", "weather") + Path.DirectorySeparatorChar,
+                Path.Combine(rootPath, "img", "tilesets") + Path.DirectorySeparatorChar,
+                Path.Combine(rootPath, "img", "weather") + Path.DirectorySeparatorChar
+            };
+            return EnumerateFilesSafe(rootPath, "*.*")
+                .Where(delegate(string path)
+                {
+                    bool supported = path.EndsWith(".rpgmvp", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".png_", StringComparison.OrdinalIgnoreCase);
+                    return supported && !skipped.Any(delegate(string prefix) { return path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase); });
+                })
                 .ToList();
         }
 
-        private sealed class UnlockerRun
+        private static IEnumerable<string> EnumerateFilesSafe(string rootPath, string pattern)
         {
-            public bool CancelRequested { get; private set; }
-            public void Cancel() { CancelRequested = true; }
+            if (!Directory.Exists(rootPath)) return Enumerable.Empty<string>();
+            try { return Directory.EnumerateFiles(rootPath, pattern, SearchOption.AllDirectories).ToList(); }
+            catch { return Enumerable.Empty<string>(); }
+        }
+
+        private static List<string> FindUnityBundleFiles(string rootPath)
+        {
+            return EnumerateFilesSafe(rootPath, "*.bundle").Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        private static string TryFindGameRoot(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return null;
+            DirectoryInfo current = Directory.Exists(path) ? new DirectoryInfo(path) : new FileInfo(path).Directory;
+            while (current != null)
+            {
+                string root = current.FullName;
+                bool known = IsUnityGame(root)
+                    || IsGodotGame(root)
+                    || IsKirikiriGame(root)
+                    || IsUnrealGame(root)
+                    || Directory.Exists(Path.Combine(root, "www"))
+                    || Directory.Exists(Path.Combine(root, "game"))
+                    || File.Exists(Path.Combine(root, "package.json"));
+                if (known) return root;
+                current = current.Parent;
+            }
+            return null;
+        }
+
+        private string UnityModeValue()
+        {
+            switch (unityExtractModeBox.SelectedIndex)
+            {
+                case 0: return "textures";
+                case 1: return "videos";
+                case 2: return "audios";
+                case 3: return "meshes";
+                default: return "all";
+            }
+        }
+
+        private static string EngineName(GameEngine engine)
+        {
+            switch (engine)
+            {
+                case GameEngine.RpgMaker: return "RPG Maker MV/MZ";
+                case GameEngine.Renpy: return "Ren'Py";
+                case GameEngine.Unity: return "Unity";
+                case GameEngine.Godot: return "Godot";
+                case GameEngine.Kirikiri: return "KiriKiri XP3";
+                case GameEngine.Unreal: return "Unreal experimental";
+                case GameEngine.Nwjs: return "NWJS";
+                default: return "not detected";
+            }
+        }
+
+        private Color EngineColor(GameEngine engine)
+        {
+            switch (engine)
+            {
+                case GameEngine.Unity: return Color.FromArgb(160, 125, 255);
+                case GameEngine.Renpy: return pinkColor;
+                case GameEngine.RpgMaker: return accentColor;
+                case GameEngine.Godot: return Color.FromArgb(71, 140, 191);
+                case GameEngine.Kirikiri: return Color.FromArgb(255, 155, 95);
+                case GameEngine.Unreal: return Color.FromArgb(178, 178, 190);
+                case GameEngine.Nwjs: return Color.FromArgb(255, 183, 77);
+                default: return mutedColor;
+            }
+        }
+
+        private static string QuoteArg(string value)
+        {
+            return "\"" + value.Replace("\"", "\\\"") + "\"";
+        }
+
+        private static int ParseInt(string value, int index)
+        {
+            int result;
+            string[] parts = value.Split(':');
+            return parts.Length > index && int.TryParse(parts[index], out result) ? result : 0;
+        }
+
+        private static long ParseLong(string value, int index)
+        {
+            long result;
+            string[] parts = value.Split(':');
+            return parts.Length > index && long.TryParse(parts[index], out result) ? result : 0;
+        }
+
+        private static long SafeFileLength(string path)
+        {
+            try { return new FileInfo(path).Length; }
+            catch { return 0; }
+        }
+
+        private static FileStats GetFileStats(string rootPath)
+        {
+            List<string> files = EnumerateFilesSafe(rootPath, "*.*").Where(delegate(string file)
+            {
+                return !file.EndsWith("GameAssetTool-report.txt", StringComparison.OrdinalIgnoreCase);
+            }).ToList();
+            return new FileStats(files.Count, files.Sum(delegate(string file) { return SafeFileLength(file); }));
+        }
+
+        private static string FormatBytes(long bytes)
+        {
+            if (bytes < 1024) return bytes + " B";
+            if (bytes < 1024L * 1024L) return (bytes / 1024d).ToString("N1") + " KB";
+            if (bytes < 1024L * 1024L * 1024L) return (bytes / (1024d * 1024d)).ToString("N1") + " MB";
+            return (bytes / (1024d * 1024d * 1024d)).ToString("N2") + " GB";
+        }
+
+        private static string FormatDuration(double seconds)
+        {
+            TimeSpan span = TimeSpan.FromSeconds(Math.Max(seconds, 0));
+            if (span.TotalHours >= 1) return string.Format("{0:00}:{1:00}:{2:00}", (int)span.TotalHours, span.Minutes, span.Seconds);
+            return string.Format("{0:00}:{1:00}", span.Minutes, span.Seconds);
+        }
+
+        private static string MakeRelativePath(string rootPath, string path)
+        {
+            Uri root = new Uri(AppendDirectorySeparator(rootPath));
+            Uri file = new Uri(path);
+            return Uri.UnescapeDataString(root.MakeRelativeUri(file).ToString()).Replace('/', Path.DirectorySeparatorChar);
+        }
+
+        private static string AppendDirectorySeparator(string path)
+        {
+            return path.EndsWith(Path.DirectorySeparatorChar.ToString()) ? path : path + Path.DirectorySeparatorChar;
+        }
+
+        private static string SanitizeRelativePath(string path)
+        {
+            string[] parts = path.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar)
+                .Split(new[] { Path.DirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
+            string[] cleaned = parts.Select(delegate(string part)
+            {
+                string value = string.Concat(part.Where(delegate(char c) { return !Path.GetInvalidFileNameChars().Contains(c); }));
+                return string.IsNullOrWhiteSpace(value) || value == "." || value == ".." ? "archive" : value;
+            }).ToArray();
+            return cleaned.Length == 0 ? "archive" : Path.Combine(cleaned);
+        }
+
+        private static string GetUniqueDirectoryPath(string path, out bool renamed)
+        {
+            string candidate = path;
+            int suffix = 2;
+            while (Directory.Exists(candidate))
+            {
+                candidate = path + " (" + suffix + ")";
+                suffix++;
+            }
+            renamed = !string.Equals(candidate, path, StringComparison.OrdinalIgnoreCase);
+            return candidate;
+        }
+
+        private enum GameEngine
+        {
+            Unknown,
+            RpgMaker,
+            Renpy,
+            Unity,
+            Godot,
+            Kirikiri,
+            Unreal,
+            Nwjs
+        }
+
+        private sealed class ScanSummary
+        {
+            public ScanSummary(GameEngine engine, int fileCount, int archiveCount, long totalBytes)
+            {
+                Engine = engine;
+                FileCount = fileCount;
+                ArchiveCount = archiveCount;
+                TotalBytes = totalBytes;
+            }
+
+            public GameEngine Engine { get; private set; }
+            public int FileCount { get; private set; }
+            public int ArchiveCount { get; private set; }
+            public long TotalBytes { get; private set; }
+        }
+
+        private sealed class FileStats
+        {
+            public FileStats(int count, long bytes)
+            {
+                Count = count;
+                Bytes = bytes;
+            }
+
+            public int Count { get; private set; }
+            public long Bytes { get; private set; }
+        }
+
+        private sealed class OperationResult
+        {
+            public OperationResult(string engine, string outputDir, int extracted, long bytes, int errors, int renamed, TimeSpan duration)
+            {
+                Engine = engine;
+                OutputDir = outputDir;
+                Extracted = extracted;
+                Bytes = bytes;
+                Errors = errors;
+                Renamed = renamed;
+                Duration = duration;
+            }
+
+            public string Engine { get; private set; }
+            public string OutputDir { get; private set; }
+            public int Extracted { get; private set; }
+            public long Bytes { get; private set; }
+            public int Errors { get; private set; }
+            public int Renamed { get; private set; }
+            public TimeSpan Duration { get; private set; }
+
+            public static OperationResult Failed(string engine, string outputDir, string message)
+            {
+                return new OperationResult(engine + " - " + message, outputDir, 0, 0, 1, 0, TimeSpan.Zero);
+            }
+
+            public string ToReport()
+            {
+                return string.Join(Environment.NewLine, new[]
+                {
+                    "Game Asset Tool v1.5 report",
+                    "Engine: " + Engine,
+                    "Extracted files: " + Extracted,
+                    "Extracted size: " + FormatBytes(Bytes),
+                    "Renamed conflicts: " + Renamed,
+                    "Errors: " + Errors,
+                    "Elapsed: " + FormatDuration(Duration.TotalSeconds),
+                    "Output: " + OutputDir,
+                    "Created: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+                });
+            }
+        }
+
+        private sealed class ResultsDialog : Form
+        {
+            public ResultsDialog(OperationResult result, string reportPath)
+            {
+                Text = "Extraction Results";
+                StartPosition = FormStartPosition.CenterParent;
+                Size = new Size(620, 390);
+                MinimumSize = new Size(620, 390);
+                BackColor = Color.FromArgb(17, 19, 24);
+                ForeColor = Color.FromArgb(239, 243, 248);
+
+                Controls.Add(new Label
+                {
+                    Text = result.Errors == 0 ? "Extraction complete" : "Extraction complete with warnings",
+                    Location = new Point(20, 18),
+                    Size = new Size(560, 30),
+                    Font = new Font("Segoe UI Semibold", 14f),
+                    ForeColor = result.Errors == 0 ? Color.FromArgb(70, 204, 120) : Color.FromArgb(255, 183, 77)
+                });
+
+                TextBox summary = new TextBox
+                {
+                    Location = new Point(20, 62),
+                    Size = new Size(560, 210),
+                    Multiline = true,
+                    ReadOnly = true,
+                    BackColor = Color.FromArgb(10, 12, 16),
+                    ForeColor = Color.FromArgb(239, 243, 248),
+                    BorderStyle = BorderStyle.FixedSingle,
+                    Font = new Font("Consolas", 10f),
+                    Text = result.ToReport() + Environment.NewLine + "Report: " + reportPath
+                };
+                Controls.Add(summary);
+
+                Button openButton = new Button
+                {
+                    Text = "Open Output Folder",
+                    Location = new Point(20, 292),
+                    Size = new Size(180, 34),
+                    BackColor = Color.FromArgb(68, 197, 255),
+                    FlatStyle = FlatStyle.Flat
+                };
+                openButton.Click += delegate
+                {
+                    try { Process.Start(new ProcessStartInfo { FileName = result.OutputDir, UseShellExecute = true }); }
+                    catch { }
+                };
+                Controls.Add(openButton);
+
+                Button closeButton = new Button
+                {
+                    Text = "Close",
+                    Location = new Point(470, 292),
+                    Size = new Size(110, 34),
+                    BackColor = Color.FromArgb(45, 50, 60),
+                    ForeColor = Color.White,
+                    FlatStyle = FlatStyle.Flat
+                };
+                closeButton.Click += delegate { Close(); };
+                Controls.Add(closeButton);
+            }
         }
 
         private sealed class ConversionRun
         {
+            private static readonly object outputPathLock = new object();
+            private static readonly HashSet<string> outputPathReservations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             private readonly ConcurrentQueue<string> queue;
             private readonly byte[] keyBytes;
-            private readonly int workerCount;
-            private readonly ManualResetEventSlim pauseGate;
-            private readonly CancellationTokenSource cancellation;
-            private readonly string outputDir;
+            private readonly ManualResetEventSlim pauseGate = new ManualResetEventSlim(true);
+            private readonly CancellationTokenSource cancellation = new CancellationTokenSource();
             private int processedCount;
             private int errorCount;
-            private string lastError = string.Empty;
-            private string currentFile = string.Empty;
+            private int renamedCount;
+            private long totalBytes;
 
-            public ConversionRun(string rootPath, List<string> files, byte[] keyBytes, int workerCount)
+            public ConversionRun(string rootPath, List<string> files, byte[] keyBytes)
             {
                 RootPath = rootPath;
                 TotalCount = files.Count;
                 this.keyBytes = keyBytes;
-                this.workerCount = workerCount;
-                outputDir = Path.Combine(rootPath, "extracted");
-                Directory.CreateDirectory(outputDir);
                 queue = new ConcurrentQueue<string>(files);
-                pauseGate = new ManualResetEventSlim(true);
-                cancellation = new CancellationTokenSource();
+                OutputDir = Path.Combine(rootPath, "extracted", "rpgm");
+                Directory.CreateDirectory(OutputDir);
                 StartUtc = DateTime.UtcNow;
-                Completion = Task.CompletedTask;
+                Completion = Task.FromResult(0);
             }
 
             public string RootPath { get; private set; }
-            public string OutputDir { get { return outputDir; } }
+            public string OutputDir { get; private set; }
             public int TotalCount { get; private set; }
             public int ProcessedCount { get { return processedCount; } }
             public int ErrorCount { get { return errorCount; } }
-            public string LastError { get { return lastError; } }
-            public string CurrentFile { get { return currentFile; } }
+            public int RenamedCount { get { return renamedCount; } }
+            public long TotalBytes { get { return totalBytes; } }
             public bool IsPaused { get; private set; }
-            public bool CancelRequested { get { return cancellation.IsCancellationRequested; } }
             public DateTime StartUtc { get; private set; }
             public Task Completion { get; private set; }
 
             public void Start()
             {
-                Task[] workers = Enumerable.Range(0, workerCount).Select(delegate(int _)
-                {
-                    return Task.Run(new Action(ProcessQueue));
-                }).ToArray();
-                Completion = Task.WhenAll(workers);
+                int workers = Math.Min(Math.Max(Environment.ProcessorCount, 2), Math.Min(8, TotalCount));
+                Completion = Task.WhenAll(Enumerable.Range(0, workers).Select(delegate(int _) { return Task.Run((Action)ProcessQueue); }));
             }
 
             public void Pause() { IsPaused = true; pauseGate.Reset(); }
@@ -2133,42 +1662,53 @@ sys.stdout.flush()
                 while (!cancellation.IsCancellationRequested)
                 {
                     pauseGate.Wait(cancellation.Token);
-
                     string filePath;
                     if (!queue.TryDequeue(out filePath)) break;
-
-                    currentFile = filePath;
                     try
                     {
                         byte[] bytes = File.ReadAllBytes(filePath);
                         if (bytes.Length <= 16) throw new InvalidDataException("File too short: " + filePath);
-
                         byte[] data = new byte[bytes.Length - 16];
                         Buffer.BlockCopy(bytes, 16, data, 0, data.Length);
+                        for (int i = 0; i < 16 && i < data.Length; i++) data[i] ^= keyBytes[i];
 
-                        for (int i = 0; i < 16 && i < data.Length; i++) data[i] = (byte)(data[i] ^ keyBytes[i]);
-
-                        string relativePath = filePath.Substring(RootPath.Length);
-                        if (relativePath.StartsWith(Path.DirectorySeparatorChar.ToString()))
-                            relativePath = relativePath.Substring(1);
-                        
-                        string outputPath = Path.Combine(outputDir, relativePath);
-                        outputPath = Path.ChangeExtension(outputPath, ".png");
-
-                        string outDir = Path.GetDirectoryName(outputPath);
-                        if (!string.IsNullOrEmpty(outDir)) Directory.CreateDirectory(outDir);
-
+                        string relative = filePath.Substring(RootPath.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                        string outputPath = Path.ChangeExtension(Path.Combine(OutputDir, relative), ".png");
+                        Directory.CreateDirectory(Path.GetDirectoryName(outputPath));
+                        bool renamed;
+                        outputPath = GetUniqueFilePath(outputPath, out renamed);
+                        if (renamed) Interlocked.Increment(ref renamedCount);
                         File.WriteAllBytes(outputPath, data);
+                        Interlocked.Add(ref totalBytes, data.Length);
                     }
-                    catch (Exception ex)
+                    catch
                     {
                         Interlocked.Increment(ref errorCount);
-                        lastError = ex.Message;
                     }
                     finally
                     {
                         Interlocked.Increment(ref processedCount);
                     }
+                }
+            }
+
+            private static string GetUniqueFilePath(string path, out bool renamed)
+            {
+                lock (outputPathLock)
+                {
+                    string candidate = path;
+                    string directory = Path.GetDirectoryName(path);
+                    string filename = Path.GetFileNameWithoutExtension(path);
+                    string extension = Path.GetExtension(path);
+                    int suffix = 2;
+                    while (File.Exists(candidate) || outputPathReservations.Contains(candidate))
+                    {
+                        candidate = Path.Combine(directory, filename + " (" + suffix + ")" + extension);
+                        suffix++;
+                    }
+                    outputPathReservations.Add(candidate);
+                    renamed = !string.Equals(candidate, path, StringComparison.OrdinalIgnoreCase);
+                    return candidate;
                 }
             }
         }

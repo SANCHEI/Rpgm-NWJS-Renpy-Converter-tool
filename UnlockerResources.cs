@@ -36,7 +36,20 @@ namespace RpgmvpConverterWinForms
             Directory.CreateDirectory(destPath);
             foreach (var kvp in files)
             {
-                string fullPath = Path.Combine(destPath, kvp.Key);
+                string relativePath = kvp.Key.Replace('/', '\\');
+                const string modsPrefix = @"game\_mods\";
+                if (relativePath.StartsWith(modsPrefix, StringComparison.OrdinalIgnoreCase))
+                    relativePath = relativePath.Substring(modsPrefix.Length);
+
+                string modPrefix = Path.GetFileName(destPath) + "\\";
+                if (relativePath.StartsWith(modPrefix, StringComparison.OrdinalIgnoreCase))
+                    relativePath = relativePath.Substring(modPrefix.Length);
+
+                string safeRoot = Path.GetFullPath(destPath) + Path.DirectorySeparatorChar;
+                string fullPath = Path.GetFullPath(Path.Combine(destPath, relativePath));
+                if (!fullPath.StartsWith(safeRoot, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("Unlocker resource path escapes destination: " + kvp.Key);
+
                 string dir = Path.GetDirectoryName(fullPath);
                 if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
                 File.WriteAllBytes(fullPath, Convert.FromBase64String(kvp.Value));

@@ -1,57 +1,52 @@
-Game Asset Tool - All-in-one game modding utility
+Game Asset Tool v1.5 - Convert, Extract, Unlock
 
-Convert, Extract, Unlock hidden content from games.
+Drop a game folder into the app, scan it, then extract assets or install the gallery unlocker.
 
-[Watch Demo Video](https://youtu.be/y7z-_byQjXo)
-
----
-
-Features:
-
-* RPGMVP / NWJS Converter - Convert encrypted RPGMVP images to PNG with auto-detect key, live progress, ETA and pause/cancel
-* Unity Asset Extractor - Extract textures from .assets and .bundle files (auto-installs UnityPy)
-* Renpy RPA Extraction - Extract files from Renpy .rpa archives (no Python dependencies required)
-* Gallery Unlocker - Unlock galleries in Renpy/NWJS games
-* Auto-Detection - Automatically detect game type and encryption key
+[Watch Demo Video](https://youtu.be/BnjRjik9fk0)
 
 ---
 
-Supported Games:
+What's new in v1.5:
 
-- RPG Maker MV/MZ (RPGMVP encryption)
-- NWJS games (Node WebKit)
-- Unity games (all versions with .assets/.bundle)
-- Renpy games (RPA archive extraction + gallery unlocker)
+* Godot 3/4 PCK extraction for unencrypted archives
+* Standard unencrypted KiriKiri XP3 extraction
+* Experimental offline Unreal PAK extraction
+* Optional Unreal AES key field
+* One portable GameAssetTool.exe: no neighboring files and no runtime downloads
 
 ---
+
+Supported engines:
+
+- RPG Maker MV/MZ
+- Ren'Py
+- NWJS
+- Unity
+- Godot 3/4
+- KiriKiri XP3
+- Unreal PAK (experimental)
 
 Requirements:
 
-- Windows 7/8/10/11
-- .NET Framework 4.0
-- Python 3.x (auto-installed for Unity extraction)
-
----
-
-Usage:
-
-1. Run the tool
-2. Select game folder (auto-detected)
-3. Enter HEX key or use auto-detect
-4. Click Start/Extract/Unlock
-
----
+- Windows 10 version 1803 or later, or Windows 11, x64
+- No separate Python, package or .NET runtime installation
+- No internet connection required
 
 Output:
 
-- RPGMVP/NWJS: Extracted PNGs in original folders
-- Unity: Textures in game_folder/extracted/
-- Renpy RPA: Extracted files in game_folder/extracted/
-- Unlocker: Mod files in game/_mods/
+- RPGM: game_folder/extracted/rpgm/
+- Ren'Py: game_folder/extracted/renpy/
+- Unity: game_folder/extracted/unity/
+- Godot: game_folder/extracted/godot/
+- KiriKiri: game_folder/extracted/kirikiri/
+- Unreal: game_folder/extracted/unreal/
+- Unlocker: game_folder/game/_mods/
 
----
+Known limits:
 
-Demo Video: https://youtu.be/y7z-_byQjXo
+- Encrypted Godot PCK and protected XP3 variants are not supported yet
+- Unreal Oodle compression and IoStore .utoc/.ucas are reported but not extracted
+
 Source Code: https://github.com/SANCHEI/Rpgm-NWJS-Renpy-Converter-tool
 
 MIT License

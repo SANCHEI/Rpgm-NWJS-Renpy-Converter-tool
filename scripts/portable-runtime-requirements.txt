@@ -1,0 +1,17 @@
+unrpa==2.3.0
+UnityPy==1.25.0
+archspec==0.2.6
+astc-encoder-py==0.1.12
+attrs==26.1.0
+brotli==1.2.0
+etcpak==0.9.15
+fmod_toolkit==0.1.3
+fsspec==2026.4.0
+lz4==4.4.5
+Pillow==12.2.0
+pyfmodex==0.7.2
+texture2ddecoder==1.0.6
+pyuepak==0.2.7
+cryptography==46.0.5
+cffi==2.0.0
+pycparser==3.0

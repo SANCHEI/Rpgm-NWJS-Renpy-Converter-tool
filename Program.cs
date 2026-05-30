@@ -10,7 +10,14 @@ namespace RpgmvpConverterWinForms
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new RpgmvpConverterForm());
+            try
+            {
+                Application.Run(new RpgmvpConverterForm());
+            }
+            finally
+            {
+                PortableRuntime.Cleanup();
+            }
         }
     }
 }
