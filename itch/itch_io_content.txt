@@ -1,4 +1,4 @@
-# Itch.io Page Content - Game Asset Tool v1.5
+# Itch.io Page Content - Game Asset Tool v1.5.1
 
 ## Title
 Game Asset Tool
@@ -16,7 +16,9 @@ Drop a game folder into the app, run **Dry Run / Scan**, then extract assets wit
 
 Watch Demo: https://youtu.be/BnjRjik9fk0
 
-### What's New in v1.5
+### What's New in v1.5.1
+- Smaller single-file EXE for faster startup checks
+- Unreal AES now uses the built-in Windows API instead of a large Python dependency
 - Godot 3/4 PCK extraction for unencrypted archives
 - Standard unencrypted KiriKiri XP3 extraction
 - Experimental offline Unreal PAK extraction

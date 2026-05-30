@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.1 - 2026-05-30
+
+- Reduced the single-file EXE size by pruning runtime files unused by the embedded extractors.
+- Replaced the heavy Unreal AES Python dependency with the built-in Windows `bcrypt.dll` API.
+- Removed the upstream `pyuepak` file logger that created an unnecessary `spam.log`.
+- Preserved Godot, XP3, Unreal PAK, Unreal AES, Unity, Ren'Py and offline runtime behavior.
+
 ## 1.5.0 - 2026-05-30
 
 - Added Godot 3/4 PCK extraction for unencrypted format versions 1, 2 and 3.

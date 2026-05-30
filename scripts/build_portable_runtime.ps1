@@ -14,8 +14,10 @@ $sitePackages = [IO.Path]::GetFullPath((Join-Path $runtime "Lib\site-packages"))
 $pythonArchive = [IO.Path]::GetFullPath((Join-Path $env:TEMP "python-3.12.10-embed-amd64.zip"))
 $requirements = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "portable-runtime-requirements.txt"))
 $offlineOodle = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "pyuepak_oodle_offline.py"))
+$windowsAes = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "pyuepak_aes_windows.py"))
+$patchPyuepak = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "patch_pyuepak_offline.py"))
 
-$runtimeVersion = "python-3.12.10-unrpa-2.3.0-unitypy-1.25.0-pyuepak-0.2.7-win-x64-v3"
+$runtimeVersion = "python-3.12.10-unrpa-2.3.0-unitypy-1.25.0-pyuepak-0.2.7-win-x64-v6"
 $pythonUrl = "https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip"
 $pythonSha256 = "4ACBED6DD1C744B0376E3B1CF57CE906F9DC9E95E68824584C8099A63025A3C3"
 
@@ -76,6 +78,51 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Copy-Item -LiteralPath $offlineOodle -Destination (Join-Path $sitePackages "pyuepak\oodle.py") -Force
+Copy-Item -LiteralPath $windowsAes -Destination (Join-Path $sitePackages "pyuepak\aes_windows.py") -Force
+& $bootstrap.Source $patchPyuepak $sitePackages
+if ($LASTEXITCODE -ne 0) {
+    throw "pyuepak offline patch failed with exit code $LASTEXITCODE"
+}
+
+function Remove-RuntimeItem {
+    param([string]$Path)
+
+    $fullPath = [IO.Path]::GetFullPath($Path)
+    $runtimePrefix = $runtime.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+    if (-not $fullPath.StartsWith($runtimePrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to remove path outside portable runtime: $fullPath"
+    }
+    if (Test-Path -LiteralPath $fullPath) {
+        Remove-Item -LiteralPath $fullPath -Recurse -Force
+    }
+}
+
+Write-Host "Removing files that are not needed by the embedded extractors..."
+Get-ChildItem -LiteralPath $sitePackages -Directory -Recurse -Force |
+    Where-Object { $_.Name -eq "__pycache__" -or $_.Name.EndsWith(".dist-info", [StringComparison]::OrdinalIgnoreCase) } |
+    Sort-Object FullName -Descending |
+    ForEach-Object { Remove-RuntimeItem $_.FullName }
+Get-ChildItem -LiteralPath $sitePackages -File -Recurse -Force |
+    Where-Object { $_.Extension -in @(".pyc", ".pyo", ".ipdb", ".iobj") } |
+    ForEach-Object { Remove-RuntimeItem $_.FullName }
+
+foreach ($optionalFile in @(
+    "PIL\_avif.cp312-win_amd64.pyd",
+    "PIL\_imagingcms.cp312-win_amd64.pyd",
+    "PIL\_imagingft.cp312-win_amd64.pyd",
+    "PIL\_webp.cp312-win_amd64.pyd"
+)) {
+    Remove-RuntimeItem (Join-Path $sitePackages $optionalFile)
+}
+Remove-RuntimeItem (Join-Path $runtime "sqlite3.dll")
+Remove-RuntimeItem (Join-Path $runtime "_sqlite3.pyd")
+Remove-RuntimeItem (Join-Path $runtime "python.cat")
+Remove-RuntimeItem (Join-Path $runtime "libcrypto-3.dll")
+Remove-RuntimeItem (Join-Path $runtime "libssl-3.dll")
+Remove-RuntimeItem (Join-Path $runtime "_hashlib.pyd")
+Remove-RuntimeItem (Join-Path $runtime "_ssl.pyd")
+Remove-RuntimeItem (Join-Path $runtime "pythonw.exe")
+Remove-RuntimeItem (Join-Path $sitePackages "bin")
 
 Get-ChildItem -LiteralPath $runtime -Directory -Recurse -Force |
     Where-Object { $_.Name -eq "__pycache__" } |
@@ -87,10 +134,17 @@ Get-ChildItem -LiteralPath $runtime -File -Recurse -Force -Filter "*.pyc" |
 Set-Content -LiteralPath (Join-Path $runtime "GameAssetTool-runtime.txt") -Encoding Ascii -Value $runtimeVersion
 
 Write-Host "Verifying portable runtime imports..."
-& (Join-Path $runtime "python.exe") -c "import unrpa, UnityPy, pyuepak; from pyuepak.oodle import oodle; print('portable-runtime-ok')"
+& (Join-Path $runtime "python.exe") -c "import hashlib, os, tempfile, unrpa, UnityPy, pyuepak; from PIL import Image; from pyuepak.aes_windows import aes_ecb_decrypt; from pyuepak.oodle import oodle; assert hashlib.md5(b'x').hexdigest() == '9dd4e461268c8034f5c8564e155c67a6'; assert hashlib.sha1(b'x').hexdigest() == '11f6ad8ec52a2984abaafd7c3b516503785c2072'; assert aes_ecb_decrypt(bytes.fromhex('000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f'), bytes.fromhex('8ea2b7ca516745bfeafc49904b496089')).hex() == '00112233445566778899aabbccddeeff'; path=os.path.join(tempfile.gettempdir(), 'GameAssetTool-pillow-test.png'); Image.new('RGBA', (1, 1)).save(path); os.remove(path); print('portable-runtime-ok')"
 if ($LASTEXITCODE -ne 0) {
     throw "Portable runtime import verification failed with exit code $LASTEXITCODE"
 }
+
+Get-ChildItem -LiteralPath $runtime -Directory -Recurse -Force |
+    Where-Object { $_.Name -eq "__pycache__" } |
+    Sort-Object FullName -Descending |
+    Remove-Item -Recurse -Force
+Get-ChildItem -LiteralPath $runtime -File -Recurse -Force -Filter "*.pyc" |
+    Remove-Item -Force
 
 if (-not (Test-Path -LiteralPath $payloadDir)) {
     New-Item -ItemType Directory -Path $payloadDir | Out-Null

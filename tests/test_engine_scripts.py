@@ -139,6 +139,12 @@ def main():
             raise AssertionError("Offline Oodle stub unexpectedly decompressed data.")
         except OodleUnavailable:
             print("offline_oodle=ok")
+
+        from pyuepak.aes_windows import aes_ecb_decrypt
+        key = bytes.fromhex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
+        encrypted = bytes.fromhex("8ea2b7ca516745bfeafc49904b496089")
+        assert aes_ecb_decrypt(key, encrypted).hex() == "00112233445566778899aabbccddeeff"
+        print("windows_aes=ok")
     finally:
         shutil.rmtree(temp, ignore_errors=True)
 

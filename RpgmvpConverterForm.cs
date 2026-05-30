@@ -78,7 +78,7 @@ namespace RpgmvpConverterWinForms
             Font titleFont = new Font("Segoe UI Semibold", 14f, FontStyle.Regular);
             Font logFont = new Font("Consolas", 9.5f, FontStyle.Regular);
 
-            Text = "Game Asset Tool v1.5";
+            Text = "Game Asset Tool v1.5.1";
             StartPosition = FormStartPosition.CenterScreen;
             MinimumSize = new Size(940, 900);
             Size = new Size(940, 900);
@@ -1535,7 +1535,7 @@ namespace RpgmvpConverterWinForms
             {
                 return string.Join(Environment.NewLine, new[]
                 {
-                    "Game Asset Tool v1.5 report",
+                    "Game Asset Tool v1.5.1 report",
                     "Engine: " + Engine,
                     "Extracted files: " + Extracted,
                     "Extracted size: " + FormatBytes(Bytes),
