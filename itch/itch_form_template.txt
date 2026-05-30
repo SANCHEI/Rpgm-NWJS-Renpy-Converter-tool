@@ -9,7 +9,7 @@ PROJECT URL:
 sanchei.itch.io/gameassettool
 
 SHORT DESCRIPTION:
-Convert, Extract, Unlock - RPG Maker, Ren'Py, NWJS, Unity, Godot and XP3 utility
+Portable Windows tool for extracting assets from RPG Maker, Ren'Py, Unity, Godot, KiriKiri and Unreal games
 
 CLASSIFICATION:
 - Type: Tools
