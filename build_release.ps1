@@ -2,8 +2,9 @@ $ErrorActionPreference = "Stop"
 
 $root = [IO.Path]::GetFullPath($PSScriptRoot)
 $release = [IO.Path]::GetFullPath((Join-Path $root "release"))
-$releaseExe = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v1.6.1.exe"))
-$obsoleteMinorExe = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v1.6.0.exe"))
+$releaseExe = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v1.7.0.exe"))
+$obsoleteMinorExe = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v1.6.1.exe"))
+$obsoleteEarlierMinorExe = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v1.6.0.exe"))
 $obsoletePatchExe = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v1.5.2.exe"))
 $obsoletePreviousPatchExe = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v1.5.1.exe"))
 $obsoleteOlderPatchExe = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v1.5.0.exe"))
@@ -12,7 +13,7 @@ $obsoleteZip = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v1.4.0.
 $obj = [IO.Path]::GetFullPath((Join-Path $root "obj"))
 $releaseBin = [IO.Path]::GetFullPath((Join-Path $root "bin\Release"))
 
-foreach ($path in @($release, $releaseExe, $obsoleteMinorExe, $obsoletePatchExe, $obsoletePreviousPatchExe, $obsoleteOlderPatchExe, $obsoleteReleaseExe, $obsoleteZip, $obj, $releaseBin)) {
+foreach ($path in @($release, $releaseExe, $obsoleteMinorExe, $obsoleteEarlierMinorExe, $obsoletePatchExe, $obsoletePreviousPatchExe, $obsoleteOlderPatchExe, $obsoleteReleaseExe, $obsoleteZip, $obj, $releaseBin)) {
     if (-not $path.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) {
         throw "Refusing to use path outside workspace: $path"
     }
@@ -34,6 +35,9 @@ Copy-Item -LiteralPath (Join-Path $root "bin\GameAssetTool.exe") -Destination $r
 
 if (Test-Path -LiteralPath $obsoleteMinorExe) {
     Remove-Item -LiteralPath $obsoleteMinorExe -Force
+}
+if (Test-Path -LiteralPath $obsoleteEarlierMinorExe) {
+    Remove-Item -LiteralPath $obsoleteEarlierMinorExe -Force
 }
 if (Test-Path -LiteralPath $obsoleteReleaseExe) {
     Remove-Item -LiteralPath $obsoleteReleaseExe -Force

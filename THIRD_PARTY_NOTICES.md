@@ -11,4 +11,6 @@ The upstream `pyuepak` package can acquire an Oodle DLL at runtime and normally 
 
 The built-in Godot PCK and standard KiriKiri XP3 extractors are project source files. The Godot implementation follows the public pack format in the official Godot source tree: https://github.com/godotengine/godot
 
+WOLF RPG encrypted archive extraction embeds the official `UberWolfCli v0.6.3` release artifact from https://github.com/Sinflower/UberWolf. UberWolf is distributed under the MIT License. The bundled license text is stored in `third_party/uberwolf/LICENSE.txt`. The embedded CLI SHA-256 is `FFFBE66CAF10699865010217AEABE3A3684EC9320FFE461268F1C9509FDA8917`.
+
 Pinned transitive dependencies are listed in `scripts/portable-runtime-requirements.txt`. The runtime and package licenses apply to their respective components.

@@ -32,6 +32,7 @@ internal static class ReleaseInspector
             bool hasXp3Script = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.scripts.extract_xp3.py");
             bool hasUnrealScript = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.scripts.extract_unreal.py");
             bool hasPortableRuntime = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.runtime.runtime-win-x64.zip");
+            bool hasWolfCli = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.tools.UberWolfCli.exe");
 
             Type unlockerType = assembly.GetType("RpgmvpConverterWinForms.UnlockerResources", true);
             MethodInfo extractUnlocker = unlockerType.GetMethod("ExtractUnlocker", BindingFlags.Public | BindingFlags.Static);
@@ -80,6 +81,28 @@ internal static class ReleaseInspector
                 Directory.CreateDirectory(path);
                 File.WriteAllText(Path.Combine(path, "package.json"), "{}");
             });
+            string wolfEngine = DetectEngine(detectEngine, Path.Combine(temp, "wolf"), delegate(string path)
+            {
+                Directory.CreateDirectory(Path.Combine(path, "Data", "BasicData"));
+                File.WriteAllBytes(Path.Combine(path, "Data", "BasicData", "Game.dat"), new byte[] { 0 });
+                File.WriteAllBytes(Path.Combine(path, "Game.exe"), new byte[] { 0 });
+            });
+            string tyranoEngine = DetectEngine(detectEngine, Path.Combine(temp, "tyrano"), delegate(string path)
+            {
+                Directory.CreateDirectory(Path.Combine(path, "data", "scenario"));
+                Directory.CreateDirectory(Path.Combine(path, "data", "system"));
+                File.WriteAllText(Path.Combine(path, "data", "scenario", "first.ks"), "*start");
+            });
+            string javaEngine = DetectEngine(detectEngine, Path.Combine(temp, "java"), delegate(string path)
+            {
+                Directory.CreateDirectory(path);
+                File.WriteAllBytes(Path.Combine(path, "game.jar"), new byte[] { 0 });
+            });
+            string flashEngine = DetectEngine(detectEngine, Path.Combine(temp, "flash"), delegate(string path)
+            {
+                Directory.CreateDirectory(path);
+                WriteMinimalSwf(Path.Combine(path, "game.swf"));
+            });
             string genericGameFolderEngine = DetectEngine(detectEngine, Path.Combine(temp, "generic-game-folder"), delegate(string path)
             {
                 Directory.CreateDirectory(Path.Combine(path, "game"));
@@ -94,6 +117,10 @@ internal static class ReleaseInspector
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "kirikiri")) == "Kirikiri"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "unreal")) == "Unreal"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "nwjs")) == "Nwjs"
+                && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "wolf")) == "WolfRpg"
+                && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "tyrano")) == "TyranoScript"
+                && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "java")) == "JavaJar"
+                && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "flash")) == "Flash"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "generic-game-folder")) == "Unknown";
 
             string rootLookup = Path.Combine(temp, "root-lookup");
@@ -104,6 +131,8 @@ internal static class ReleaseInspector
             bool fastRootLookup = string.Equals(foundRoot, rootLookup, StringComparison.OrdinalIgnoreCase);
             bool contextualGui = VerifyContextualGui(formType);
             bool nwjsExtraction = VerifyNwjsExtraction(formType, temp);
+            bool localEngineExtraction = VerifyLocalEngineExtraction(formType, temp);
+            bool startupFolderArgument = VerifyStartupFolderArgument(formType, temp);
 
             Type runtimeType = assembly.GetType("RpgmvpConverterWinForms.PortableRuntime", true);
             MethodInfo ensureRuntime = runtimeType.GetMethod("EnsureExtracted", BindingFlags.Public | BindingFlags.Static);
@@ -113,6 +142,8 @@ internal static class ReleaseInspector
             string runtimeDirectory = null;
             bool portableImports = false;
             bool runtimeRemoved = false;
+            bool wolfCliExtracted = false;
+            bool wolfCliRemoved = false;
             try
             {
                 string staleSession = Path.Combine(
@@ -140,6 +171,21 @@ internal static class ReleaseInspector
                 runtimeRemoved = string.IsNullOrWhiteSpace(runtimeDirectory) || !Directory.Exists(runtimeDirectory);
             }
 
+            Type toolRuntimeType = assembly.GetType("RpgmvpConverterWinForms.ToolRuntime", true);
+            MethodInfo ensureWolfCli = toolRuntimeType.GetMethod("EnsureWolfCliExtracted", BindingFlags.Public | BindingFlags.Static);
+            MethodInfo cleanupTools = toolRuntimeType.GetMethod("Cleanup", BindingFlags.Public | BindingFlags.Static);
+            string wolfCliPath = null;
+            try
+            {
+                wolfCliPath = (string)ensureWolfCli.Invoke(null, null);
+                wolfCliExtracted = File.Exists(wolfCliPath);
+            }
+            finally
+            {
+                cleanupTools.Invoke(null, null);
+                wolfCliRemoved = string.IsNullOrWhiteSpace(wolfCliPath) || !File.Exists(wolfCliPath);
+            }
+
             Console.WriteLine("AssemblyVersion=" + assembly.GetName().Version);
             Console.WriteLine("EmbeddedUnityScript=" + hasUnityScript);
             Console.WriteLine("UnityFilteringFix=" + unityFilteringFix);
@@ -147,8 +193,11 @@ internal static class ReleaseInspector
             Console.WriteLine("EmbeddedXp3Script=" + hasXp3Script);
             Console.WriteLine("EmbeddedUnrealScript=" + hasUnrealScript);
             Console.WriteLine("EmbeddedPortableRuntime=" + hasPortableRuntime);
+            Console.WriteLine("EmbeddedWolfCli=" + hasWolfCli);
             Console.WriteLine("PortableRuntimeImports=" + portableImports);
             Console.WriteLine("PortableRuntimeRemoved=" + runtimeRemoved);
+            Console.WriteLine("WolfCliExtracted=" + wolfCliExtracted);
+            Console.WriteLine("WolfCliRemoved=" + wolfCliRemoved);
             Console.WriteLine("UnlockerFiles=" + files.Length);
             Console.WriteLine("UnexpectedNestedGameFolder=" + nestedGameFolder);
             Console.WriteLine("DetectUnity=" + unityEngine);
@@ -158,12 +207,18 @@ internal static class ReleaseInspector
             Console.WriteLine("DetectKirikiri=" + kirikiriEngine);
             Console.WriteLine("DetectUnreal=" + unrealEngine);
             Console.WriteLine("DetectNwjs=" + nwjsEngine);
+            Console.WriteLine("DetectWolfRpg=" + wolfEngine);
+            Console.WriteLine("DetectTyranoScript=" + tyranoEngine);
+            Console.WriteLine("DetectJavaJar=" + javaEngine);
+            Console.WriteLine("DetectFlash=" + flashEngine);
             Console.WriteLine("DetectGenericGameFolder=" + genericGameFolderEngine);
             Console.WriteLine("RenpyUnlockerScope=" + renpyUnlockerScope);
             Console.WriteLine("FastDetection=" + fastDetection);
             Console.WriteLine("FastRootLookup=" + fastRootLookup);
             Console.WriteLine("ContextualGui=" + contextualGui);
             Console.WriteLine("NwjsExtraction=" + nwjsExtraction);
+            Console.WriteLine("LocalEngineExtraction=" + localEngineExtraction);
+            Console.WriteLine("StartupFolderArgument=" + startupFolderArgument);
 
             return hasUnityScript
                 && unityFilteringFix
@@ -171,8 +226,11 @@ internal static class ReleaseInspector
                 && hasXp3Script
                 && hasUnrealScript
                 && hasPortableRuntime
+                && hasWolfCli
                 && portableImports
                 && runtimeRemoved
+                && wolfCliExtracted
+                && wolfCliRemoved
                 && files.Length > 0
                 && !nestedGameFolder
                 && unityEngine == "Unity"
@@ -182,12 +240,18 @@ internal static class ReleaseInspector
                 && kirikiriEngine == "Kirikiri"
                 && unrealEngine == "Unreal"
                 && nwjsEngine == "Nwjs"
+                && wolfEngine == "WolfRpg"
+                && tyranoEngine == "TyranoScript"
+                && javaEngine == "JavaJar"
+                && flashEngine == "Flash"
                 && genericGameFolderEngine == "Unknown"
                 && renpyUnlockerScope
                 && fastDetection
                 && fastRootLookup
                 && contextualGui
                 && nwjsExtraction
+                && localEngineExtraction
+                && startupFolderArgument
                 ? 0
                 : 1;
         }
@@ -243,6 +307,7 @@ internal static class ReleaseInspector
             object toggleLogButton = GetField(formType, form, "toggleLogButton");
             object runtimeStatus = GetField(formType, form, "runtimeStatusLabel");
             object toolTip = GetField(formType, form, "actionToolTip");
+            object language = GetField(formType, form, "languageBox");
             IEnumerable dragPanels = (IEnumerable)GetField(formType, form, "dragHighlightPanels");
 
             bool initial = !GetBool(startButton, "Enabled")
@@ -281,6 +346,20 @@ internal static class ReleaseInspector
                 && !GetBool(unlockerButton, "Enabled")
                 && !GetLocalVisible(unlockerSection)
                 && GetString(extractionHint, "Text").IndexOf("Unlocker", StringComparison.OrdinalIgnoreCase) < 0;
+
+            updateContext.Invoke(form, new[] { Enum.Parse(engineType, "WolfRpg") });
+            bool wolf = GetBool(startButton, "Enabled")
+                && GetString(extractionHint, "Text").IndexOf("UberWolf", StringComparison.OrdinalIgnoreCase) >= 0;
+
+            updateContext.Invoke(form, new[] { Enum.Parse(engineType, "TyranoScript") });
+            bool tyrano = GetBool(startButton, "Enabled");
+
+            updateContext.Invoke(form, new[] { Enum.Parse(engineType, "JavaJar") });
+            bool java = GetBool(startButton, "Enabled");
+
+            updateContext.Invoke(form, new[] { Enum.Parse(engineType, "Flash") });
+            bool flash = GetBool(startButton, "Enabled")
+                && GetString(extractionHint, "Text").IndexOf("JPEG", StringComparison.OrdinalIgnoreCase) >= 0;
             bool readableDisabledButtons = HasReadableDisabledContrast(startButton)
                 && HasReadableDisabledContrast(unlockerButton)
                 && HasReadableDisabledContrast(removeUnlockerButton)
@@ -292,6 +371,11 @@ internal static class ReleaseInspector
             bool dpi = form.GetType().GetProperty("AutoScaleMode").GetValue(form, null).ToString() == "Dpi"
                 && (int)scaleLogicalHeightForDpi.Invoke(null, new object[] { 570, 120f }) == 712
                 && (int)scaleLogicalHeightForDpi.Invoke(null, new object[] { 570, 144f }) == 855;
+            language.GetType().GetProperty("SelectedIndex").SetValue(language, 1, null);
+            updateContext.Invoke(form, new[] { Enum.Parse(engineType, "RpgMaker") });
+            bool russian = GetString(startButton, "Text") == "Извлечь ресурсы"
+                && GetString(keyLabel, "Text") == "HEX-ключ RPGM";
+            language.GetType().GetProperty("SelectedIndex").SetValue(language, 0, null);
             setDragHighlight.Invoke(form, new object[] { true });
             bool dragHighlight = dragPanels.Cast<object>().Count() == 4 && dragPanels.Cast<object>().All(GetLocalVisible);
             setDragHighlight.Invoke(form, new object[] { false });
@@ -305,7 +389,8 @@ internal static class ReleaseInspector
             bool collapsed = GetString(toggleLogButton, "Text") == "Show Log"
                 && GetSizeHeight(form, "ClientSize") == compactHeight;
 
-            return initial && unity && renpy && rpgm && unreal && nwjs && readableDisabledButtons && tooltips && dpi && dragHighlight && expanded && collapsed;
+            return initial && unity && renpy && rpgm && unreal && nwjs && wolf && tyrano && java && flash && russian
+                && readableDisabledButtons && tooltips && dpi && dragHighlight && expanded && collapsed;
         }
         finally
         {
@@ -348,6 +433,119 @@ internal static class ReleaseInspector
             MethodInfo dispose = formType.GetMethod("Dispose", BindingFlags.Public | BindingFlags.Instance);
             dispose.Invoke(form, null);
         }
+    }
+
+    private static bool VerifyLocalEngineExtraction(Type formType, string temp)
+    {
+        string root = Path.Combine(temp, "local-engine-extraction");
+        string tyrano = Path.Combine(root, "tyrano");
+        Directory.CreateDirectory(Path.Combine(tyrano, "data", "scenario"));
+        Directory.CreateDirectory(Path.Combine(tyrano, "data", "system"));
+        File.WriteAllText(Path.Combine(tyrano, "data", "scenario", "first.ks"), "*start");
+
+        string java = Path.Combine(root, "java");
+        Directory.CreateDirectory(java);
+        using (FileStream stream = File.Create(Path.Combine(java, "game.jar")))
+        using (ZipArchive archive = new ZipArchive(stream, ZipArchiveMode.Create))
+        {
+            using (StreamWriter writer = new StreamWriter(archive.CreateEntry("assets/picture.png").Open()))
+                writer.Write("png");
+            using (StreamWriter writer = new StreamWriter(archive.CreateEntry("../outside.txt").Open()))
+                writer.Write("inside-output");
+        }
+
+        string flash = Path.Combine(root, "flash");
+        Directory.CreateDirectory(flash);
+        WriteMinimalSwf(Path.Combine(flash, "movie.swf"));
+
+        string wolf = Path.Combine(root, "wolf");
+        Directory.CreateDirectory(Path.Combine(wolf, "Data", "BasicData"));
+        Directory.CreateDirectory(Path.Combine(wolf, "Data", "Picture"));
+        File.WriteAllText(Path.Combine(wolf, "Data", "BasicData", "Game.dat"), "game");
+        File.WriteAllText(Path.Combine(wolf, "Data", "Picture", "hero.png"), "png");
+        File.WriteAllBytes(Path.Combine(wolf, "Game.exe"), new byte[] { 0 });
+
+        object form = Activator.CreateInstance(formType);
+        try
+        {
+            object tyranoResult = InvokeExtraction(formType, form, "RunTyranoExtraction", tyrano, Path.Combine(tyrano, "extracted", "tyrano"));
+            object javaResult = InvokeExtraction(formType, form, "RunJavaExtraction", java, Path.Combine(java, "extracted", "java"));
+            object flashResult = InvokeExtraction(formType, form, "RunFlashExtraction", flash, Path.Combine(flash, "extracted", "flash"));
+            object wolfResult = InvokeExtraction(formType, form, "RunWolfExtraction", wolf, Path.Combine(wolf, "extracted", "wolf"));
+            return GetInt(tyranoResult, "Extracted") == 1
+                && File.Exists(Path.Combine(tyrano, "extracted", "tyrano", "data", "scenario", "first.ks"))
+                && GetInt(javaResult, "Extracted") == 2
+                && GetInt(javaResult, "Errors") == 0
+                && File.Exists(Path.Combine(java, "extracted", "java", "archives", "game", "assets", "picture.png"))
+                && !File.Exists(Path.Combine(java, "extracted", "outside.txt"))
+                && GetInt(flashResult, "Extracted") == 2
+                && GetInt(flashResult, "Errors") == 0
+                && File.Exists(Path.Combine(flash, "extracted", "flash", "originals", "movie.swf"))
+                && File.Exists(Path.Combine(flash, "extracted", "flash", "embedded", "movie", "image-7.jpg"))
+                && GetInt(wolfResult, "Extracted") == 2
+                && GetInt(wolfResult, "Errors") == 0
+                && File.Exists(Path.Combine(wolf, "extracted", "wolf", "loose", "Data", "Picture", "hero.png"));
+        }
+        finally
+        {
+            MethodInfo dispose = formType.GetMethod("Dispose", BindingFlags.Public | BindingFlags.Instance);
+            dispose.Invoke(form, null);
+        }
+    }
+
+    private static bool VerifyStartupFolderArgument(Type formType, string temp)
+    {
+        string root = Path.Combine(temp, "startup-folder");
+        Directory.CreateDirectory(Path.Combine(root, "data", "scenario"));
+        Directory.CreateDirectory(Path.Combine(root, "data", "system"));
+        File.WriteAllText(Path.Combine(root, "data", "scenario", "first.ks"), "*start");
+        object form = Activator.CreateInstance(formType, new object[] { root });
+        try
+        {
+            MethodInfo apply = formType.GetMethod("TryApplyStartupGamePath", BindingFlags.NonPublic | BindingFlags.Instance);
+            apply.Invoke(form, null);
+            object pathBox = GetField(formType, form, "pathBox");
+            return string.Equals(GetString(pathBox, "Text"), root, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            MethodInfo dispose = formType.GetMethod("Dispose", BindingFlags.Public | BindingFlags.Instance);
+            dispose.Invoke(form, null);
+        }
+    }
+
+    private static object InvokeExtraction(Type formType, object form, string method, string root, string output)
+    {
+        return formType.GetMethod(method, BindingFlags.NonPublic | BindingFlags.Instance).Invoke(form, new object[] { root, output });
+    }
+
+    private static int GetInt(object instance, string property)
+    {
+        return (int)instance.GetType().GetProperty(property).GetValue(instance, null);
+    }
+
+    private static void WriteMinimalSwf(string path)
+    {
+        byte[] jpeg = { 0xff, 0xd8, 0xff, 0xd9 };
+        byte[] body =
+        {
+            0x08, 0x00,
+            0x00, 0x00,
+            0x01, 0x00,
+            0x46, 0x05,
+            0x07, 0x00,
+            jpeg[0], jpeg[1], jpeg[2], jpeg[3],
+            0x00, 0x00
+        };
+        byte[] file = new byte[8 + body.Length];
+        file[0] = (byte)'F';
+        file[1] = (byte)'W';
+        file[2] = (byte)'S';
+        file[3] = 9;
+        byte[] length = BitConverter.GetBytes(file.Length);
+        Array.Copy(length, 0, file, 4, length.Length);
+        Array.Copy(body, 0, file, 8, body.Length);
+        File.WriteAllBytes(path, file);
     }
 
     private static object GetField(Type type, object instance, string name)

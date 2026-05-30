@@ -32,6 +32,7 @@
   <ItemGroup>
     <Compile Include="Program.cs" />
     <Compile Include="PortableRuntime.cs" />
+    <Compile Include="ToolRuntime.cs" />
     <Compile Include="RpgmvpConverterForm.cs" />
     <Compile Include="UnlockerResources.cs" />
     <Compile Include="EmbeddedScripts.cs" />
@@ -52,6 +53,9 @@
     </EmbeddedResource>
     <EmbeddedResource Include="payload\runtime-win-x64.zip">
       <LogicalName>RpgmvpConverterWinForms.runtime.runtime-win-x64.zip</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="third_party\uberwolf\UberWolfCli.exe">
+      <LogicalName>RpgmvpConverterWinForms.tools.UberWolfCli.exe</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

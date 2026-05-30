@@ -1,4 +1,4 @@
-# Game Asset Tool v1.6.1 UI Preview
+# Game Asset Tool v1.7.0 UI Preview
 
 ## Main Window
 
@@ -48,6 +48,8 @@ The **Show Log** button expands the same fixed-width window vertically.
 - NWJS: copies loose files and safely unpacks ZIP-compatible `.nw` archives without a gallery unlocker.
 
 The Ren'Py gallery unlocker section is shown only for relevant Ren'Py folders or when previously installed files can be removed.
+
+The header includes an `EN` / `RU` language switch. Dropping a folder directly onto `GameAssetTool.exe` opens the same window with that folder already selected.
 
 ## Results Dialog
 

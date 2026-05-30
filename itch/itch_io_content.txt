@@ -7,16 +7,16 @@ Game Asset Tool
 https://sanchei.itch.io/gameassettool
 
 ## Short description
-Portable Windows tool for extracting assets from RPG Maker, Ren'Py, NWJS, Unity, Godot, KiriKiri and Unreal games.
+Portable Windows tool for extracting assets from RPG Maker, Ren'Py, NWJS, Unity, Godot, WOLF RPG, TyranoScript, Java and Flash games.
 
 ## Description
 Use the contents of `itch/itch_description.md`.
 
 ## Tags
-unity, rpg-maker, godot, game-modding, modding-tools, asset-extractor, game-tools, renpy, nwjs, converter
+unity, rpg-maker, godot, game-modding, modding-tools, asset-extractor, game-tools, renpy, nwjs, wolf-rpg
 
 ## AI Generation Disclosure
-No
+Yes - the project cover logo and page background were generated with an AI image tool. The application itself extracts user-selected local files and does not generate game content.
 
 ## Custom Noun
 tool

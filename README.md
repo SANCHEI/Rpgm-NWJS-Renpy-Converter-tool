@@ -4,9 +4,9 @@
 
 [**Watch Demo Video on YouTube**](https://youtu.be/BnjRjik9fk0)
 
-Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **Ren'Py**, **NWJS**, **Unity**, **Godot** and **KiriKiri** games. Experimental Unreal `.pak` extraction is included.
+Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **Ren'Py**, **NWJS**, **Unity**, **Godot**, **KiriKiri**, **WOLF RPG**, **TyranoScript** and **Java** games. Experimental Unreal `.pak` and Flash `.swf` extraction is included.
 
-![Version](https://img.shields.io/badge/version-1.6.1-blue)
+![Version](https://img.shields.io/badge/version-1.7.0-blue)
 ![.NET](https://img.shields.io/badge/.NET_Framework-4.7.2-blue)
 ![Runtime](https://img.shields.io/badge/runtime-built--in-green)
 
@@ -14,6 +14,8 @@ Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **Re
 
 - Detects the selected game engine automatically.
 - Supports drag-and-drop for game folders.
+- Opens with a selected folder when you drop that folder directly onto `GameAssetTool.exe`.
+- Includes an `EN` / `RU` interface switch.
 - Provides a **Dry Run / Scan** before extraction with archive count, candidate file count and input size.
 - Shows only the extraction settings relevant to the detected engine.
 - Uses one primary **Extract Assets** button and a collapsible log panel.
@@ -48,6 +50,10 @@ extracted/
   godot/
   kirikiri/
   unreal/
+  wolf/
+  tyrano/
+  java/
+  flash/
 ```
 
 Each extractor writes `GameAssetTool-report.txt` into its own output folder.
@@ -94,6 +100,22 @@ Unreal extraction uses [`pyuepak==0.2.7`](https://github.com/stas96111/pyUEpak) 
 
 The application does not download or redistribute an Oodle DLL. Oodle-compressed archives and IoStore `.utoc/.ucas` containers are reported as unsupported.
 
+## WOLF RPG
+
+WOLF RPG extraction copies loose `Data` files and uses the embedded MIT-licensed [`UberWolfCli v0.6.3`](https://github.com/Sinflower/UberWolf) for encrypted archives. The CLI is extracted into the temporary application session only when it is needed and removed after use.
+
+## TyranoScript
+
+TyranoScript extraction copies project files from the `data` folder while preserving their structure, including scenarios, images, audio and video.
+
+## Java JAR
+
+Java `.jar` files are treated as ZIP-compatible containers and unpacked into separate folders with path traversal protection.
+
+## Flash Experimental
+
+Flash inspection copies original `.swf` files and extracts embedded JPEG, PNG and GIF images from uncompressed `FWS` and Zlib-compressed `CWS` files. LZMA-compressed `ZWS` files are reported as unsupported.
+
 ## Gallery Unlocker
 
 The Ren'Py unlocker is shown only when a Ren'Py folder is selected or previously installed files can be removed. It has separate buttons:
@@ -128,7 +150,7 @@ powershell -ExecutionPolicy Bypass -File .\build_release.ps1
 Release output:
 
 ```text
-release/GameAssetTool-v1.6.1.exe
+release/GameAssetTool-v1.7.0.exe
 ```
 
 The release contains one supported executable. Users do not need any neighboring files.

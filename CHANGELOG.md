@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.7.0 - 2026-05-30
+
+- Accept a game-folder argument so dropping a folder onto `GameAssetTool.exe` opens the application with that path selected.
+- Added WOLF RPG detection, loose `Data` copying and encrypted archive extraction through the embedded MIT-licensed `UberWolfCli v0.6.3`.
+- Added TyranoScript project-data extraction.
+- Added safe Java `.jar` archive extraction.
+- Added experimental Flash `.swf` inspection with original-file copying and embedded JPEG, PNG and GIF extraction.
+- Added an `EN` / `RU` interface switch with localized contextual hints, tooltips and results dialog.
+
 ## 1.6.1 - 2026-05-30
 
 - Fixed Unity extraction by filtering unsupported objects before reading them and exporting meshes through UnityPy's OBJ API.

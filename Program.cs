@@ -10,7 +10,7 @@ namespace RpgmvpConverterWinForms
         private static extern bool SetProcessDPIAware();
 
         [STAThread]
-        private static void Main()
+        private static void Main(string[] args)
         {
             try { SetProcessDPIAware(); }
             catch { }
@@ -18,11 +18,13 @@ namespace RpgmvpConverterWinForms
             Application.SetCompatibleTextRenderingDefault(false);
             try
             {
-                Application.Run(new RpgmvpConverterForm());
+                string startupPath = args != null && args.Length > 0 ? args[0] : null;
+                Application.Run(new RpgmvpConverterForm(startupPath));
             }
             finally
             {
                 PortableRuntime.Cleanup();
+                ToolRuntime.Cleanup();
             }
         }
     }

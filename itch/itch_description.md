@@ -10,6 +10,8 @@ Drop a game folder into the window, review the detected engine with **Dry Run / 
 
 - Automatic engine detection after selecting or dropping a game folder
 - Drag-and-drop folder support
+- Drop a game folder directly onto `GameAssetTool.exe` to open it with that path already selected
+- `EN` / `RU` interface switch
 - Dry Run / Scan preview with archive count, candidate file count and input size
 - Contextual extraction options: the window shows only settings relevant to the detected engine
 - One primary **Extract Assets** action and a collapsible technical log
@@ -53,6 +55,22 @@ Extracts standard unencrypted `.xp3` archives, including compressed indexes and 
 
 Provides experimental offline extraction for ordinary and Zlib-compressed `.pak` archives. An optional AES key can be entered in the shared key field.
 
+### WOLF RPG
+
+Copies loose `Data` files and extracts encrypted WOLF archives through the embedded MIT-licensed `UberWolfCli v0.6.3`. The temporary helper is removed after use.
+
+### TyranoScript
+
+Copies project files from the `data` folder while preserving scenarios, images, audio, video and their original structure.
+
+### Java JAR
+
+Safely unpacks ZIP-compatible `.jar` archives into separate output folders.
+
+### Flash SWF Experimental
+
+Copies original `.swf` files and extracts embedded JPEG, PNG and GIF images from `FWS` and `CWS` files. LZMA-compressed `ZWS` files are reported as unsupported.
+
 ## Gallery Unlocker
 
 The gallery unlocker is intended for supported Ren'Py folders.
@@ -74,6 +92,10 @@ Use **Hard** mode only when the soft mode is insufficient.
 - Godot: `game_folder/extracted/godot/`
 - KiriKiri: `game_folder/extracted/kirikiri/`
 - Unreal: `game_folder/extracted/unreal/`
+- WOLF RPG: `game_folder/extracted/wolf/`
+- TyranoScript: `game_folder/extracted/tyrano/`
+- Java JAR: `game_folder/extracted/java/`
+- Flash SWF: `game_folder/extracted/flash/`
 - Unlocker files: `game_folder/game/_mods/`
 
 Each extractor writes `GameAssetTool-report.txt` into its output folder.
@@ -93,6 +115,7 @@ The built-in extraction runtime is prepared silently under `%LocalAppData%\GameA
 - Protected game-specific XP3 variants are not extracted.
 - Unreal Oodle compression is detected but not extracted.
 - Unreal IoStore `.utoc/.ucas` containers are detected but not extracted.
+- Flash LZMA-compressed `ZWS` files are detected but not inspected.
 
 Source code: [GitHub repository](https://github.com/SANCHEI/Rpgm-NWJS-Renpy-Converter-tool)
 

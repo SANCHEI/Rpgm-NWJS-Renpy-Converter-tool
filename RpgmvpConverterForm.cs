@@ -31,8 +31,13 @@ namespace RpgmvpConverterWinForms
 
         private TextBox pathBox;
         private TextBox keyBox;
+        private ComboBox languageBox;
         private ComboBox unlockerModeBox;
         private ComboBox unityExtractModeBox;
+        private Label subtitleLabel;
+        private Label folderSectionLabel;
+        private Label extractSectionLabel;
+        private Label logSectionLabel;
         private Label keyLabel;
         private Label unityModeLabel;
         private Label extractionHintLabel;
@@ -54,6 +59,7 @@ namespace RpgmvpConverterWinForms
         private Button cancelButton;
         private Button openOutputButton;
         private Button toggleLogButton;
+        private Button clearLogButton;
         private ToolTip actionToolTip;
 
         private readonly object processSync = new object();
@@ -68,15 +74,22 @@ namespace RpgmvpConverterWinForms
         private bool logExpanded;
         private bool unlockerLayoutVisible = true;
         private bool localCopyCancellationRequested;
+        private bool russianUi;
         private string lastOutputDir = "";
+        private readonly string startupGamePath;
         private GameEngine selectedEngine;
 
         private const int CompactClientHeight = 570;
         private const int ExpandedClientHeight = 872;
         private const int UnlockerSectionHeight = 64;
 
-        public RpgmvpConverterForm()
+        public RpgmvpConverterForm() : this(null)
         {
+        }
+
+        public RpgmvpConverterForm(string startupPath)
+        {
+            startupGamePath = startupPath;
             BuildUi();
 
             string iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app.ico");
@@ -96,7 +109,7 @@ namespace RpgmvpConverterWinForms
             Font titleFont = new Font("Segoe UI Semibold", 14f, FontStyle.Regular);
             Font logFont = new Font("Consolas", 9.5f, FontStyle.Regular);
 
-            Text = "Game Asset Tool v1.6.1";
+            Text = "Game Asset Tool v1.7.0";
             StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
@@ -123,27 +136,47 @@ namespace RpgmvpConverterWinForms
                 Size = new Size(500, 28),
                 BackColor = Color.Transparent
             });
-            header.Controls.Add(new Label
+            subtitleLabel = new Label
             {
                 Text = "Drop a game folder here, scan it, then extract or unlock",
                 ForeColor = mutedColor,
                 Location = new Point(19, 39),
                 Size = new Size(700, 20),
                 BackColor = Color.Transparent
-            });
+            };
+            header.Controls.Add(subtitleLabel);
             runtimeStatusLabel = new Label
             {
                 Text = "Runtime: waiting for a supported folder",
                 ForeColor = mutedColor,
-                Location = new Point(620, 24),
-                Size = new Size(290, 20),
+                Location = new Point(575, 24),
+                Size = new Size(265, 20),
                 TextAlign = ContentAlignment.MiddleRight,
                 BackColor = Color.Transparent
             };
             header.Controls.Add(runtimeStatusLabel);
+            languageBox = new ComboBox
+            {
+                Location = new Point(852, 21),
+                Size = new Size(58, 26),
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                BackColor = inputBack,
+                ForeColor = textColor,
+                FlatStyle = FlatStyle.Flat
+            };
+            languageBox.Items.Add("EN");
+            languageBox.Items.Add("RU");
+            languageBox.SelectedIndex = 0;
+            languageBox.SelectedIndexChanged += delegate
+            {
+                russianUi = languageBox.SelectedIndex == 1;
+                LocalizeUi();
+            };
+            header.Controls.Add(languageBox);
 
             int y = 88;
-            Controls.Add(CreateSectionLabel("Game Folder", y));
+            folderSectionLabel = CreateSectionLabel("Game Folder", y);
+            Controls.Add(folderSectionLabel);
             y += 22;
 
             Panel pathPanel = new Panel
@@ -200,7 +233,8 @@ namespace RpgmvpConverterWinForms
             scanPanel.Controls.Add(dryRunButton);
             y += 66;
 
-            Controls.Add(CreateSectionLabel("Extract Assets", y));
+            extractSectionLabel = CreateSectionLabel("Extract Assets", y);
+            Controls.Add(extractSectionLabel);
             y += 22;
 
             Panel extractionPanel = new Panel
@@ -348,15 +382,16 @@ namespace RpgmvpConverterWinForms
                 Visible = false
             };
             Controls.Add(logPanel);
-            logPanel.Controls.Add(new Label
+            logSectionLabel = new Label
             {
                 Text = "Log",
                 Location = new Point(10, 10),
                 Size = new Size(60, 20),
                 ForeColor = mutedColor,
                 Font = uiBold
-            });
-            Button clearLogButton = CreateButton("Clear", new Point(75, 8), new Size(80, 24), Color.FromArgb(45, 50, 60), textColor, uiFont);
+            };
+            logPanel.Controls.Add(logSectionLabel);
+            clearLogButton = CreateButton("Clear", new Point(75, 8), new Size(80, 24), Color.FromArgb(45, 50, 60), textColor, uiFont);
             clearLogButton.Click += delegate { logBox.Clear(); };
             logPanel.Controls.Add(clearLogButton);
             logBox = new TextBox
@@ -389,6 +424,7 @@ namespace RpgmvpConverterWinForms
             };
             ConfigureActionTooltips();
             CreateDragHighlightBorders();
+            LocalizeUi();
             UpdateEngineContext(GameEngine.Unknown);
         }
 
@@ -425,11 +461,75 @@ namespace RpgmvpConverterWinForms
             return button;
         }
 
+        private string T(string english, string russian)
+        {
+            return russianUi ? russian : english;
+        }
+
+        private void LocalizeUi()
+        {
+            if (subtitleLabel == null) return;
+
+            subtitleLabel.Text = T("Drop a game folder here, scan it, then extract or unlock", "Перетащите папку игры, проверьте её и извлеките ресурсы");
+            folderSectionLabel.Text = T("Game Folder", "Папка игры");
+            extractSectionLabel.Text = T("Extract Assets", "Извлечение ресурсов");
+            unlockerSectionLabel.Text = T("Gallery Unlocker for Ren'Py", "Анлокер галереи для Ren'Py");
+            logSectionLabel.Text = T("Log", "Лог");
+            browseButton.Text = T("Browse...", "Обзор...");
+            dryRunButton.Text = T("Dry Run / Scan", "Проверить");
+            startButton.Text = T("Extract Assets", "Извлечь ресурсы");
+            unlockerButton.Text = T("Install Unlocker", "Установить анлокер");
+            removeUnlockerButton.Text = T("Remove Unlocker", "Удалить анлокер");
+            pauseButton.Text = T("Pause", "Пауза");
+            cancelButton.Text = T("Cancel", "Отмена");
+            openOutputButton.Text = T("Open Output Folder", "Открыть результат");
+            toggleLogButton.Text = logExpanded ? T("Hide Log", "Скрыть лог") : T("Show Log", "Показать лог");
+            clearLogButton.Text = T("Clear", "Очистить");
+
+            int unityMode = unityExtractModeBox.SelectedIndex;
+            unityExtractModeBox.Items.Clear();
+            unityExtractModeBox.Items.Add(T("Textures", "Текстуры"));
+            unityExtractModeBox.Items.Add(T("Videos", "Видео"));
+            unityExtractModeBox.Items.Add(T("Audio", "Аудио"));
+            unityExtractModeBox.Items.Add(T("Meshes", "Меши"));
+            unityExtractModeBox.Items.Add(T("All", "Все"));
+            unityExtractModeBox.SelectedIndex = unityMode >= 0 ? unityMode : 4;
+
+            int unlockerMode = unlockerModeBox.SelectedIndex;
+            unlockerModeBox.Items.Clear();
+            unlockerModeBox.Items.Add(T("Soft", "Мягкий"));
+            unlockerModeBox.Items.Add(T("Hard", "Жёсткий"));
+            unlockerModeBox.SelectedIndex = unlockerMode >= 0 ? unlockerMode : 0;
+
+            string path = pathBox.Text.Trim();
+            if (Directory.Exists(path))
+            {
+                detectedEngineLabel.Text = T("Engine: ", "Движок: ") + EngineName(DetectEngineFast(path));
+                scanSummaryLabel.Text = T(
+                    "Ready to scan. Click Dry Run / Scan to inspect files before extraction.",
+                    "Готово к проверке. Нажмите «Проверить», чтобы просмотреть файлы перед извлечением.");
+            }
+            else
+            {
+                detectedEngineLabel.Text = T("Engine: not detected", "Движок: не определён");
+                scanSummaryLabel.Text = T("Select a folder or drop it into this window.", "Выберите папку или перетащите её в это окно.");
+            }
+
+            if (currentRun == null && !externalRunning)
+            {
+                statusLabel.Text = T("Waiting to start", "Ожидание запуска");
+                statsLabel.Text = T("Processed: 0 / 0 | Size: -- | ETA: --:--", "Обработано: 0 / 0 | Размер: -- | Осталось: --:--");
+            }
+
+            UpdateEngineContext(selectedEngine);
+            ConfigureActionTooltips();
+        }
+
         private void BrowseFolder()
         {
             using (FolderBrowserDialog dialog = new FolderBrowserDialog())
             {
-                dialog.Description = "Select game folder";
+                dialog.Description = T("Select game folder", "Выберите папку игры");
                 dialog.SelectedPath = Directory.Exists(pathBox.Text) ? pathBox.Text : "";
                 if (dialog.ShowDialog(this) == DialogResult.OK)
                     ApplyGamePath(dialog.SelectedPath, true);
@@ -475,7 +575,13 @@ namespace RpgmvpConverterWinForms
         private void TryApplyStartupGamePath()
         {
             if (closing || IsDisposed) return;
-            string initialRoot = TryFindGameRoot(AppDomain.CurrentDomain.BaseDirectory);
+            bool hasStartupArgument = !string.IsNullOrWhiteSpace(startupGamePath);
+            string requestedPath = hasStartupArgument
+                ? startupGamePath
+                : AppDomain.CurrentDomain.BaseDirectory;
+            string initialRoot = TryFindGameRoot(requestedPath);
+            if (string.IsNullOrWhiteSpace(initialRoot) && hasStartupArgument && Directory.Exists(requestedPath))
+                initialRoot = requestedPath;
             if (!string.IsNullOrWhiteSpace(initialRoot))
                 ApplyGamePath(initialRoot, false);
         }
@@ -485,18 +591,20 @@ namespace RpgmvpConverterWinForms
             string path = pathBox.Text.Trim();
             if (!Directory.Exists(path))
             {
-                detectedEngineLabel.Text = "Engine: not detected";
+                detectedEngineLabel.Text = T("Engine: not detected", "Движок: не определён");
                 detectedEngineLabel.ForeColor = mutedColor;
-                scanSummaryLabel.Text = "Select a folder or drop it into this window.";
+                scanSummaryLabel.Text = T("Select a folder or drop it into this window.", "Выберите папку или перетащите её в это окно.");
                 UpdateEngineContext(GameEngine.Unknown);
                 return;
             }
 
             TryAutoDetectKey(path);
             GameEngine engine = DetectEngineFast(path);
-            detectedEngineLabel.Text = "Engine: " + EngineName(engine);
+            detectedEngineLabel.Text = T("Engine: ", "Движок: ") + EngineName(engine);
             detectedEngineLabel.ForeColor = EngineColor(engine);
-            scanSummaryLabel.Text = "Ready to scan. Click Dry Run / Scan to inspect files before extraction.";
+            scanSummaryLabel.Text = T(
+                "Ready to scan. Click Dry Run / Scan to inspect files before extraction.",
+                "Готово к проверке. Нажмите «Проверить», чтобы просмотреть файлы перед извлечением.");
             UpdateEngineContext(engine);
             WarmPortableRuntimeInBackground(engine);
         }
@@ -515,10 +623,12 @@ namespace RpgmvpConverterWinForms
             try
             {
                 ScanSummary summary = BuildScanSummary(rootPath);
-                detectedEngineLabel.Text = "Engine: " + EngineName(summary.Engine);
+                detectedEngineLabel.Text = T("Engine: ", "Движок: ") + EngineName(summary.Engine);
                 detectedEngineLabel.ForeColor = EngineColor(summary.Engine);
                 scanSummaryLabel.Text = string.Format(
-                    "{0} archive(s), {1} candidate file(s), input size {2} (not estimated output)",
+                    T(
+                        "{0} archive(s), {1} candidate file(s), input size {2} (not estimated output)",
+                        "{0} архив(а), {1} подходящих файлов, входной размер {2} (не оценка результата)"),
                     summary.ArchiveCount,
                     summary.FileCount,
                     FormatBytes(summary.TotalBytes));
@@ -574,6 +684,26 @@ namespace RpgmvpConverterWinForms
             if (engine == GameEngine.Nwjs)
             {
                 await StartNwjsExtractionAsync();
+                return;
+            }
+            if (engine == GameEngine.WolfRpg)
+            {
+                await StartWolfExtractionAsync();
+                return;
+            }
+            if (engine == GameEngine.TyranoScript)
+            {
+                await StartTyranoExtractionAsync();
+                return;
+            }
+            if (engine == GameEngine.JavaJar)
+            {
+                await StartJavaExtractionAsync();
+                return;
+            }
+            if (engine == GameEngine.Flash)
+            {
+                await StartFlashExtractionAsync();
                 return;
             }
             if (engine != GameEngine.RpgMaker)
@@ -929,12 +1059,17 @@ namespace RpgmvpConverterWinForms
 
         private void UpdateNwjsProgress(int processed, int total, long bytes)
         {
+            UpdateLocalProgress("NWJS", processed, total, bytes);
+        }
+
+        private void UpdateLocalProgress(string operation, int processed, int total, long bytes)
+        {
             BeginUi(delegate
             {
                 progressBar.Maximum = Math.Max(total, 1);
                 progressBar.Value = Math.Min(processed, progressBar.Maximum);
-                statusLabel.Text = "NWJS: " + processed + " / " + total;
-                statsLabel.Text = "Sources: " + processed + " / " + total + " | Size: " + FormatBytes(bytes);
+                statusLabel.Text = operation + ": " + processed + " / " + total;
+                statsLabel.Text = T("Sources: ", "Источники: ") + processed + " / " + total + T(" | Size: ", " | Размер: ") + FormatBytes(bytes);
             });
         }
 
@@ -946,11 +1081,302 @@ namespace RpgmvpConverterWinForms
 
         private NwjsCopyStats ExtractNwjsZipArchive(string archivePath, string outputDir)
         {
+            return ExtractZipArchive(archivePath, outputDir, Path.Combine("archives", Path.GetFileNameWithoutExtension(archivePath)));
+        }
+
+        private async Task StartTyranoExtractionAsync()
+        {
+            await StartLocalExtractionAsync("TyranoScript", "tyrano", delegate(string rootPath, string outputDir)
+            {
+                return RunTyranoExtraction(rootPath, outputDir);
+            });
+        }
+
+        private async Task StartJavaExtractionAsync()
+        {
+            await StartLocalExtractionAsync("Java JAR", "java", delegate(string rootPath, string outputDir)
+            {
+                return RunJavaExtraction(rootPath, outputDir);
+            });
+        }
+
+        private async Task StartFlashExtractionAsync()
+        {
+            await StartLocalExtractionAsync("Flash SWF experimental", "flash", delegate(string rootPath, string outputDir)
+            {
+                return RunFlashExtraction(rootPath, outputDir);
+            });
+        }
+
+        private async Task StartWolfExtractionAsync()
+        {
+            await StartLocalExtractionAsync("WOLF RPG", "wolf", delegate(string rootPath, string outputDir)
+            {
+                return RunWolfExtraction(rootPath, outputDir);
+            });
+        }
+
+        private async Task StartLocalExtractionAsync(string engineName, string outputFolder, Func<string, string, OperationResult> extract)
+        {
+            if (currentRun != null || externalRunning) return;
+
+            string rootPath = pathBox.Text.Trim();
+            if (!Directory.Exists(rootPath))
+            {
+                WriteLog("Invalid path");
+                return;
+            }
+
+            string outputDir = Path.Combine(rootPath, "extracted", outputFolder);
+            lastOutputDir = outputDir;
+            localCopyCancellationRequested = false;
+            SetExternalRunningState(true, engineName);
+            WriteLog(engineName + " extraction started");
+
+            OperationResult result;
+            try
+            {
+                result = await Task.Run(delegate { return extract(rootPath, outputDir); });
+            }
+            catch (OperationCanceledException)
+            {
+                result = OperationResult.Failed(engineName, outputDir, "cancelled");
+            }
+            catch (Exception ex)
+            {
+                result = OperationResult.Failed(engineName, outputDir, ex.Message);
+            }
+            SetExternalRunningState(false, engineName);
+            CompleteExternalOperation(result);
+        }
+
+        private OperationResult RunTyranoExtraction(string rootPath, string outputDir)
+        {
+            DateTime start = DateTime.UtcNow;
+            Directory.CreateDirectory(outputDir);
+            List<string> files = GetTyranoFiles(rootPath, outputDir);
+            NwjsCopyStats stats = CopyLooseFiles(rootPath, files, outputDir, "");
+            return new OperationResult("TyranoScript", outputDir, stats.Extracted, stats.Bytes, 0, stats.Renamed, stats.Skipped, DateTime.UtcNow - start);
+        }
+
+        private OperationResult RunJavaExtraction(string rootPath, string outputDir)
+        {
+            DateTime start = DateTime.UtcNow;
+            Directory.CreateDirectory(outputDir);
+            List<string> archives = FindJavaArchives(rootPath);
+            int extracted = 0;
+            long bytes = 0;
+            int errors = 0;
+            int renamed = 0;
+            int skipped = 0;
+
+            for (int i = 0; i < archives.Count; i++)
+            {
+                ThrowIfLocalCopyCancelled();
+                string archive = archives[i];
+                try
+                {
+                    NwjsCopyStats stats = ExtractZipArchive(archive, outputDir, Path.Combine("archives", Path.GetFileNameWithoutExtension(archive)));
+                    extracted += stats.Extracted;
+                    bytes += stats.Bytes;
+                    renamed += stats.Renamed;
+                    skipped += stats.Skipped;
+                }
+                catch (InvalidDataException)
+                {
+                    skipped++;
+                    SafeLog("Java JAR is not ZIP-compatible and was skipped: " + archive);
+                }
+                catch (Exception ex)
+                {
+                    errors++;
+                    SafeLog("WARN:" + archive + ":" + ex.Message);
+                }
+                UpdateLocalProgress("Java JAR", i + 1, archives.Count, bytes);
+            }
+
+            return new OperationResult("Java JAR", outputDir, extracted, bytes, errors, renamed, skipped, DateTime.UtcNow - start);
+        }
+
+        private OperationResult RunFlashExtraction(string rootPath, string outputDir)
+        {
+            DateTime start = DateTime.UtcNow;
+            Directory.CreateDirectory(outputDir);
+            List<string> files = FindFlashFiles(rootPath);
+            int extracted = 0;
+            long bytes = 0;
+            int errors = 0;
+            int renamed = 0;
+            int skipped = 0;
+
+            for (int i = 0; i < files.Count; i++)
+            {
+                ThrowIfLocalCopyCancelled();
+                string source = files[i];
+                try
+                {
+                    bool collision;
+                    string destination = GetSafeOutputPath(outputDir, Path.Combine("originals", Path.GetFileName(source)));
+                    destination = GetUniqueFilePath(destination, out collision);
+                    Directory.CreateDirectory(Path.GetDirectoryName(destination));
+                    File.Copy(source, destination);
+                    extracted++;
+                    bytes += SafeFileLength(destination);
+                    if (collision) renamed++;
+
+                    NwjsCopyStats images = ExtractSwfImages(source, outputDir);
+                    extracted += images.Extracted;
+                    bytes += images.Bytes;
+                    renamed += images.Renamed;
+                    skipped += images.Skipped;
+                }
+                catch (NotSupportedException ex)
+                {
+                    skipped++;
+                    SafeLog("Flash inspection skipped: " + ex.Message);
+                }
+                catch (Exception ex)
+                {
+                    errors++;
+                    SafeLog("WARN:" + source + ":" + ex.Message);
+                }
+                UpdateLocalProgress("Flash", i + 1, files.Count, bytes);
+            }
+
+            return new OperationResult("Flash SWF experimental", outputDir, extracted, bytes, errors, renamed, skipped, DateTime.UtcNow - start);
+        }
+
+        private OperationResult RunWolfExtraction(string rootPath, string outputDir)
+        {
+            DateTime start = DateTime.UtcNow;
+            Directory.CreateDirectory(outputDir);
+            List<string> looseFiles = GetWolfLooseFiles(rootPath, outputDir);
+            List<string> archives = FindWolfArchiveFiles(rootPath);
+            NwjsCopyStats loose = CopyLooseFiles(rootPath, looseFiles, outputDir, "loose");
+            int extracted = loose.Extracted;
+            long bytes = loose.Bytes;
+            int errors = 0;
+            int renamed = loose.Renamed;
+            int skipped = loose.Skipped;
+
+            if (archives.Count > 0)
+            {
+                string staging = ToolRuntime.CreateSessionDirectory("wolf-run-" + Guid.NewGuid().ToString("N"));
+                try
+                {
+                    List<string> stagedArchives = StageWolfFiles(rootPath, archives, staging);
+                    string cliPath = ToolRuntime.EnsureWolfCliExtracted();
+                    string gameExe = FindWolfGameExecutable(staging);
+                    ProcessStartInfo psi = new ProcessStartInfo
+                    {
+                        FileName = cliPath,
+                        WorkingDirectory = staging,
+                        Arguments = !string.IsNullOrWhiteSpace(gameExe)
+                            ? QuoteArg(gameExe)
+                            : string.Join(" ", stagedArchives.Select(QuoteArg)),
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        CreateNoWindow = true,
+                        StandardOutputEncoding = Encoding.UTF8,
+                        StandardErrorEncoding = Encoding.UTF8
+                    };
+                    int exitCode = RunExternalProcess(psi, delegate(string line) { SafeLog(line); });
+                    if (exitCode != 0) errors++;
+
+                    foreach (string stagedArchive in stagedArchives)
+                    {
+                        string unpacked = Path.Combine(Path.GetDirectoryName(stagedArchive), Path.GetFileNameWithoutExtension(stagedArchive));
+                        if (!Directory.Exists(unpacked))
+                        {
+                            skipped++;
+                            continue;
+                        }
+
+                        string relative = Path.ChangeExtension(MakeRelativePath(staging, stagedArchive), null);
+                        NwjsCopyStats copied = CopyLooseFiles(unpacked, EnumerateFilesSafe(unpacked, "*.*").ToList(), outputDir, Path.Combine("archives", relative));
+                        extracted += copied.Extracted;
+                        bytes += copied.Bytes;
+                        renamed += copied.Renamed;
+                        skipped += copied.Skipped;
+                    }
+                }
+                finally
+                {
+                    ToolRuntime.DeleteSessionDirectory(staging);
+                }
+            }
+
+            return new OperationResult("WOLF RPG", outputDir, extracted, bytes, errors, renamed, skipped, DateTime.UtcNow - start);
+        }
+
+        private static List<string> StageWolfFiles(string rootPath, IEnumerable<string> archives, string staging)
+        {
+            List<string> result = new List<string>();
+            foreach (string archive in archives)
+            {
+                string relative = MakeRelativePath(rootPath, archive);
+                string destination = GetSafeChildPath(staging, relative);
+                Directory.CreateDirectory(Path.GetDirectoryName(destination));
+                File.Copy(archive, destination, true);
+                result.Add(destination);
+            }
+
+            foreach (string name in new[] { "GamePro.exe", "Game.exe" })
+            {
+                string source = Path.Combine(rootPath, name);
+                if (File.Exists(source))
+                    File.Copy(source, GetSafeChildPath(staging, name), true);
+            }
+            return result;
+        }
+
+        private static string FindWolfGameExecutable(string rootPath)
+        {
+            foreach (string name in new[] { "GamePro.exe", "Game.exe" })
+            {
+                string path = Path.Combine(rootPath, name);
+                if (File.Exists(path)) return path;
+            }
+            return "";
+        }
+
+        private NwjsCopyStats CopyLooseFiles(string relativeRoot, IEnumerable<string> files, string outputDir, string prefix)
+        {
             int extracted = 0;
             long bytes = 0;
             int renamed = 0;
             int skipped = 0;
-            string archiveName = Path.GetFileNameWithoutExtension(archivePath);
+            foreach (string source in files)
+            {
+                ThrowIfLocalCopyCancelled();
+                try
+                {
+                    string relative = MakeRelativePath(relativeRoot, source);
+                    string destination = GetSafeOutputPath(outputDir, string.IsNullOrWhiteSpace(prefix) ? relative : Path.Combine(prefix, relative));
+                    bool collision;
+                    destination = GetUniqueFilePath(destination, out collision);
+                    Directory.CreateDirectory(Path.GetDirectoryName(destination));
+                    File.Copy(source, destination);
+                    extracted++;
+                    bytes += SafeFileLength(destination);
+                    if (collision) renamed++;
+                }
+                catch (Exception ex)
+                {
+                    skipped++;
+                    SafeLog("WARN:" + source + ":" + ex.Message);
+                }
+            }
+            return new NwjsCopyStats(extracted, bytes, renamed, skipped);
+        }
+
+        private NwjsCopyStats ExtractZipArchive(string archivePath, string outputDir, string prefix)
+        {
+            int extracted = 0;
+            long bytes = 0;
+            int renamed = 0;
+            int skipped = 0;
             using (FileStream stream = File.OpenRead(archivePath))
             using (ZipArchive archive = new ZipArchive(stream, ZipArchiveMode.Read))
             {
@@ -963,7 +1389,7 @@ namespace RpgmvpConverterWinForms
                         continue;
                     }
 
-                    string destination = GetSafeOutputPath(outputDir, Path.Combine("archives", archiveName, entry.FullName));
+                    string destination = GetSafeOutputPath(outputDir, Path.Combine(prefix, entry.FullName));
                     bool collision;
                     destination = GetUniqueFilePath(destination, out collision);
                     Directory.CreateDirectory(Path.GetDirectoryName(destination));
@@ -976,6 +1402,129 @@ namespace RpgmvpConverterWinForms
                 }
             }
             return new NwjsCopyStats(extracted, bytes, renamed, skipped);
+        }
+
+        private NwjsCopyStats ExtractSwfImages(string source, string outputDir)
+        {
+            byte[] body = ReadSwfBody(source);
+            int position = GetSwfTagStart(body);
+            int extracted = 0;
+            long bytes = 0;
+            int renamed = 0;
+            int skipped = 0;
+            string swfName = Path.GetFileNameWithoutExtension(source);
+
+            while (position + 2 <= body.Length)
+            {
+                int tagHeader = ReadUInt16(body, position);
+                position += 2;
+                int tagCode = tagHeader >> 6;
+                int length = tagHeader & 0x3f;
+                if (length == 0x3f)
+                {
+                    if (position + 4 > body.Length) break;
+                    length = ReadInt32(body, position);
+                    position += 4;
+                }
+                if (length < 0 || position + length > body.Length) break;
+                if (tagCode == 0) break;
+
+                int imageOffset = 0;
+                int imageLength = 0;
+                int characterId = 0;
+                if (tagCode == 21 && length > 2)
+                {
+                    characterId = ReadUInt16(body, position);
+                    imageOffset = position + 2;
+                    imageLength = length - 2;
+                }
+                else if (tagCode == 35 && length > 6)
+                {
+                    characterId = ReadUInt16(body, position);
+                    imageOffset = position + 6;
+                    imageLength = Math.Min(ReadInt32(body, position + 2), length - 6);
+                }
+                else if (tagCode == 90 && length > 8)
+                {
+                    characterId = ReadUInt16(body, position);
+                    imageOffset = position + 8;
+                    imageLength = Math.Min(ReadInt32(body, position + 2), length - 8);
+                }
+
+                string extension = DetectImageExtension(body, imageOffset, imageLength);
+                if (!string.IsNullOrWhiteSpace(extension))
+                {
+                    string destination = GetSafeOutputPath(outputDir, Path.Combine("embedded", swfName, "image-" + characterId + extension));
+                    bool collision;
+                    destination = GetUniqueFilePath(destination, out collision);
+                    Directory.CreateDirectory(Path.GetDirectoryName(destination));
+                    using (FileStream output = File.Create(destination))
+                        output.Write(body, imageOffset, imageLength);
+                    extracted++;
+                    bytes += SafeFileLength(destination);
+                    if (collision) renamed++;
+                }
+                else if (imageLength > 0)
+                {
+                    skipped++;
+                }
+                position += length;
+            }
+            return new NwjsCopyStats(extracted, bytes, renamed, skipped);
+        }
+
+        private static byte[] ReadSwfBody(string path)
+        {
+            byte[] file = File.ReadAllBytes(path);
+            if (file.Length < 8 || file[1] != (byte)'W' || file[2] != (byte)'S')
+                throw new InvalidDataException("Invalid SWF header: " + path);
+            if (file[0] == (byte)'F')
+                return file.Skip(8).ToArray();
+            if (file[0] == (byte)'C')
+            {
+                if (file.Length < 14) throw new InvalidDataException("Compressed SWF is incomplete: " + path);
+                using (MemoryStream input = new MemoryStream(file, 10, file.Length - 14))
+                using (DeflateStream deflate = new DeflateStream(input, CompressionMode.Decompress))
+                using (MemoryStream output = new MemoryStream())
+                {
+                    deflate.CopyTo(output);
+                    return output.ToArray();
+                }
+            }
+            if (file[0] == (byte)'Z')
+                throw new NotSupportedException("LZMA-compressed ZWS is not supported yet: " + path);
+            throw new InvalidDataException("Unknown SWF compression: " + path);
+        }
+
+        private static int GetSwfTagStart(byte[] body)
+        {
+            if (body.Length < 5) throw new InvalidDataException("SWF body is incomplete.");
+            int rectBits = 5 + 4 * (body[0] >> 3);
+            int position = (rectBits + 7) / 8 + 4;
+            if (position > body.Length) throw new InvalidDataException("SWF frame header is incomplete.");
+            return position;
+        }
+
+        private static string DetectImageExtension(byte[] data, int offset, int length)
+        {
+            if (offset < 0 || length < 3 || offset + length > data.Length) return "";
+            if (data[offset] == 0xff && data[offset + 1] == 0xd8 && data[offset + 2] == 0xff) return ".jpg";
+            if (length >= 8 && data[offset] == 0x89 && data[offset + 1] == 0x50 && data[offset + 2] == 0x4e && data[offset + 3] == 0x47) return ".png";
+            if (length >= 6 && data[offset] == (byte)'G' && data[offset + 1] == (byte)'I' && data[offset + 2] == (byte)'F') return ".gif";
+            return "";
+        }
+
+        private static int ReadUInt16(byte[] data, int offset)
+        {
+            return data[offset] | (data[offset + 1] << 8);
+        }
+
+        private static int ReadInt32(byte[] data, int offset)
+        {
+            return data[offset]
+                | (data[offset + 1] << 8)
+                | (data[offset + 2] << 16)
+                | (data[offset + 3] << 24);
         }
 
         private async Task StartPortableScriptExtractionAsync(string engineName, string outputFolder, string scriptFile, string resourceName)
@@ -1146,19 +1695,19 @@ namespace RpgmvpConverterWinForms
         {
             try
             {
-                statusLabel.Text = "Preparing built-in runtime...";
-                SetRuntimeStatus("Runtime: preparing silently...", warningColor);
+                statusLabel.Text = T("Preparing built-in runtime...", "Подготовка встроенного runtime...");
+                SetRuntimeStatus(T("Runtime: preparing silently...", "Runtime: подготовка в фоне..."), warningColor);
                 Task warmup;
                 lock (runtimeWarmupSync) warmup = runtimeWarmupTask;
                 if (warmup != null && !warmup.IsCompleted)
                     warmup.Wait();
                 PortableRuntime.EnsureExtracted();
-                SetRuntimeStatus("Runtime: ready", successColor);
+                SetRuntimeStatus(T("Runtime: ready", "Runtime: готов"), successColor);
                 return true;
             }
             catch (Exception ex)
             {
-                SetRuntimeStatus("Runtime: unavailable", dangerColor);
+                SetRuntimeStatus(T("Runtime: unavailable", "Runtime: недоступен"), dangerColor);
                 WriteLog("Built-in runtime failed: " + ex.Message);
                 MessageBox.Show(
                     "Could not prepare the built-in extraction runtime.\n\n" + ex.Message,
@@ -1217,14 +1766,14 @@ namespace RpgmvpConverterWinForms
             if (currentRun.IsPaused)
             {
                 currentRun.Resume();
-                pauseButton.Text = "Pause";
+                pauseButton.Text = T("Pause", "Пауза");
                 WriteLog("RPGM extraction resumed.");
             }
             else
             {
                 currentRun.Pause();
-                pauseButton.Text = "Resume";
-                statusLabel.Text = "Paused";
+                pauseButton.Text = T("Resume", "Продолжить");
+                statusLabel.Text = T("Paused", "Приостановлено");
                 WriteLog("RPGM extraction paused.");
             }
         }
@@ -1245,7 +1794,7 @@ namespace RpgmvpConverterWinForms
                 }
             }
             cancelButton.Enabled = false;
-            statusLabel.Text = "Stopping...";
+            statusLabel.Text = T("Stopping...", "Остановка...");
             WriteLog("Stop requested.");
         }
 
@@ -1258,8 +1807,10 @@ namespace RpgmvpConverterWinForms
             double elapsed = Math.Max((DateTime.UtcNow - currentRun.StartUtc).TotalSeconds, 0.1);
             double speed = processed / elapsed;
             string eta = speed > 0 && !currentRun.IsPaused ? FormatDuration((currentRun.TotalCount - processed) / speed) : "--:--";
-            statusLabel.Text = currentRun.IsPaused ? "Paused" : "RPGM: " + processed + " / " + currentRun.TotalCount;
-            statsLabel.Text = "Processed: " + processed + " / " + currentRun.TotalCount + " | Size: " + FormatBytes(currentRun.TotalBytes) + " | ETA: " + eta;
+            statusLabel.Text = currentRun.IsPaused ? T("Paused", "Приостановлено") : "RPGM: " + processed + " / " + currentRun.TotalCount;
+            statsLabel.Text = T("Processed: ", "Обработано: ") + processed + " / " + currentRun.TotalCount
+                + T(" | Size: ", " | Размер: ") + FormatBytes(currentRun.TotalBytes)
+                + T(" | ETA: ", " | Осталось: ") + eta;
         }
 
         private void FinishRpgmExtraction(ConversionRun finished)
@@ -1284,13 +1835,15 @@ namespace RpgmvpConverterWinForms
             lastOutputDir = result.OutputDir;
             openOutputButton.Enabled = Directory.Exists(lastOutputDir);
             progressBar.Value = progressBar.Maximum;
-            statusLabel.Text = result.Errors == 0 ? "Complete" : "Complete with warnings";
-            statsLabel.Text = "Extracted: " + result.Extracted + " | Size: " + FormatBytes(result.Bytes) + " | Errors: " + result.Errors
-                + (result.Skipped > 0 ? " | Skipped: " + result.Skipped : "");
+            statusLabel.Text = result.Errors == 0 ? T("Complete", "Завершено") : T("Complete with warnings", "Завершено с предупреждениями");
+            statsLabel.Text = T("Extracted: ", "Извлечено: ") + result.Extracted
+                + T(" | Size: ", " | Размер: ") + FormatBytes(result.Bytes)
+                + T(" | Errors: ", " | Ошибки: ") + result.Errors
+                + (result.Skipped > 0 ? T(" | Skipped: ", " | Пропущено: ") + result.Skipped : "");
             UpdateActionTooltips();
             string reportPath = SaveReport(result);
             WriteLog("Report: " + reportPath);
-            using (ResultsDialog dialog = new ResultsDialog(result, reportPath))
+            using (ResultsDialog dialog = new ResultsDialog(result, reportPath, russianUi))
                 dialog.ShowDialog(this);
         }
 
@@ -1333,7 +1886,7 @@ namespace RpgmvpConverterWinForms
                 {
                     progressBar.Maximum = 1;
                     progressBar.Value = 0;
-                    statusLabel.Text = operation + ": starting...";
+                    statusLabel.Text = operation + T(": starting...", ": запуск...");
                     statsLabel.Text = "";
                 }
                 else
@@ -1348,7 +1901,7 @@ namespace RpgmvpConverterWinForms
         {
             logExpanded = !logExpanded;
             logPanel.Visible = logExpanded;
-            toggleLogButton.Text = logExpanded ? "Hide Log" : "Show Log";
+            toggleLogButton.Text = logExpanded ? T("Hide Log", "Скрыть лог") : T("Show Log", "Показать лог");
             UpdateWindowHeight();
             UpdateActionTooltips();
         }
@@ -1370,30 +1923,58 @@ namespace RpgmvpConverterWinForms
             switch (engine)
             {
                 case GameEngine.RpgMaker:
-                    keyLabel.Text = "RPGM HEX key";
-                    extractionHintLabel.Text = "Encrypted image assets. The key is detected automatically when possible.";
+                    keyLabel.Text = T("RPGM HEX key", "HEX-ключ RPGM");
+                    extractionHintLabel.Text = T(
+                        "Encrypted image assets. The key is detected automatically when possible.",
+                        "Зашифрованные изображения. Ключ определяется автоматически, когда это возможно.");
                     break;
                 case GameEngine.Unity:
-                    extractionHintLabel.Text = "Choose the Unity asset types to export.";
+                    extractionHintLabel.Text = T("Choose the Unity asset types to export.", "Выберите типы ресурсов Unity для извлечения.");
                     break;
                 case GameEngine.Renpy:
-                    extractionHintLabel.Text = "RPA archives will be extracted into separate folders.";
+                    extractionHintLabel.Text = T("RPA archives will be extracted into separate folders.", "Архивы RPA будут извлечены в отдельные папки.");
                     break;
                 case GameEngine.Godot:
-                    extractionHintLabel.Text = "Standard unencrypted PCK archives will be extracted.";
+                    extractionHintLabel.Text = T("Standard unencrypted PCK archives will be extracted.", "Будут извлечены стандартные незашифрованные архивы PCK.");
                     break;
                 case GameEngine.Kirikiri:
-                    extractionHintLabel.Text = "Standard unencrypted XP3 archives will be extracted.";
+                    extractionHintLabel.Text = T("Standard unencrypted XP3 archives will be extracted.", "Будут извлечены стандартные незашифрованные архивы XP3.");
                     break;
                 case GameEngine.Unreal:
-                    keyLabel.Text = "Unreal AES key";
-                    extractionHintLabel.Text = "Experimental PAK extraction. AES key is optional; Oodle and IoStore are reported.";
+                    keyLabel.Text = T("Unreal AES key", "AES-ключ Unreal");
+                    extractionHintLabel.Text = T(
+                        "Experimental PAK extraction. AES key is optional; Oodle and IoStore are reported.",
+                        "Экспериментальное извлечение PAK. AES-ключ необязателен; Oodle и IoStore отмечаются в отчёте.");
                     break;
                 case GameEngine.Nwjs:
-                    extractionHintLabel.Text = "NWJS files will be copied. ZIP-compatible package.nw archives will be unpacked.";
+                    extractionHintLabel.Text = T(
+                        "NWJS files will be copied. ZIP-compatible package.nw archives will be unpacked.",
+                        "Файлы NWJS будут скопированы. ZIP-совместимые архивы package.nw будут распакованы.");
+                    break;
+                case GameEngine.WolfRpg:
+                    extractionHintLabel.Text = T(
+                        "WOLF archives use the embedded UberWolf CLI. Loose Data files are copied too.",
+                        "Архивы WOLF извлекаются встроенным UberWolf CLI. Открытые файлы Data также копируются.");
+                    break;
+                case GameEngine.TyranoScript:
+                    extractionHintLabel.Text = T(
+                        "TyranoScript project data will be copied with its original folder structure.",
+                        "Данные проекта TyranoScript будут скопированы с исходной структурой папок.");
+                    break;
+                case GameEngine.JavaJar:
+                    extractionHintLabel.Text = T(
+                        "Java JAR archives will be safely unpacked into separate folders.",
+                        "Архивы Java JAR будут безопасно распакованы в отдельные папки.");
+                    break;
+                case GameEngine.Flash:
+                    extractionHintLabel.Text = T(
+                        "Experimental Flash inspection copies SWF files and extracts embedded JPEG, PNG and GIF images.",
+                        "Экспериментальный анализ Flash копирует SWF и извлекает встроенные JPEG, PNG и GIF.");
                     break;
                 default:
-                    extractionHintLabel.Text = "Select a supported game folder to see its extraction options.";
+                    extractionHintLabel.Text = T(
+                        "Select a supported game folder to see its extraction options.",
+                        "Выберите поддерживаемую папку игры, чтобы увидеть доступные действия.");
                     break;
             }
 
@@ -1420,7 +2001,11 @@ namespace RpgmvpConverterWinForms
                 || engine == GameEngine.Godot
                 || engine == GameEngine.Kirikiri
                 || engine == GameEngine.Unreal
-                || engine == GameEngine.Nwjs;
+                || engine == GameEngine.Nwjs
+                || engine == GameEngine.WolfRpg
+                || engine == GameEngine.TyranoScript
+                || engine == GameEngine.JavaJar
+                || engine == GameEngine.Flash;
         }
 
         private void UpdateUnlockerLayout(bool visible)
@@ -1462,10 +2047,11 @@ namespace RpgmvpConverterWinForms
 
         private void ConfigureActionTooltips()
         {
-            SetActionTooltip(pathBox, "Drop a game folder here or choose it with Browse.");
-            SetActionTooltip(browseButton, "Select the root folder of a game.");
-            SetActionTooltip(dryRunButton, "Inspect supported archives and estimate the input size without extracting files.");
-            SetActionTooltip(toggleLogButton, "Show or hide technical extraction messages.");
+            SetActionTooltip(pathBox, T("Drop a game folder here or choose it with Browse.", "Перетащите папку игры сюда или выберите её через «Обзор»."));
+            SetActionTooltip(browseButton, T("Select the root folder of a game.", "Выберите корневую папку игры."));
+            SetActionTooltip(dryRunButton, T("Inspect supported archives and estimate the input size without extracting files.", "Проверьте архивы и входной размер без извлечения файлов."));
+            SetActionTooltip(toggleLogButton, T("Show or hide technical extraction messages.", "Показать или скрыть технические сообщения."));
+            SetActionTooltip(languageBox, T("Switch interface language.", "Переключить язык интерфейса."));
             UpdateActionTooltips();
         }
 
@@ -1474,21 +2060,24 @@ namespace RpgmvpConverterWinForms
             if (actionToolTip == null) return;
             bool busy = currentRun != null || externalRunning;
             SetActionTooltip(startButton, busy
-                ? "Wait for the current operation to finish."
+                ? T("Wait for the current operation to finish.", "Дождитесь завершения текущей операции.")
                 : CanExtractAssets(selectedEngine)
-                    ? "Extract supported assets for the detected engine."
-                    : "Select a supported game folder first.");
+                    ? T("Extract supported assets for the detected engine.", "Извлечь поддерживаемые ресурсы определённого движка.")
+                    : T("Select a supported game folder first.", "Сначала выберите поддерживаемую папку игры."));
             SetActionTooltip(unlockerButton, selectedEngine == GameEngine.Renpy
-                ? "Install the Ren'Py gallery unlocker. Try Soft mode first."
-                : "The gallery unlocker is available only for detected Ren'Py folders.");
+                ? T("Install the Ren'Py gallery unlocker. Try Soft mode first.", "Установить анлокер галереи Ren'Py. Сначала попробуйте мягкий режим.")
+                : T("The gallery unlocker is available only for detected Ren'Py folders.", "Анлокер галереи доступен только для определённых папок Ren'Py."));
             SetActionTooltip(removeUnlockerButton, removeUnlockerButton.Enabled
-                ? "Remove previously installed Ren'Py gallery unlocker files."
-                : "No installed Ren'Py gallery unlocker was found.");
-            SetActionTooltip(pauseButton, "Pause or resume RPG Maker asset conversion.");
-            SetActionTooltip(cancelButton, busy ? "Stop the current operation." : "No operation is currently running.");
+                ? T("Remove previously installed Ren'Py gallery unlocker files.", "Удалить ранее установленные файлы анлокера Ren'Py.")
+                : T("No installed Ren'Py gallery unlocker was found.", "Установленный анлокер Ren'Py не найден."));
+            SetActionTooltip(pauseButton, T("Pause or resume RPG Maker asset conversion.", "Приостановить или продолжить конвертацию RPG Maker."));
+            SetActionTooltip(cancelButton, busy ? T("Stop the current operation.", "Остановить текущую операцию.") : T("No operation is currently running.", "Сейчас нет выполняемой операции."));
             SetActionTooltip(openOutputButton, Directory.Exists(lastOutputDir)
-                ? "Open the most recent extraction output folder."
-                : "Run an extraction first to create an output folder.");
+                ? T("Open the most recent extraction output folder.", "Открыть папку последнего результата.")
+                : T("Run an extraction first to create an output folder.", "Сначала выполните извлечение, чтобы создать папку результата."));
+            SetActionTooltip(keyBox, selectedEngine == GameEngine.RpgMaker
+                ? T("The RPG Maker HEX key is filled automatically when possible. You can paste it manually if detection fails.", "HEX-ключ RPG Maker заполняется автоматически, когда это возможно. Если определение не сработало, вставьте ключ вручную.")
+                : T("Optional Unreal AES key. Leave it empty for unencrypted PAK archives.", "Необязательный AES-ключ Unreal. Для незашифрованных PAK оставьте поле пустым."));
         }
 
         private void SetActionTooltip(Control control, string text)
@@ -1528,18 +2117,26 @@ namespace RpgmvpConverterWinForms
         {
             if (!UsesPortableRuntime(engine))
             {
-                SetRuntimeStatus(engine == GameEngine.Unknown ? "Runtime: waiting for a supported folder" : "Runtime: not needed", mutedColor);
+                SetRuntimeStatus(
+                    engine == GameEngine.Unknown
+                        ? T("Runtime: waiting for a supported folder", "Runtime: выберите поддерживаемую папку")
+                        : T("Runtime: not needed", "Runtime: не требуется"),
+                    mutedColor);
                 return;
             }
             if (PortableRuntime.IsReady)
             {
-                SetRuntimeStatus("Runtime: ready", successColor);
+                SetRuntimeStatus(T("Runtime: ready", "Runtime: готов"), successColor);
                 return;
             }
 
             Task warmup;
             lock (runtimeWarmupSync) warmup = runtimeWarmupTask;
-            SetRuntimeStatus(warmup != null && !warmup.IsCompleted ? "Runtime: preparing silently..." : "Runtime: preparing after selection", warningColor);
+            SetRuntimeStatus(
+                warmup != null && !warmup.IsCompleted
+                    ? T("Runtime: preparing silently...", "Runtime: подготовка в фоне...")
+                    : T("Runtime: preparing after selection", "Runtime: подготовится после выбора"),
+                warningColor);
         }
 
         private void SetRuntimeStatus(string text, Color color)
@@ -1580,6 +2177,7 @@ namespace RpgmvpConverterWinForms
                 catch { }
             }
             PortableRuntime.Cleanup();
+            ToolRuntime.Cleanup();
         }
 
         private void WarmPortableRuntimeInBackground(GameEngine engine)
@@ -1587,13 +2185,13 @@ namespace RpgmvpConverterWinForms
             if (!UsesPortableRuntime(engine) || closing) return;
             if (PortableRuntime.IsReady)
             {
-                SetRuntimeStatus("Runtime: ready", successColor);
+                SetRuntimeStatus(T("Runtime: ready", "Runtime: готов"), successColor);
                 return;
             }
             lock (runtimeWarmupSync)
             {
                 if (runtimeWarmupTask != null) return;
-                SetRuntimeStatus("Runtime: preparing silently...", warningColor);
+                SetRuntimeStatus(T("Runtime: preparing silently...", "Runtime: подготовка в фоне..."), warningColor);
                 runtimeWarmupTask = Task.Run(delegate
                 {
                     bool ready = false;
@@ -1605,7 +2203,9 @@ namespace RpgmvpConverterWinForms
                     catch { }
                     BeginUi(delegate
                     {
-                        SetRuntimeStatus(ready ? "Runtime: ready" : "Runtime: unavailable", ready ? successColor : dangerColor);
+                        SetRuntimeStatus(
+                            ready ? T("Runtime: ready", "Runtime: готов") : T("Runtime: unavailable", "Runtime: недоступен"),
+                            ready ? successColor : dangerColor);
                     });
                 });
             }
@@ -1717,8 +2317,12 @@ namespace RpgmvpConverterWinForms
             if (HasRpgmFiles(rootPath)) return GameEngine.RpgMaker;
             if (IsGodotGame(rootPath)) return GameEngine.Godot;
             if (IsKirikiriGame(rootPath)) return GameEngine.Kirikiri;
+            if (IsWolfRpgGame(rootPath)) return GameEngine.WolfRpg;
+            if (IsTyranoScriptGame(rootPath)) return GameEngine.TyranoScript;
             if (IsUnrealGame(rootPath)) return GameEngine.Unreal;
             if (IsNwjsGame(rootPath)) return GameEngine.Nwjs;
+            if (IsJavaJarGame(rootPath)) return GameEngine.JavaJar;
+            if (IsFlashGame(rootPath)) return GameEngine.Flash;
             return GameEngine.Unknown;
         }
 
@@ -1730,8 +2334,12 @@ namespace RpgmvpConverterWinForms
             if (HasRpgmFilesFast(rootPath)) return GameEngine.RpgMaker;
             if (IsGodotGameFast(rootPath)) return GameEngine.Godot;
             if (IsKirikiriGameFast(rootPath)) return GameEngine.Kirikiri;
+            if (IsWolfRpgGame(rootPath)) return GameEngine.WolfRpg;
+            if (IsTyranoScriptGame(rootPath)) return GameEngine.TyranoScript;
             if (IsUnrealGameFast(rootPath)) return GameEngine.Unreal;
             if (IsNwjsGame(rootPath)) return GameEngine.Nwjs;
+            if (IsJavaJarGame(rootPath)) return GameEngine.JavaJar;
+            if (IsFlashGame(rootPath)) return GameEngine.Flash;
             return GameEngine.Unknown;
         }
 
@@ -1770,6 +2378,40 @@ namespace RpgmvpConverterWinForms
             bool hasPackageNw = File.Exists(Path.Combine(rootPath, "package.nw")) || Directory.Exists(Path.Combine(rootPath, "package.nw"));
             bool hasAppNw = File.Exists(Path.Combine(rootPath, "app.nw")) || Directory.Exists(Path.Combine(rootPath, "app.nw"));
             return hasWww || hasPackage || hasPackageNw || hasAppNw;
+        }
+
+        private static bool IsWolfRpgGame(string rootPath)
+        {
+            List<string> archives = FindWolfArchiveFiles(rootPath);
+            bool hasWolfArchive = archives.Any(delegate(string path)
+            {
+                return path.EndsWith(".wolf", StringComparison.OrdinalIgnoreCase);
+            });
+            bool hasGameExe = File.Exists(Path.Combine(rootPath, "Game.exe"))
+                || File.Exists(Path.Combine(rootPath, "GamePro.exe"));
+            string dataFolder = Path.Combine(rootPath, "Data");
+            bool hasLooseData = Directory.Exists(Path.Combine(dataFolder, "BasicData"))
+                || File.Exists(Path.Combine(dataFolder, "BasicData", "Game.dat"));
+            return hasWolfArchive || (hasGameExe && (archives.Count > 0 || hasLooseData));
+        }
+
+        private static bool IsTyranoScriptGame(string rootPath)
+        {
+            string dataFolder = Path.Combine(rootPath, "data");
+            return Directory.Exists(Path.Combine(dataFolder, "scenario"))
+                && (Directory.Exists(Path.Combine(dataFolder, "system"))
+                    || Directory.Exists(Path.Combine(rootPath, "tyrano"))
+                    || File.Exists(Path.Combine(rootPath, "index.html")));
+        }
+
+        private static bool IsJavaJarGame(string rootPath)
+        {
+            return EnumerateFilesTopLevelSafe(rootPath, "*.jar").Any();
+        }
+
+        private static bool IsFlashGame(string rootPath)
+        {
+            return EnumerateFilesTopLevelSafe(rootPath, "*.swf").Any();
         }
 
         private static bool HasRpgmFiles(string rootPath)
@@ -1911,6 +2553,30 @@ namespace RpgmvpConverterWinForms
                     .ToList();
                 archives = nwjsArchives.Count;
             }
+            else if (engine == GameEngine.WolfRpg)
+            {
+                List<string> wolfArchives = FindWolfArchiveFiles(rootPath);
+                files = GetWolfLooseFiles(rootPath, Path.Combine(rootPath, "extracted", "wolf"))
+                    .Concat(wolfArchives)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                archives = wolfArchives.Count;
+            }
+            else if (engine == GameEngine.TyranoScript)
+            {
+                files = GetTyranoFiles(rootPath, Path.Combine(rootPath, "extracted", "tyrano")).ToList();
+                archives = 0;
+            }
+            else if (engine == GameEngine.JavaJar)
+            {
+                files = FindJavaArchives(rootPath);
+                archives = files.Count();
+            }
+            else if (engine == GameEngine.Flash)
+            {
+                files = FindFlashFiles(rootPath);
+                archives = files.Count();
+            }
             else
             {
                 files = GetFilesToConvert(rootPath);
@@ -1966,6 +2632,62 @@ namespace RpgmvpConverterWinForms
                 .ToList();
         }
 
+        private static List<string> FindWolfArchiveFiles(string rootPath)
+        {
+            string[] extensions = { ".wolf", ".data", ".pak", ".bin", ".assets", ".content", ".res", ".resource" };
+            IEnumerable<string> roots = new[] { rootPath, Path.Combine(rootPath, "Data") }.Where(Directory.Exists);
+            return roots
+                .SelectMany(delegate(string folder) { return EnumerateFilesTopLevelSafe(folder, "*.*"); })
+                .Where(delegate(string path) { return extensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase); })
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private static List<string> GetWolfLooseFiles(string rootPath, string outputDir)
+        {
+            string dataFolder = Path.Combine(rootPath, "Data");
+            if (!Directory.Exists(dataFolder)) return new List<string>();
+            HashSet<string> archives = new HashSet<string>(FindWolfArchiveFiles(rootPath), StringComparer.OrdinalIgnoreCase);
+            return GetLooseFiles(dataFolder, outputDir)
+                .Where(delegate(string path) { return !archives.Contains(path); })
+                .ToList();
+        }
+
+        private static List<string> GetTyranoFiles(string rootPath, string outputDir)
+        {
+            string dataFolder = Path.Combine(rootPath, "data");
+            return Directory.Exists(dataFolder) ? GetLooseFiles(dataFolder, outputDir) : new List<string>();
+        }
+
+        private static List<string> FindJavaArchives(string rootPath)
+        {
+            return EnumerateFilesTopLevelSafe(rootPath, "*.jar")
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private static List<string> FindFlashFiles(string rootPath)
+        {
+            return EnumerateFilesTopLevelSafe(rootPath, "*.swf")
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private static List<string> GetLooseFiles(string sourceRoot, string outputDir)
+        {
+            string outputPrefix = AppendDirectorySeparator(Path.GetFullPath(outputDir));
+            string extractedPrefix = AppendDirectorySeparator(Path.GetFullPath(Path.Combine(sourceRoot, "extracted")));
+            return EnumerateFilesSafe(sourceRoot, "*.*")
+                .Where(delegate(string path)
+                {
+                    string fullPath = Path.GetFullPath(path);
+                    return !fullPath.StartsWith(outputPrefix, StringComparison.OrdinalIgnoreCase)
+                        && !fullPath.StartsWith(extractedPrefix, StringComparison.OrdinalIgnoreCase);
+                })
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
         private static List<string> GetNwjsLooseFiles(string rootPath, string outputDir)
         {
             List<string> roots = new List<string>();
@@ -2007,7 +2729,11 @@ namespace RpgmvpConverterWinForms
                 bool known = IsUnityGame(root)
                     || IsGodotGameFast(root)
                     || IsKirikiriGameFast(root)
+                    || IsWolfRpgGame(root)
+                    || IsTyranoScriptGame(root)
                     || IsUnrealGameFast(root)
+                    || IsJavaJarGame(root)
+                    || IsFlashGame(root)
                     || Directory.Exists(Path.Combine(root, "www"))
                     || Directory.Exists(Path.Combine(root, "game"))
                     || File.Exists(Path.Combine(root, "package.json"))
@@ -2044,6 +2770,10 @@ namespace RpgmvpConverterWinForms
                 case GameEngine.Kirikiri: return "KiriKiri XP3";
                 case GameEngine.Unreal: return "Unreal experimental";
                 case GameEngine.Nwjs: return "NWJS";
+                case GameEngine.WolfRpg: return "WOLF RPG";
+                case GameEngine.TyranoScript: return "TyranoScript";
+                case GameEngine.JavaJar: return "Java JAR";
+                case GameEngine.Flash: return "Flash SWF experimental";
                 default: return "not detected";
             }
         }
@@ -2059,6 +2789,10 @@ namespace RpgmvpConverterWinForms
                 case GameEngine.Kirikiri: return Color.FromArgb(255, 155, 95);
                 case GameEngine.Unreal: return Color.FromArgb(178, 178, 190);
                 case GameEngine.Nwjs: return Color.FromArgb(255, 183, 77);
+                case GameEngine.WolfRpg: return Color.FromArgb(110, 205, 150);
+                case GameEngine.TyranoScript: return Color.FromArgb(255, 140, 190);
+                case GameEngine.JavaJar: return Color.FromArgb(235, 155, 75);
+                case GameEngine.Flash: return Color.FromArgb(225, 80, 75);
                 default: return mutedColor;
             }
         }
@@ -2145,6 +2879,15 @@ namespace RpgmvpConverterWinForms
             return destination;
         }
 
+        private static string GetSafeChildPath(string rootPath, string relativePath)
+        {
+            string root = AppendDirectorySeparator(Path.GetFullPath(rootPath));
+            string destination = Path.GetFullPath(Path.Combine(rootPath, SanitizeRelativePath(relativePath)));
+            if (!destination.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Path escapes temporary folder: " + relativePath);
+            return destination;
+        }
+
         private static string GetUniqueFilePath(string path, out bool renamed)
         {
             string directory = Path.GetDirectoryName(path);
@@ -2183,7 +2926,11 @@ namespace RpgmvpConverterWinForms
             Godot,
             Kirikiri,
             Unreal,
-            Nwjs
+            Nwjs,
+            WolfRpg,
+            TyranoScript,
+            JavaJar,
+            Flash
         }
 
         private sealed class ScanSummary
@@ -2267,7 +3014,7 @@ namespace RpgmvpConverterWinForms
             {
                 return string.Join(Environment.NewLine, new[]
                 {
-                    "Game Asset Tool v1.6.1 report",
+                    "Game Asset Tool v1.7.0 report",
                     "Engine: " + Engine,
                     "Extracted files: " + Extracted,
                     "Extracted size: " + FormatBytes(Bytes),
@@ -2283,9 +3030,9 @@ namespace RpgmvpConverterWinForms
 
         private sealed class ResultsDialog : Form
         {
-            public ResultsDialog(OperationResult result, string reportPath)
+            public ResultsDialog(OperationResult result, string reportPath, bool russian)
             {
-                Text = "Extraction Results";
+                Text = russian ? "Результаты извлечения" : "Extraction Results";
                 StartPosition = FormStartPosition.CenterParent;
                 Size = new Size(620, 390);
                 MinimumSize = new Size(620, 390);
@@ -2294,7 +3041,9 @@ namespace RpgmvpConverterWinForms
 
                 Controls.Add(new Label
                 {
-                    Text = result.Errors == 0 ? "Extraction complete" : "Extraction complete with warnings",
+                    Text = result.Errors == 0
+                        ? (russian ? "Извлечение завершено" : "Extraction complete")
+                        : (russian ? "Извлечение завершено с предупреждениями" : "Extraction complete with warnings"),
                     Location = new Point(20, 18),
                     Size = new Size(560, 30),
                     Font = new Font("Segoe UI Semibold", 14f),
@@ -2317,7 +3066,7 @@ namespace RpgmvpConverterWinForms
 
                 Button openButton = new Button
                 {
-                    Text = "Open Output Folder",
+                    Text = russian ? "Открыть результат" : "Open Output Folder",
                     Location = new Point(20, 292),
                     Size = new Size(180, 34),
                     BackColor = Color.FromArgb(68, 197, 255),
@@ -2332,7 +3081,7 @@ namespace RpgmvpConverterWinForms
 
                 Button closeButton = new Button
                 {
-                    Text = "Close",
+                    Text = russian ? "Закрыть" : "Close",
                     Location = new Point(470, 292),
                     Size = new Size(110, 34),
                     BackColor = Color.FromArgb(45, 50, 60),
