@@ -12,6 +12,8 @@
 
 - Use `itch/itch_description.md` for the release description.
 - Use `itch/itch_form_template.txt` for project fields and tags.
+- Upload `itch/logo-game-asset-tool.png` as the project cover image.
+- Upload `itch/background-game-asset-tool.png` as the page background image.
 - Keep the existing screenshot and demo video.
 
 ## Manual Verification
