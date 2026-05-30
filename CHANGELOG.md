@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.6.1 - 2026-05-30
+
+- Fixed Unity extraction by filtering unsupported objects before reading them and exporting meshes through UnityPy's OBJ API.
+- Report Unity service objects and unavailable resources as skipped items instead of extraction errors.
+- Added NWJS file extraction for loose `www`, `package.nw` and `app.nw` folders plus ZIP-compatible `.nw` archives.
+- Hide the Ren'Py gallery unlocker outside relevant folders and show it again when installed files can be removed.
+- Added action tooltips, drag-and-drop highlighting and DPI-aware scaling for 125% and 150% Windows display settings.
+
 ## 1.6.0 - 2026-05-30
 
 - Reworked the main window around one `Extract Assets` action.
@@ -10,11 +18,6 @@
 - Added a visible silent-runtime status in the application header.
 - Restricted the embedded `.rpy` gallery unlocker to Ren'Py folders and removed incorrect NWJS unlocker guidance.
 - Improved disabled-button contrast so secondary actions remain readable before a folder is selected.
-- Fixed Unity extraction by filtering unsupported objects before reading them and exporting meshes through UnityPy's OBJ API.
-- Report Unity service objects and unavailable resources as skipped items instead of extraction errors.
-- Added NWJS file extraction for loose `www`, `package.nw` and `app.nw` folders plus ZIP-compatible `.nw` archives.
-- Hide the Ren'Py gallery unlocker outside relevant folders and show it again when installed files can be removed.
-- Added action tooltips, drag-and-drop highlighting and DPI-aware scaling for 125% and 150% Windows display settings.
 
 ## 1.5.2 - 2026-05-30
 
