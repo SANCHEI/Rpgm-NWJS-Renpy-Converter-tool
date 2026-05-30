@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | RPG Maker MV/MZ | Supported | RPGMVP and PNG_ conversion with key detection |
 | Ren'Py | Supported | RPA 2.0, 3.0, 3.2 and 4.0 through `unrpa==2.3.0` |
-| NWJS | Supported | Folder detection and gallery unlocker workflow |
+| NWJS | Detection only | Detects NWJS-style folders; no generic extractor or gallery unlocker |
 | Unity | Supported | Textures, videos, audio, OBJ meshes and direct media |
 | Godot 3/4 | Supported | Unencrypted PCK versions 1, 2 and 3, including embedded PCK |
 | KiriKiri | Supported | Standard unencrypted XP3 archives |

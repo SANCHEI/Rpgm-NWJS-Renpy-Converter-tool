@@ -39,6 +39,7 @@ internal static class ReleaseInspector
             MethodInfo detectEngine = formType.GetMethod("DetectEngine", BindingFlags.NonPublic | BindingFlags.Static);
             MethodInfo detectEngineFast = formType.GetMethod("DetectEngineFast", BindingFlags.NonPublic | BindingFlags.Static);
             MethodInfo tryFindGameRoot = formType.GetMethod("TryFindGameRoot", BindingFlags.NonPublic | BindingFlags.Static);
+            MethodInfo canInstallUnlocker = formType.GetMethod("CanInstallUnlocker", BindingFlags.NonPublic | BindingFlags.Static);
             string unityEngine = DetectEngine(detectEngine, Path.Combine(temp, "unity"), delegate(string path)
             {
                 Directory.CreateDirectory(Path.Combine(path, "Sample_Data"));
@@ -68,12 +69,26 @@ internal static class ReleaseInspector
                 Directory.CreateDirectory(path);
                 File.WriteAllBytes(Path.Combine(path, "pakchunk0-Windows.pak"), new byte[] { 0 });
             });
+            string nwjsEngine = DetectEngine(detectEngine, Path.Combine(temp, "nwjs"), delegate(string path)
+            {
+                Directory.CreateDirectory(path);
+                File.WriteAllText(Path.Combine(path, "package.json"), "{}");
+            });
+            string genericGameFolderEngine = DetectEngine(detectEngine, Path.Combine(temp, "generic-game-folder"), delegate(string path)
+            {
+                Directory.CreateDirectory(Path.Combine(path, "game"));
+            });
+            bool renpyUnlockerScope = (bool)canInstallUnlocker.Invoke(null, new object[] { Path.Combine(temp, "renpy") })
+                && !(bool)canInstallUnlocker.Invoke(null, new object[] { Path.Combine(temp, "nwjs") })
+                && !(bool)canInstallUnlocker.Invoke(null, new object[] { Path.Combine(temp, "generic-game-folder") });
             bool fastDetection = DetectExistingEngine(detectEngineFast, Path.Combine(temp, "unity")) == "Unity"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "renpy")) == "Renpy"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "rpgm")) == "RpgMaker"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "godot")) == "Godot"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "kirikiri")) == "Kirikiri"
-                && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "unreal")) == "Unreal";
+                && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "unreal")) == "Unreal"
+                && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "nwjs")) == "Nwjs"
+                && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "generic-game-folder")) == "Unknown";
 
             string rootLookup = Path.Combine(temp, "root-lookup");
             string nestedLookup = Path.Combine(rootLookup, "one", "two");
@@ -134,6 +149,9 @@ internal static class ReleaseInspector
             Console.WriteLine("DetectGodot=" + godotEngine);
             Console.WriteLine("DetectKirikiri=" + kirikiriEngine);
             Console.WriteLine("DetectUnreal=" + unrealEngine);
+            Console.WriteLine("DetectNwjs=" + nwjsEngine);
+            Console.WriteLine("DetectGenericGameFolder=" + genericGameFolderEngine);
+            Console.WriteLine("RenpyUnlockerScope=" + renpyUnlockerScope);
             Console.WriteLine("FastDetection=" + fastDetection);
             Console.WriteLine("FastRootLookup=" + fastRootLookup);
             Console.WriteLine("ContextualGui=" + contextualGui);
@@ -153,6 +171,9 @@ internal static class ReleaseInspector
                 && godotEngine == "Godot"
                 && kirikiriEngine == "Kirikiri"
                 && unrealEngine == "Unreal"
+                && nwjsEngine == "Nwjs"
+                && genericGameFolderEngine == "Unknown"
+                && renpyUnlockerScope
                 && fastDetection
                 && fastRootLookup
                 && contextualGui
@@ -190,6 +211,8 @@ internal static class ReleaseInspector
             object keyBox = GetField(formType, form, "keyBox");
             object keyLabel = GetField(formType, form, "keyLabel");
             object unityMode = GetField(formType, form, "unityExtractModeBox");
+            object extractionHint = GetField(formType, form, "extractionHintLabel");
+            object unlockerButton = GetField(formType, form, "unlockerButton");
             object logPanel = GetField(formType, form, "logPanel");
             object toggleLogButton = GetField(formType, form, "toggleLogButton");
             object runtimeStatus = GetField(formType, form, "runtimeStatusLabel");
@@ -218,7 +241,9 @@ internal static class ReleaseInspector
                 && GetString(keyLabel, "Text") == "Unreal AES key";
 
             updateContext.Invoke(form, new[] { Enum.Parse(engineType, "Nwjs") });
-            bool nwjs = !GetBool(startButton, "Enabled");
+            bool nwjs = !GetBool(startButton, "Enabled")
+                && !GetBool(unlockerButton, "Enabled")
+                && GetString(extractionHint, "Text").IndexOf("Unlocker", StringComparison.OrdinalIgnoreCase) < 0;
 
             int compactHeight = GetSizeHeight(form, "ClientSize");
             toggleLog.Invoke(form, null);

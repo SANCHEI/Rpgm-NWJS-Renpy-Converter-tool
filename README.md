@@ -4,7 +4,7 @@
 
 [**Watch Demo Video on YouTube**](https://youtu.be/BnjRjik9fk0)
 
-Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **Ren'Py**, **NWJS**, **Unity**, **Godot** and **KiriKiri** games. Experimental Unreal `.pak` extraction is included.
+Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **Ren'Py**, **Unity**, **Godot** and **KiriKiri** games. **NWJS** folders are detected for inspection. Experimental Unreal `.pak` extraction is included.
 
 ![Version](https://img.shields.io/badge/version-1.6.0-blue)
 ![.NET](https://img.shields.io/badge/.NET_Framework-4.7.2-blue)
@@ -25,7 +25,7 @@ Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **Re
 - Extracts standard unencrypted KiriKiri XP3 archives.
 - Extracts Unreal PAK archives in an experimental offline mode.
 - Preserves relative paths and renames collisions with suffixes such as `image (2).png`.
-- Installs and removes the Ren'Py / NWJS gallery unlocker.
+- Installs and removes the Ren'Py gallery unlocker.
 - Writes an extraction summary to the results dialog and `GameAssetTool-report.txt`.
 
 ## Usage
@@ -55,6 +55,10 @@ Each extractor writes `GameAssetTool-report.txt` into its own output folder.
 Ren'Py extraction uses the maintained [`unrpa`](https://github.com/Lattyware/unrpa) package and supports RPA `2.0`, `3.0`, `3.2` and `4.0` archives. The pinned `unrpa==2.3.0` package is embedded into `GameAssetTool.exe`.
 
 Archives are extracted into separate subfolders to prevent files from different RPA archives overwriting one another.
+
+## NWJS
+
+NWJS-style folders are detected, but a generic NWJS asset extractor is not included yet. The bundled gallery unlocker is not used for NWJS games: gallery state is usually stored in game-specific save data.
 
 ## Unity
 
@@ -86,7 +90,7 @@ The application does not download or redistribute an Oodle DLL. Oodle-compressed
 
 ## Gallery Unlocker
 
-The unlocker has separate buttons:
+The Ren'Py unlocker has separate buttons:
 
 - **Install Unlocker**
 - **Remove Unlocker**

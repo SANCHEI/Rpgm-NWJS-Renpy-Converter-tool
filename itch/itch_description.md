@@ -1,6 +1,6 @@
 # Game Asset Tool
 
-**Game Asset Tool** is a portable Windows utility for extracting game assets and installing a gallery unlocker for supported visual novel and game folders.
+**Game Asset Tool** is a portable Windows utility for extracting game assets and installing a gallery unlocker for supported Ren'Py visual novels.
 
 Drop a game folder into the window, review the detected engine with **Dry Run / Scan**, then run the matching extractor. Files are written into an `extracted` folder inside the selected game directory, so the original game files remain untouched.
 
@@ -32,7 +32,7 @@ Extracts `.rpa` archives for supported RPA formats `2.0`, `3.0`, `3.2` and `4.0`
 
 ### NWJS
 
-Detects NWJS-style game folders and provides the gallery unlocker workflow.
+Detects NWJS-style game folders for inspection. A generic NWJS asset extractor is not included yet. The bundled gallery unlocker is not used for NWJS games because gallery state is usually stored in game-specific save data.
 
 ### Unity
 
@@ -52,7 +52,7 @@ Provides experimental offline extraction for ordinary and Zlib-compressed `.pak`
 
 ## Gallery Unlocker
 
-The gallery unlocker is intended for supported Ren'Py and NWJS-style folders.
+The gallery unlocker is intended for supported Ren'Py folders.
 
 1. Select the game folder.
 2. Choose **Soft** mode first.

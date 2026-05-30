@@ -19,7 +19,7 @@ The default window is compact. Only settings relevant to the detected engine are
 | Choose the Unity asset types to export.                                  |
 | Asset type [ All v ]                                  [ Extract Assets ] |
 |                                                                          |
-| Gallery Unlocker for Ren'Py / NWJS                                       |
+| Gallery Unlocker for Ren'Py                                              |
 | [Soft v] [ Install Unlocker ] [ Remove Unlocker ]                        |
 |                                                                          |
 | [ Pause ] [ Cancel ] [ Open Output Folder ] [ Show Log ]                |
@@ -48,7 +48,7 @@ The **Show Log** button expands the same fixed-width window vertically.
 - Unity: Textures, Videos, Audio, Meshes or All filter.
 - Unreal: optional Unreal AES key field and experimental-mode notice.
 - Ren'Py, Godot and KiriKiri: extractor description without unnecessary inputs.
-- NWJS: unlocker guidance without an asset extraction action.
+- NWJS: detection-only notice without a generic extractor or gallery unlocker.
 
 ## Results Dialog
 

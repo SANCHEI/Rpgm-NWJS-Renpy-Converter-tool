@@ -48,10 +48,10 @@ draw.text(((400 - sub_width) // 2, 110), subtitle, font=subtitle_font, fill=acce
 
 # Features on left panel
 features = [
-    (accent, "RPGMVP / NWJS Converter"),
-    (success, "Unity Extractor"),
-    (pink, "Renpy RPA Extraction"),
-    (warning, "Gallery Unlocker"),
+    (accent, "RPG Maker MV / MZ"),
+    (success, "Unity Asset Extraction"),
+    (pink, "Ren'Py RPA / Unlocker"),
+    (warning, "Godot / XP3 / PAK"),
 ]
 
 y = 180

@@ -260,7 +260,7 @@ namespace RpgmvpConverterWinForms
             extractionPanel.Controls.Add(startButton);
             y += 82;
 
-            Controls.Add(CreateSectionLabel("Gallery Unlocker for Ren'Py / NWJS", y));
+            Controls.Add(CreateSectionLabel("Gallery Unlocker for Ren'Py", y));
             y += 22;
             unlockerModeBox = new ComboBox
             {
@@ -535,7 +535,7 @@ namespace RpgmvpConverterWinForms
                 await StartPortableScriptExtractionAsync("Unreal experimental", "unreal", "extract_unreal.py", "RpgmvpConverterWinForms.scripts.extract_unreal.py");
                 return;
             }
-            if (engine != GameEngine.RpgMaker && engine != GameEngine.Nwjs)
+            if (engine != GameEngine.RpgMaker)
             {
                 MessageBox.Show("No supported game assets found. Run Dry Run / Scan and check the selected folder.", "Game Asset Tool", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
@@ -874,9 +874,9 @@ namespace RpgmvpConverterWinForms
         private void InstallUnlocker()
         {
             string rootPath = pathBox.Text.Trim();
-            if (!Directory.Exists(rootPath) || !IsRpgmOrNwjsGame(rootPath))
+            if (!CanInstallUnlocker(rootPath))
             {
-                MessageBox.Show("Unlocker works with Ren'Py / NWJS-style game folders.", "Unlocker", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Unlocker works with Ren'Py game folders.", "Unlocker", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -934,6 +934,11 @@ namespace RpgmvpConverterWinForms
             string modsPath = Path.Combine(rootPath, "game", "_mods");
             if (!Directory.Exists(modsPath)) return Enumerable.Empty<string>();
             return Directory.EnumerateDirectories(modsPath, "ZLZK_UGU_*", SearchOption.TopDirectoryOnly).ToList();
+        }
+
+        private static bool CanInstallUnlocker(string rootPath)
+        {
+            return Directory.Exists(rootPath) && IsRenpyGame(rootPath);
         }
 
         private bool EnsurePortableRuntimeAvailable()
@@ -1099,8 +1104,7 @@ namespace RpgmvpConverterWinForms
             browseButton.Enabled = !running;
             dryRunButton.Enabled = !running;
             startButton.Enabled = !running;
-            unlockerButton.Enabled = !running;
-            removeUnlockerButton.Enabled = !running;
+            UpdateUnlockerControls(running);
             pauseButton.Enabled = running;
             cancelButton.Enabled = running;
             openOutputButton.Enabled = !running && Directory.Exists(lastOutputDir);
@@ -1116,8 +1120,7 @@ namespace RpgmvpConverterWinForms
                 browseButton.Enabled = !running;
                 dryRunButton.Enabled = !running;
                 startButton.Enabled = !running;
-                unlockerButton.Enabled = !running;
-                removeUnlockerButton.Enabled = !running;
+                UpdateUnlockerControls(running);
                 pauseButton.Enabled = false;
                 cancelButton.Enabled = running;
                 openOutputButton.Enabled = !running && Directory.Exists(lastOutputDir);
@@ -1155,6 +1158,7 @@ namespace RpgmvpConverterWinForms
             unityModeLabel.Visible = showUnityMode;
             unityExtractModeBox.Visible = showUnityMode;
             startButton.Enabled = !busy && CanExtractAssets(engine);
+            UpdateUnlockerControls(busy);
 
             switch (engine)
             {
@@ -1179,7 +1183,7 @@ namespace RpgmvpConverterWinForms
                     extractionHintLabel.Text = "Experimental PAK extraction. AES key is optional; Oodle and IoStore are reported.";
                     break;
                 case GameEngine.Nwjs:
-                    extractionHintLabel.Text = "No asset extractor selected. Use the Gallery Unlocker tools below.";
+                    extractionHintLabel.Text = "NWJS folder detected. A generic asset extractor is not implemented yet.";
                     break;
                 default:
                     extractionHintLabel.Text = "Select a supported game folder to see its extraction options.";
@@ -1187,6 +1191,15 @@ namespace RpgmvpConverterWinForms
             }
 
             UpdateRuntimeStatusForEngine(engine);
+        }
+
+        private void UpdateUnlockerControls(bool busy)
+        {
+            string rootPath = pathBox.Text.Trim();
+            bool canInstall = !busy && selectedEngine == GameEngine.Renpy && Directory.Exists(rootPath);
+            unlockerModeBox.Enabled = canInstall;
+            unlockerButton.Enabled = canInstall;
+            removeUnlockerButton.Enabled = !busy && GetUnlockerDirectories(rootPath).Any();
         }
 
         private static bool CanExtractAssets(GameEngine engine)
@@ -1393,7 +1406,7 @@ namespace RpgmvpConverterWinForms
             if (IsGodotGame(rootPath)) return GameEngine.Godot;
             if (IsKirikiriGame(rootPath)) return GameEngine.Kirikiri;
             if (IsUnrealGame(rootPath)) return GameEngine.Unreal;
-            if (IsRpgmOrNwjsGame(rootPath)) return GameEngine.Nwjs;
+            if (IsNwjsGame(rootPath)) return GameEngine.Nwjs;
             return GameEngine.Unknown;
         }
 
@@ -1406,7 +1419,7 @@ namespace RpgmvpConverterWinForms
             if (IsGodotGameFast(rootPath)) return GameEngine.Godot;
             if (IsKirikiriGameFast(rootPath)) return GameEngine.Kirikiri;
             if (IsUnrealGameFast(rootPath)) return GameEngine.Unreal;
-            if (IsRpgmOrNwjsGame(rootPath)) return GameEngine.Nwjs;
+            if (IsNwjsGame(rootPath)) return GameEngine.Nwjs;
             return GameEngine.Unknown;
         }
 
@@ -1438,12 +1451,11 @@ namespace RpgmvpConverterWinForms
                 || File.Exists(Path.Combine(rootPath, "renpy.exe"));
         }
 
-        private static bool IsRpgmOrNwjsGame(string rootPath)
+        private static bool IsNwjsGame(string rootPath)
         {
-            bool hasGame = Directory.Exists(Path.Combine(rootPath, "game"));
             bool hasWww = Directory.Exists(Path.Combine(rootPath, "www"));
             bool hasPackage = File.Exists(Path.Combine(rootPath, "package.json"));
-            return hasGame || hasWww || hasPackage;
+            return hasWww || hasPackage;
         }
 
         private static bool HasRpgmFiles(string rootPath)

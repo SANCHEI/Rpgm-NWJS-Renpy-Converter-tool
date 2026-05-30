@@ -8,6 +8,7 @@
 - Show RPG Maker and Unreal key input only when it is relevant.
 - Added a collapsible log panel and a compact default window height.
 - Added a visible silent-runtime status in the application header.
+- Restricted the embedded `.rpy` gallery unlocker to Ren'Py folders and marked NWJS as detection-only.
 
 ## 1.5.2 - 2026-05-30
 
