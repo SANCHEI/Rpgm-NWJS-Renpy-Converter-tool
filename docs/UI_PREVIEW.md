@@ -13,14 +13,11 @@ The default window is compact. Only settings relevant to the detected engine are
 | [ D:\Games\Example Game                                      ] [Browse] |
 |                                                                          |
 | Engine: Unity                                  [ Dry Run / Scan ]        |
-| 24 archive(s), 731 candidate file(s), estimated input 1.84 GB            |
+| 24 archive(s), 731 candidate file(s), input size 1.84 GB                 |
 |                                                                          |
 | Extract Assets                                                           |
 | Choose the Unity asset types to export.                                  |
 | Asset type [ All v ]                                  [ Extract Assets ] |
-|                                                                          |
-| Gallery Unlocker for Ren'Py                                              |
-| [Soft v] [ Install Unlocker ] [ Remove Unlocker ]                        |
 |                                                                          |
 | [ Pause ] [ Cancel ] [ Open Output Folder ] [ Show Log ]                |
 | [========================= 61% =====================]                     |
@@ -48,7 +45,9 @@ The **Show Log** button expands the same fixed-width window vertically.
 - Unity: Textures, Videos, Audio, Meshes or All filter.
 - Unreal: optional Unreal AES key field and experimental-mode notice.
 - Ren'Py, Godot and KiriKiri: extractor description without unnecessary inputs.
-- NWJS: detection-only notice without a generic extractor or gallery unlocker.
+- NWJS: copies loose files and safely unpacks ZIP-compatible `.nw` archives without a gallery unlocker.
+
+The Ren'Py gallery unlocker section is shown only for relevant Ren'Py folders or when previously installed files can be removed.
 
 ## Results Dialog
 

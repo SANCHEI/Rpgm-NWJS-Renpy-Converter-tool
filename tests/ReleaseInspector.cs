@@ -1,6 +1,8 @@
 using System;
+using System.Collections;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
 
@@ -22,6 +24,10 @@ internal static class ReleaseInspector
             Assembly assembly = Assembly.LoadFile(Path.GetFullPath(args[0]));
             string resourceName = "RpgmvpConverterWinForms.scripts.extract_unity.py";
             bool hasUnityScript = assembly.GetManifestResourceNames().Contains(resourceName);
+            string unityScript = ReadResourceText(assembly, resourceName);
+            bool unityFilteringFix = unityScript.Contains("if not supported:")
+                && unityScript.Contains("mesh.export(\"obj\")")
+                && unityScript.Contains("RESULT:{0}:{1}:{2}:{3}:{4}");
             bool hasGodotScript = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.scripts.extract_godot.py");
             bool hasXp3Script = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.scripts.extract_xp3.py");
             bool hasUnrealScript = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.scripts.extract_unreal.py");
@@ -97,6 +103,7 @@ internal static class ReleaseInspector
             string foundRoot = (string)tryFindGameRoot.Invoke(null, new object[] { nestedLookup });
             bool fastRootLookup = string.Equals(foundRoot, rootLookup, StringComparison.OrdinalIgnoreCase);
             bool contextualGui = VerifyContextualGui(formType);
+            bool nwjsExtraction = VerifyNwjsExtraction(formType, temp);
 
             Type runtimeType = assembly.GetType("RpgmvpConverterWinForms.PortableRuntime", true);
             MethodInfo ensureRuntime = runtimeType.GetMethod("EnsureExtracted", BindingFlags.Public | BindingFlags.Static);
@@ -135,6 +142,7 @@ internal static class ReleaseInspector
 
             Console.WriteLine("AssemblyVersion=" + assembly.GetName().Version);
             Console.WriteLine("EmbeddedUnityScript=" + hasUnityScript);
+            Console.WriteLine("UnityFilteringFix=" + unityFilteringFix);
             Console.WriteLine("EmbeddedGodotScript=" + hasGodotScript);
             Console.WriteLine("EmbeddedXp3Script=" + hasXp3Script);
             Console.WriteLine("EmbeddedUnrealScript=" + hasUnrealScript);
@@ -155,8 +163,10 @@ internal static class ReleaseInspector
             Console.WriteLine("FastDetection=" + fastDetection);
             Console.WriteLine("FastRootLookup=" + fastRootLookup);
             Console.WriteLine("ContextualGui=" + contextualGui);
+            Console.WriteLine("NwjsExtraction=" + nwjsExtraction);
 
             return hasUnityScript
+                && unityFilteringFix
                 && hasGodotScript
                 && hasXp3Script
                 && hasUnrealScript
@@ -177,6 +187,7 @@ internal static class ReleaseInspector
                 && fastDetection
                 && fastRootLookup
                 && contextualGui
+                && nwjsExtraction
                 ? 0
                 : 1;
         }
@@ -193,6 +204,13 @@ internal static class ReleaseInspector
         return value.ToString();
     }
 
+    private static string ReadResourceText(Assembly assembly, string name)
+    {
+        using (Stream stream = assembly.GetManifestResourceStream(name))
+        using (StreamReader reader = new StreamReader(stream))
+            return reader.ReadToEnd();
+    }
+
     private static string DetectExistingEngine(MethodInfo detectEngine, string path)
     {
         object value = detectEngine.Invoke(null, new object[] { path });
@@ -207,12 +225,16 @@ internal static class ReleaseInspector
             Type engineType = formType.GetNestedType("GameEngine", BindingFlags.NonPublic);
             MethodInfo updateContext = formType.GetMethod("UpdateEngineContext", BindingFlags.NonPublic | BindingFlags.Instance);
             MethodInfo toggleLog = formType.GetMethod("ToggleLog", BindingFlags.NonPublic | BindingFlags.Instance);
+            MethodInfo setDragHighlight = formType.GetMethod("SetDragHighlight", BindingFlags.NonPublic | BindingFlags.Instance);
+            MethodInfo scaleLogicalHeightForDpi = formType.GetMethod("ScaleLogicalHeightForDpi", BindingFlags.NonPublic | BindingFlags.Static);
             object startButton = GetField(formType, form, "startButton");
             object keyBox = GetField(formType, form, "keyBox");
             object keyLabel = GetField(formType, form, "keyLabel");
             object unityMode = GetField(formType, form, "unityExtractModeBox");
             object extractionHint = GetField(formType, form, "extractionHintLabel");
             object unlockerButton = GetField(formType, form, "unlockerButton");
+            object unlockerSection = GetField(formType, form, "unlockerSectionLabel");
+            object unlockerMode = GetField(formType, form, "unlockerModeBox");
             object removeUnlockerButton = GetField(formType, form, "removeUnlockerButton");
             object pauseButton = GetField(formType, form, "pauseButton");
             object cancelButton = GetField(formType, form, "cancelButton");
@@ -220,17 +242,27 @@ internal static class ReleaseInspector
             object logPanel = GetField(formType, form, "logPanel");
             object toggleLogButton = GetField(formType, form, "toggleLogButton");
             object runtimeStatus = GetField(formType, form, "runtimeStatusLabel");
+            object toolTip = GetField(formType, form, "actionToolTip");
+            IEnumerable dragPanels = (IEnumerable)GetField(formType, form, "dragHighlightPanels");
 
             bool initial = !GetBool(startButton, "Enabled")
                 && !GetLocalVisible(keyBox)
                 && !GetLocalVisible(unityMode)
                 && !GetLocalVisible(logPanel)
+                && !GetLocalVisible(unlockerSection)
                 && GetString(runtimeStatus, "Text").StartsWith("Runtime:", StringComparison.Ordinal);
 
             updateContext.Invoke(form, new[] { Enum.Parse(engineType, "Unity") });
             bool unity = GetBool(startButton, "Enabled")
                 && GetLocalVisible(unityMode)
-                && !GetLocalVisible(keyBox);
+                && !GetLocalVisible(keyBox)
+                && !GetLocalVisible(unlockerSection);
+
+            updateContext.Invoke(form, new[] { Enum.Parse(engineType, "Renpy") });
+            bool renpy = GetBool(startButton, "Enabled")
+                && GetLocalVisible(unlockerSection)
+                && GetLocalVisible(unlockerMode)
+                && GetLocalVisible(unlockerButton);
 
             updateContext.Invoke(form, new[] { Enum.Parse(engineType, "RpgMaker") });
             bool rpgm = GetBool(startButton, "Enabled")
@@ -245,8 +277,9 @@ internal static class ReleaseInspector
                 && GetString(keyLabel, "Text") == "Unreal AES key";
 
             updateContext.Invoke(form, new[] { Enum.Parse(engineType, "Nwjs") });
-            bool nwjs = !GetBool(startButton, "Enabled")
+            bool nwjs = GetBool(startButton, "Enabled")
                 && !GetBool(unlockerButton, "Enabled")
+                && !GetLocalVisible(unlockerSection)
                 && GetString(extractionHint, "Text").IndexOf("Unlocker", StringComparison.OrdinalIgnoreCase) < 0;
             bool readableDisabledButtons = HasReadableDisabledContrast(startButton)
                 && HasReadableDisabledContrast(unlockerButton)
@@ -254,6 +287,15 @@ internal static class ReleaseInspector
                 && HasReadableDisabledContrast(pauseButton)
                 && HasReadableDisabledContrast(cancelButton)
                 && HasReadableDisabledContrast(openOutputButton);
+            bool tooltips = !string.IsNullOrWhiteSpace((string)toolTip.GetType().GetMethod("GetToolTip").Invoke(toolTip, new[] { startButton }))
+                && !string.IsNullOrWhiteSpace((string)toolTip.GetType().GetMethod("GetToolTip").Invoke(toolTip, new[] { openOutputButton }));
+            bool dpi = form.GetType().GetProperty("AutoScaleMode").GetValue(form, null).ToString() == "Dpi"
+                && (int)scaleLogicalHeightForDpi.Invoke(null, new object[] { 570, 120f }) == 712
+                && (int)scaleLogicalHeightForDpi.Invoke(null, new object[] { 570, 144f }) == 855;
+            setDragHighlight.Invoke(form, new object[] { true });
+            bool dragHighlight = dragPanels.Cast<object>().Count() == 4 && dragPanels.Cast<object>().All(GetLocalVisible);
+            setDragHighlight.Invoke(form, new object[] { false });
+            dragHighlight = dragHighlight && dragPanels.Cast<object>().All(delegate(object panel) { return !GetLocalVisible(panel); });
 
             int compactHeight = GetSizeHeight(form, "ClientSize");
             toggleLog.Invoke(form, null);
@@ -263,7 +305,43 @@ internal static class ReleaseInspector
             bool collapsed = GetString(toggleLogButton, "Text") == "Show Log"
                 && GetSizeHeight(form, "ClientSize") == compactHeight;
 
-            return initial && unity && rpgm && unreal && nwjs && readableDisabledButtons && expanded && collapsed;
+            return initial && unity && renpy && rpgm && unreal && nwjs && readableDisabledButtons && tooltips && dpi && dragHighlight && expanded && collapsed;
+        }
+        finally
+        {
+            MethodInfo dispose = formType.GetMethod("Dispose", BindingFlags.Public | BindingFlags.Instance);
+            dispose.Invoke(form, null);
+        }
+    }
+
+    private static bool VerifyNwjsExtraction(Type formType, string temp)
+    {
+        string game = Path.Combine(temp, "nwjs-extraction");
+        string www = Path.Combine(game, "www");
+        string output = Path.Combine(game, "extracted", "nwjs");
+        Directory.CreateDirectory(www);
+        File.WriteAllText(Path.Combine(www, "index.html"), "<html></html>");
+        using (FileStream stream = File.Create(Path.Combine(game, "package.nw")))
+        using (ZipArchive archive = new ZipArchive(stream, ZipArchiveMode.Create))
+        {
+            using (StreamWriter writer = new StreamWriter(archive.CreateEntry("scripts/app.js").Open()))
+                writer.Write("console.log('ok');");
+            using (StreamWriter writer = new StreamWriter(archive.CreateEntry("../outside.txt").Open()))
+                writer.Write("kept-inside-output");
+        }
+
+        object form = Activator.CreateInstance(formType);
+        try
+        {
+            MethodInfo extract = formType.GetMethod("RunNwjsExtraction", BindingFlags.NonPublic | BindingFlags.Instance);
+            object result = extract.Invoke(form, new object[] { game, output });
+            int extracted = (int)result.GetType().GetProperty("Extracted").GetValue(result, null);
+            int errors = (int)result.GetType().GetProperty("Errors").GetValue(result, null);
+            return extracted == 3
+                && errors == 0
+                && File.Exists(Path.Combine(output, "loose", "www", "index.html"))
+                && File.Exists(Path.Combine(output, "archives", "package", "scripts", "app.js"))
+                && !File.Exists(Path.Combine(game, "extracted", "outside.txt"));
         }
         finally
         {

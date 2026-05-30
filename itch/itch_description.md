@@ -10,9 +10,10 @@ Drop a game folder into the window, review the detected engine with **Dry Run / 
 
 - Automatic engine detection after selecting or dropping a game folder
 - Drag-and-drop folder support
-- Dry Run / Scan preview with archive count, candidate file count and estimated input size
+- Dry Run / Scan preview with archive count, candidate file count and input size
 - Contextual extraction options: the window shows only settings relevant to the detected engine
 - One primary **Extract Assets** action and a collapsible technical log
+- Action tooltips, drag-and-drop highlighting and DPI-aware scaling
 - Visible runtime status while the built-in extraction tools are prepared silently
 - Collision-safe output names such as `image (2).png`
 - Extraction summary dialog and saved `GameAssetTool-report.txt`
@@ -32,11 +33,13 @@ Extracts `.rpa` archives for supported RPA formats `2.0`, `3.0`, `3.2` and `4.0`
 
 ### NWJS
 
-Detects NWJS-style game folders for inspection. A generic NWJS asset extractor is not included yet. The bundled gallery unlocker is not used for NWJS games because gallery state is usually stored in game-specific save data.
+Copies loose files from `www`, `package.nw` and `app.nw` folders while preserving paths. ZIP-compatible `.nw` archives are unpacked safely. The bundled gallery unlocker is not used for NWJS games because gallery state is usually stored in game-specific save data.
 
 ### Unity
 
 Extracts textures, videos, audio, OBJ meshes and direct media files. Unity extraction includes filters for processing only the asset types you need.
+
+Unity service objects and unavailable resources are reported as skipped items rather than extraction errors.
 
 ### Godot 3 / 4
 
@@ -66,6 +69,7 @@ Use **Hard** mode only when the soft mode is insufficient.
 
 - RPG Maker: `game_folder/extracted/rpgm/`
 - Ren'Py: `game_folder/extracted/renpy/`
+- NWJS: `game_folder/extracted/nwjs/`
 - Unity: `game_folder/extracted/unity/`
 - Godot: `game_folder/extracted/godot/`
 - KiriKiri: `game_folder/extracted/kirikiri/`

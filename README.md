@@ -4,7 +4,7 @@
 
 [**Watch Demo Video on YouTube**](https://youtu.be/BnjRjik9fk0)
 
-Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **Ren'Py**, **Unity**, **Godot** and **KiriKiri** games. **NWJS** folders are detected for inspection. Experimental Unreal `.pak` extraction is included.
+Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **Ren'Py**, **NWJS**, **Unity**, **Godot** and **KiriKiri** games. Experimental Unreal `.pak` extraction is included.
 
 ![Version](https://img.shields.io/badge/version-1.6.0-blue)
 ![.NET](https://img.shields.io/badge/.NET_Framework-4.7.2-blue)
@@ -14,9 +14,10 @@ Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **Re
 
 - Detects the selected game engine automatically.
 - Supports drag-and-drop for game folders.
-- Provides a **Dry Run / Scan** before extraction with archive count, candidate file count and estimated input size.
+- Provides a **Dry Run / Scan** before extraction with archive count, candidate file count and input size.
 - Shows only the extraction settings relevant to the detected engine.
 - Uses one primary **Extract Assets** button and a collapsible log panel.
+- Shows action tooltips, highlights folder drag-and-drop and scales for common Windows DPI settings.
 - Displays the built-in runtime state while it is prepared silently in the background.
 - Converts RPGMVP assets with key auto-detection and key reconstruction.
 - Extracts Ren'Py RPA archives through verified `unrpa==2.3.0`.
@@ -25,7 +26,7 @@ Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **Re
 - Extracts standard unencrypted KiriKiri XP3 archives.
 - Extracts Unreal PAK archives in an experimental offline mode.
 - Preserves relative paths and renames collisions with suffixes such as `image (2).png`.
-- Installs and removes the Ren'Py gallery unlocker.
+- Shows the Ren'Py gallery unlocker only for relevant folders or when installed files can be removed.
 - Writes an extraction summary to the results dialog and `GameAssetTool-report.txt`.
 
 ## Usage
@@ -42,6 +43,7 @@ Output is written inside the selected game folder:
 extracted/
   rpgm/
   renpy/
+  nwjs/
   unity/
   godot/
   kirikiri/
@@ -58,7 +60,9 @@ Archives are extracted into separate subfolders to prevent files from different 
 
 ## NWJS
 
-NWJS-style folders are detected, but a generic NWJS asset extractor is not included yet. The bundled gallery unlocker is not used for NWJS games: gallery state is usually stored in game-specific save data.
+NWJS extraction copies loose files from `www`, `package.nw` and `app.nw` folders while preserving their relative paths. ZIP-compatible `package.nw` and `app.nw` archives are unpacked safely. Non-ZIP package formats are reported and skipped.
+
+The bundled gallery unlocker is not used for NWJS games: gallery state is usually stored in game-specific save data.
 
 ## Unity
 
@@ -73,6 +77,8 @@ Available filters:
 - All
 
 Bundle extraction is confirmed before processing. Direct media files are copied while preserving their relative paths.
+
+Unity service objects and unavailable resources are reported as skipped items rather than extraction errors.
 
 ## Godot
 
@@ -90,7 +96,7 @@ The application does not download or redistribute an Oodle DLL. Oodle-compressed
 
 ## Gallery Unlocker
 
-The Ren'Py unlocker has separate buttons:
+The Ren'Py unlocker is shown only when a Ren'Py folder is selected or previously installed files can be removed. It has separate buttons:
 
 - **Install Unlocker**
 - **Remove Unlocker**

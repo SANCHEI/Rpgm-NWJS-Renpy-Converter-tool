@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | RPG Maker MV/MZ | Supported | RPGMVP and PNG_ conversion with key detection |
 | Ren'Py | Supported | RPA 2.0, 3.0, 3.2 and 4.0 through `unrpa==2.3.0` |
-| NWJS | Detection only | Detects NWJS-style folders; no generic extractor or gallery unlocker |
+| NWJS | Supported | Copies loose `www`, `package.nw` and `app.nw` files; safely unpacks ZIP-compatible `.nw` archives |
 | Unity | Supported | Textures, videos, audio, OBJ meshes and direct media |
 | Godot 3/4 | Supported | Unencrypted PCK versions 1, 2 and 3, including embedded PCK |
 | KiriKiri | Supported | Standard unencrypted XP3 archives |
@@ -16,6 +16,7 @@
 
 - Godot encrypted PCK directories and encrypted PCK files are not extracted.
 - Protected game-specific XP3 variants are not extracted.
+- Non-ZIP NWJS `.nw` package formats are reported and skipped.
 - Unreal Oodle compression is not extracted because the single-file offline build does not download or redistribute an Oodle DLL.
 - Unreal IoStore `.utoc/.ucas` containers are detected and reported, but not extracted.
 

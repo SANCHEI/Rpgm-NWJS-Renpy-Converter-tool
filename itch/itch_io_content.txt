@@ -7,7 +7,7 @@ Game Asset Tool
 https://sanchei.itch.io/gameassettool
 
 ## Short description
-Portable Windows tool for extracting assets from RPG Maker, Ren'Py, Unity, Godot, KiriKiri and Unreal games.
+Portable Windows tool for extracting assets from RPG Maker, Ren'Py, NWJS, Unity, Godot, KiriKiri and Unreal games.
 
 ## Description
 Use the contents of `itch/itch_description.md`.

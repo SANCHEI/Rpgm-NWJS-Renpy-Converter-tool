@@ -43,6 +43,13 @@ def safe_component(value, fallback):
     return cleaned or fallback
 
 
+def safe_getattr(value, name, fallback=None):
+    try:
+        return getattr(value, name, fallback)
+    except Exception:
+        return fallback
+
+
 def unique_path(path):
     base, ext = os.path.splitext(path)
     candidate = path
@@ -83,7 +90,7 @@ def read_streamed_resource(file_path, resource):
     if not resource or not hasattr(resource, "m_Source"):
         return None
     source_file = resolve_resource(file_path, resource.m_Source)
-    if not source_file or not os.path.exists(source_file):
+    if not source_file or not os.path.isfile(source_file):
         return None
     with open(source_file, "rb") as stream:
         stream.seek(resource.m_Offset)
@@ -108,7 +115,8 @@ def save_image(path, image):
 def export_mesh(path, mesh):
     path, renamed = unique_path(path)
     ensure_parent(path)
-    mesh.export(path)
+    with open(path, "w", encoding="utf-8") as output:
+        output.write(mesh.export("obj"))
     return os.path.getsize(path), int(renamed)
 
 
@@ -117,6 +125,7 @@ def extract_archive(file_path):
     total_size = 0
     errors = 0
     renamed = 0
+    skipped = 0
 
     try:
         env = UnityPy.load(file_path)
@@ -124,13 +133,23 @@ def extract_archive(file_path):
         os.makedirs(output_dir, exist_ok=True)
 
         for index, obj in enumerate(env.objects):
+            obj_type = obj.type.name
+            supported = (
+                (EXTRACT_MODE in ("textures", "all") and obj_type in TEXTURE_TYPES)
+                or (EXTRACT_MODE in ("videos", "all") and obj_type == "VideoClip")
+                or (EXTRACT_MODE in ("audios", "all") and obj_type == "AudioClip")
+                or (EXTRACT_MODE in ("meshes", "all") and obj_type == "Mesh")
+            )
+            if not supported:
+                skipped += 1
+                continue
+
             try:
-                obj_type = obj.type.name
                 data = obj.read()
 
                 if EXTRACT_MODE in ("textures", "all") and obj_type in TEXTURE_TYPES:
                     name = getattr(data, "name", None) or getattr(data, "m_Name", None)
-                    image = getattr(data, "image", None)
+                    image = safe_getattr(data, "image")
                     if image:
                         size, collision = save_image(
                             os.path.join(output_dir, safe_component(name, "texture_{0}".format(index)) + ".png"),
@@ -139,12 +158,14 @@ def extract_archive(file_path):
                         extracted += 1
                         total_size += size
                         renamed += collision
+                    else:
+                        skipped += 1
 
                 elif EXTRACT_MODE in ("videos", "all") and obj_type == "VideoClip":
                     name = getattr(data, "m_Name", None)
                     video_data = read_streamed_resource(file_path, getattr(data, "m_ExternalResources", None))
                     if not video_data:
-                        video_data = getattr(data, "video_data", None)
+                        video_data = safe_getattr(data, "video_data")
                     if video_data:
                         ext = ".mp4"
                         resource = getattr(data, "m_ExternalResources", None)
@@ -158,12 +179,14 @@ def extract_archive(file_path):
                         extracted += 1
                         total_size += size
                         renamed += collision
+                    else:
+                        skipped += 1
 
                 elif EXTRACT_MODE in ("audios", "all") and obj_type == "AudioClip":
                     name = getattr(data, "name", None) or getattr(data, "m_Name", None)
                     audio_data = read_streamed_resource(file_path, getattr(data, "m_Resource", None))
                     if not audio_data:
-                        audio_data = getattr(data, "audio_data", None) or getattr(data, "m_AudioData", None)
+                        audio_data = safe_getattr(data, "audio_data") or safe_getattr(data, "m_AudioData")
                     if audio_data:
                         size, collision = save_bytes(
                             os.path.join(output_dir, safe_component(name, "audio_{0}".format(index)) + ".wav"),
@@ -172,6 +195,8 @@ def extract_archive(file_path):
                         extracted += 1
                         total_size += size
                         renamed += collision
+                    else:
+                        skipped += 1
 
                 elif EXTRACT_MODE in ("meshes", "all") and obj_type == "Mesh":
                     name = getattr(data, "m_Name", None)
@@ -191,7 +216,7 @@ def extract_archive(file_path):
         errors += 1
         log("WARN:{0}:{1}".format(os.path.basename(file_path), error))
 
-    return extracted, total_size, errors, renamed
+    return extracted, total_size, errors, renamed, skipped
 
 
 def collect_files():
@@ -244,20 +269,22 @@ def main():
     log("DIRECT:{0}".format(len(direct_files)))
 
     total_extracted, total_size, total_errors, total_renamed = copy_direct_files(direct_files)
+    total_skipped = 0
     processed = 0
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         futures = [executor.submit(extract_archive, path) for path in archives]
         for future in as_completed(futures):
-            extracted, size, errors, renamed = future.result()
+            extracted, size, errors, renamed, skipped = future.result()
             total_extracted += extracted
             total_size += size
             total_errors += errors
             total_renamed += renamed
+            total_skipped += skipped
             processed += 1
             log("PROGRESS:{0}:{1}:{2}".format(processed, len(archives), total_size))
 
-    log("RESULT:{0}:{1}:{2}:{3}".format(total_extracted, total_size, total_errors, total_renamed))
+    log("RESULT:{0}:{1}:{2}:{3}:{4}".format(total_extracted, total_size, total_errors, total_renamed, total_skipped))
     return 0 if total_errors == 0 else 1
 
 

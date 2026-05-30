@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -40,6 +41,7 @@ namespace RpgmvpConverterWinForms
         private Label statusLabel;
         private Label statsLabel;
         private Label runtimeStatusLabel;
+        private Label unlockerSectionLabel;
         private TextBox logBox;
         private Panel logPanel;
         private ProgressBar progressBar;
@@ -52,9 +54,11 @@ namespace RpgmvpConverterWinForms
         private Button cancelButton;
         private Button openOutputButton;
         private Button toggleLogButton;
+        private ToolTip actionToolTip;
 
         private readonly object processSync = new object();
         private readonly object runtimeWarmupSync = new object();
+        private readonly List<Panel> dragHighlightPanels = new List<Panel>();
         private System.Windows.Forms.Timer uiTimer;
         private ConversionRun currentRun;
         private Task runtimeWarmupTask;
@@ -62,11 +66,14 @@ namespace RpgmvpConverterWinForms
         private bool externalRunning;
         private bool closing;
         private bool logExpanded;
+        private bool unlockerLayoutVisible = true;
+        private bool localCopyCancellationRequested;
         private string lastOutputDir = "";
         private GameEngine selectedEngine;
 
         private const int CompactClientHeight = 570;
         private const int ExpandedClientHeight = 872;
+        private const int UnlockerSectionHeight = 64;
 
         public RpgmvpConverterForm()
         {
@@ -93,12 +100,15 @@ namespace RpgmvpConverterWinForms
             StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
+            AutoScaleDimensions = new SizeF(96f, 96f);
+            AutoScaleMode = AutoScaleMode.Dpi;
             ClientSize = new Size(928, CompactClientHeight);
             BackColor = formBack;
             ForeColor = textColor;
             Font = uiFont;
             AllowDrop = true;
             DragEnter += OnDragEnter;
+            DragLeave += OnDragLeave;
             DragDrop += OnDragDrop;
             FormClosing += OnFormClosing;
 
@@ -260,7 +270,8 @@ namespace RpgmvpConverterWinForms
             extractionPanel.Controls.Add(startButton);
             y += 82;
 
-            Controls.Add(CreateSectionLabel("Gallery Unlocker for Ren'Py", y));
+            unlockerSectionLabel = CreateSectionLabel("Gallery Unlocker for Ren'Py", y);
+            Controls.Add(unlockerSectionLabel);
             y += 22;
             unlockerModeBox = new ComboBox
             {
@@ -369,6 +380,15 @@ namespace RpgmvpConverterWinForms
 
             uiTimer = new System.Windows.Forms.Timer { Interval = 200 };
             uiTimer.Tick += delegate { UpdateUiFromRun(); };
+            actionToolTip = new ToolTip
+            {
+                AutoPopDelay = 6000,
+                InitialDelay = 350,
+                ReshowDelay = 150,
+                ShowAlways = true
+            };
+            ConfigureActionTooltips();
+            CreateDragHighlightBorders();
             UpdateEngineContext(GameEngine.Unknown);
         }
 
@@ -419,11 +439,24 @@ namespace RpgmvpConverterWinForms
         private void OnDragEnter(object sender, DragEventArgs e)
         {
             if (e.Data != null && e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
                 e.Effect = DragDropEffects.Copy;
+                SetDragHighlight(true);
+            }
+            else
+            {
+                SetDragHighlight(false);
+            }
+        }
+
+        private void OnDragLeave(object sender, EventArgs e)
+        {
+            SetDragHighlight(false);
         }
 
         private void OnDragDrop(object sender, DragEventArgs e)
         {
+            SetDragHighlight(false);
             string[] paths = e.Data == null ? null : e.Data.GetData(DataFormats.FileDrop) as string[];
             if (paths == null || paths.Length == 0) return;
             string path = Directory.Exists(paths[0]) ? paths[0] : Path.GetDirectoryName(paths[0]);
@@ -485,7 +518,7 @@ namespace RpgmvpConverterWinForms
                 detectedEngineLabel.Text = "Engine: " + EngineName(summary.Engine);
                 detectedEngineLabel.ForeColor = EngineColor(summary.Engine);
                 scanSummaryLabel.Text = string.Format(
-                    "{0} archive(s), {1} candidate file(s), estimated input {2}",
+                    "{0} archive(s), {1} candidate file(s), input size {2} (not estimated output)",
                     summary.ArchiveCount,
                     summary.FileCount,
                     FormatBytes(summary.TotalBytes));
@@ -493,7 +526,7 @@ namespace RpgmvpConverterWinForms
                 if (showLog)
                 {
                     WriteLog("Dry run: " + EngineName(summary.Engine));
-                    WriteLog("Found: " + summary.ArchiveCount + " archive(s), " + summary.FileCount + " candidate file(s), " + FormatBytes(summary.TotalBytes));
+                    WriteLog("Found: " + summary.ArchiveCount + " archive(s), " + summary.FileCount + " candidate file(s), input size " + FormatBytes(summary.TotalBytes));
                 }
                 WarmPortableRuntimeInBackground(summary.Engine);
             }
@@ -536,6 +569,11 @@ namespace RpgmvpConverterWinForms
             if (engine == GameEngine.Unreal)
             {
                 await StartPortableScriptExtractionAsync("Unreal experimental", "unreal", "extract_unreal.py", "RpgmvpConverterWinForms.scripts.extract_unreal.py");
+                return;
+            }
+            if (engine == GameEngine.Nwjs)
+            {
+                await StartNwjsExtractionAsync();
                 return;
             }
             if (engine != GameEngine.RpgMaker)
@@ -729,6 +767,7 @@ namespace RpgmvpConverterWinForms
             long bytes = 0;
             int errors = 0;
             int renamed = 0;
+            int skipped = 0;
 
             ProcessStartInfo psi = CreatePythonProcessInfo();
             psi.Arguments = QuoteArg(scriptPath);
@@ -769,6 +808,7 @@ namespace RpgmvpConverterWinForms
                     bytes = ParseLong(line, 2);
                     errors = ParseInt(line, 3);
                     renamed = ParseInt(line, 4);
+                    skipped = ParseInt(line, 5);
                 }
                 else
                 {
@@ -777,7 +817,165 @@ namespace RpgmvpConverterWinForms
             });
 
             if (exitCode != 0 && errors == 0) errors = 1;
-            return new OperationResult("Unity", outputDir, extracted, bytes, errors, renamed, DateTime.UtcNow - start);
+            return new OperationResult("Unity", outputDir, extracted, bytes, errors, renamed, skipped, DateTime.UtcNow - start);
+        }
+
+        private async Task StartNwjsExtractionAsync()
+        {
+            if (currentRun != null || externalRunning) return;
+
+            string rootPath = pathBox.Text.Trim();
+            if (!Directory.Exists(rootPath) || !IsNwjsGame(rootPath))
+            {
+                MessageBox.Show("No NWJS game found. Select a folder containing www, package.json, package.nw or app.nw.", "NWJS Extractor", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            string outputDir = Path.Combine(rootPath, "extracted", "nwjs");
+            lastOutputDir = outputDir;
+            localCopyCancellationRequested = false;
+            SetExternalRunningState(true, "NWJS");
+            WriteLog("NWJS file extraction started");
+
+            OperationResult result;
+            try
+            {
+                result = await Task.Run(delegate { return RunNwjsExtraction(rootPath, outputDir); });
+            }
+            catch (OperationCanceledException)
+            {
+                result = OperationResult.Failed("NWJS", outputDir, "cancelled");
+            }
+            catch (Exception ex)
+            {
+                result = OperationResult.Failed("NWJS", outputDir, ex.Message);
+            }
+            SetExternalRunningState(false, "NWJS");
+            CompleteExternalOperation(result);
+        }
+
+        private OperationResult RunNwjsExtraction(string rootPath, string outputDir)
+        {
+            DateTime start = DateTime.UtcNow;
+            Directory.CreateDirectory(outputDir);
+            List<string> looseFiles = GetNwjsLooseFiles(rootPath, outputDir);
+            List<string> archives = FindNwjsPackageArchives(rootPath);
+            int total = looseFiles.Count + archives.Count;
+            int processed = 0;
+            int extracted = 0;
+            long bytes = 0;
+            int errors = 0;
+            int renamed = 0;
+            int skipped = 0;
+
+            BeginUi(delegate
+            {
+                progressBar.Maximum = Math.Max(total, 1);
+                progressBar.Value = 0;
+                statusLabel.Text = "NWJS: found " + looseFiles.Count + " loose file(s), " + archives.Count + " archive(s)";
+            });
+
+            foreach (string source in looseFiles)
+            {
+                ThrowIfLocalCopyCancelled();
+                try
+                {
+                    string relative = MakeRelativePath(rootPath, source);
+                    string destination = GetSafeOutputPath(outputDir, Path.Combine("loose", relative));
+                    bool collision;
+                    destination = GetUniqueFilePath(destination, out collision);
+                    Directory.CreateDirectory(Path.GetDirectoryName(destination));
+                    File.Copy(source, destination);
+                    extracted++;
+                    bytes += SafeFileLength(destination);
+                    if (collision) renamed++;
+                }
+                catch (Exception ex)
+                {
+                    errors++;
+                    SafeLog("WARN:" + source + ":" + ex.Message);
+                }
+                processed++;
+                UpdateNwjsProgress(processed, total, bytes);
+            }
+
+            foreach (string archive in archives)
+            {
+                ThrowIfLocalCopyCancelled();
+                try
+                {
+                    NwjsCopyStats stats = ExtractNwjsZipArchive(archive, outputDir);
+                    extracted += stats.Extracted;
+                    bytes += stats.Bytes;
+                    renamed += stats.Renamed;
+                    skipped += stats.Skipped;
+                }
+                catch (InvalidDataException)
+                {
+                    skipped++;
+                    SafeLog("NWJS package is not ZIP-compatible and was skipped: " + archive);
+                }
+                catch (Exception ex)
+                {
+                    errors++;
+                    SafeLog("WARN:" + archive + ":" + ex.Message);
+                }
+                processed++;
+                UpdateNwjsProgress(processed, total, bytes);
+            }
+
+            return new OperationResult("NWJS", outputDir, extracted, bytes, errors, renamed, skipped, DateTime.UtcNow - start);
+        }
+
+        private void UpdateNwjsProgress(int processed, int total, long bytes)
+        {
+            BeginUi(delegate
+            {
+                progressBar.Maximum = Math.Max(total, 1);
+                progressBar.Value = Math.Min(processed, progressBar.Maximum);
+                statusLabel.Text = "NWJS: " + processed + " / " + total;
+                statsLabel.Text = "Sources: " + processed + " / " + total + " | Size: " + FormatBytes(bytes);
+            });
+        }
+
+        private void ThrowIfLocalCopyCancelled()
+        {
+            if (localCopyCancellationRequested)
+                throw new OperationCanceledException();
+        }
+
+        private NwjsCopyStats ExtractNwjsZipArchive(string archivePath, string outputDir)
+        {
+            int extracted = 0;
+            long bytes = 0;
+            int renamed = 0;
+            int skipped = 0;
+            string archiveName = Path.GetFileNameWithoutExtension(archivePath);
+            using (FileStream stream = File.OpenRead(archivePath))
+            using (ZipArchive archive = new ZipArchive(stream, ZipArchiveMode.Read))
+            {
+                foreach (ZipArchiveEntry entry in archive.Entries)
+                {
+                    ThrowIfLocalCopyCancelled();
+                    if (string.IsNullOrEmpty(entry.Name))
+                    {
+                        skipped++;
+                        continue;
+                    }
+
+                    string destination = GetSafeOutputPath(outputDir, Path.Combine("archives", archiveName, entry.FullName));
+                    bool collision;
+                    destination = GetUniqueFilePath(destination, out collision);
+                    Directory.CreateDirectory(Path.GetDirectoryName(destination));
+                    using (Stream input = entry.Open())
+                    using (FileStream output = File.Create(destination))
+                        input.CopyTo(output);
+                    extracted++;
+                    bytes += SafeFileLength(destination);
+                    if (collision) renamed++;
+                }
+            }
+            return new NwjsCopyStats(extracted, bytes, renamed, skipped);
         }
 
         private async Task StartPortableScriptExtractionAsync(string engineName, string outputFolder, string scriptFile, string resourceName)
@@ -1033,6 +1231,7 @@ namespace RpgmvpConverterWinForms
 
         private void CancelOperation()
         {
+            localCopyCancellationRequested = true;
             if (currentRun != null) currentRun.Cancel();
             lock (processSync)
             {
@@ -1086,7 +1285,9 @@ namespace RpgmvpConverterWinForms
             openOutputButton.Enabled = Directory.Exists(lastOutputDir);
             progressBar.Value = progressBar.Maximum;
             statusLabel.Text = result.Errors == 0 ? "Complete" : "Complete with warnings";
-            statsLabel.Text = "Extracted: " + result.Extracted + " | Size: " + FormatBytes(result.Bytes) + " | Errors: " + result.Errors;
+            statsLabel.Text = "Extracted: " + result.Extracted + " | Size: " + FormatBytes(result.Bytes) + " | Errors: " + result.Errors
+                + (result.Skipped > 0 ? " | Skipped: " + result.Skipped : "");
+            UpdateActionTooltips();
             string reportPath = SaveReport(result);
             WriteLog("Report: " + reportPath);
             using (ResultsDialog dialog = new ResultsDialog(result, reportPath))
@@ -1112,6 +1313,7 @@ namespace RpgmvpConverterWinForms
             cancelButton.Enabled = running;
             openOutputButton.Enabled = !running && Directory.Exists(lastOutputDir);
             if (!running) UpdateEngineContext(selectedEngine);
+            else UpdateActionTooltips();
         }
 
         private void SetExternalRunningState(bool running, string operation)
@@ -1138,6 +1340,7 @@ namespace RpgmvpConverterWinForms
                 {
                     UpdateEngineContext(selectedEngine);
                 }
+                UpdateActionTooltips();
             });
         }
 
@@ -1146,7 +1349,8 @@ namespace RpgmvpConverterWinForms
             logExpanded = !logExpanded;
             logPanel.Visible = logExpanded;
             toggleLogButton.Text = logExpanded ? "Hide Log" : "Show Log";
-            ClientSize = new Size(ClientSize.Width, logExpanded ? ExpandedClientHeight : CompactClientHeight);
+            UpdateWindowHeight();
+            UpdateActionTooltips();
         }
 
         private void UpdateEngineContext(GameEngine engine)
@@ -1186,7 +1390,7 @@ namespace RpgmvpConverterWinForms
                     extractionHintLabel.Text = "Experimental PAK extraction. AES key is optional; Oodle and IoStore are reported.";
                     break;
                 case GameEngine.Nwjs:
-                    extractionHintLabel.Text = "NWJS folder detected. A generic asset extractor is not implemented yet.";
+                    extractionHintLabel.Text = "NWJS files will be copied. ZIP-compatible package.nw archives will be unpacked.";
                     break;
                 default:
                     extractionHintLabel.Text = "Select a supported game folder to see its extraction options.";
@@ -1194,15 +1398,18 @@ namespace RpgmvpConverterWinForms
             }
 
             UpdateRuntimeStatusForEngine(engine);
+            UpdateActionTooltips();
         }
 
         private void UpdateUnlockerControls(bool busy)
         {
             string rootPath = pathBox.Text.Trim();
+            bool installed = GetUnlockerDirectories(rootPath).Any();
+            UpdateUnlockerLayout(selectedEngine == GameEngine.Renpy || installed);
             bool canInstall = !busy && selectedEngine == GameEngine.Renpy && Directory.Exists(rootPath);
             unlockerModeBox.Enabled = canInstall;
             unlockerButton.Enabled = canInstall;
-            removeUnlockerButton.Enabled = !busy && GetUnlockerDirectories(rootPath).Any();
+            removeUnlockerButton.Enabled = !busy && installed;
         }
 
         private static bool CanExtractAssets(GameEngine engine)
@@ -1212,7 +1419,109 @@ namespace RpgmvpConverterWinForms
                 || engine == GameEngine.Unity
                 || engine == GameEngine.Godot
                 || engine == GameEngine.Kirikiri
-                || engine == GameEngine.Unreal;
+                || engine == GameEngine.Unreal
+                || engine == GameEngine.Nwjs;
+        }
+
+        private void UpdateUnlockerLayout(bool visible)
+        {
+            unlockerSectionLabel.Visible = visible;
+            unlockerModeBox.Visible = visible;
+            unlockerButton.Visible = visible;
+            removeUnlockerButton.Visible = visible;
+            if (unlockerLayoutVisible == visible)
+            {
+                UpdateWindowHeight();
+                return;
+            }
+
+            int offset = visible ? ScaleLogicalHeight(UnlockerSectionHeight) : -ScaleLogicalHeight(UnlockerSectionHeight);
+            foreach (Control control in new Control[] { pauseButton, cancelButton, openOutputButton, toggleLogButton, progressBar, statusLabel, statsLabel, logPanel })
+                control.Top += offset;
+            unlockerLayoutVisible = visible;
+            UpdateWindowHeight();
+        }
+
+        private void UpdateWindowHeight()
+        {
+            int logicalHeight = logExpanded ? ExpandedClientHeight : CompactClientHeight;
+            if (!unlockerLayoutVisible) logicalHeight -= UnlockerSectionHeight;
+            ClientSize = new Size(ClientSize.Width, ScaleLogicalHeight(logicalHeight));
+        }
+
+        private int ScaleLogicalHeight(int logicalHeight)
+        {
+            float currentDpi = CurrentAutoScaleDimensions.Height;
+            return ScaleLogicalHeightForDpi(logicalHeight, currentDpi);
+        }
+
+        private static int ScaleLogicalHeightForDpi(int logicalHeight, float dpi)
+        {
+            return (int)Math.Round(logicalHeight * (dpi > 0 ? dpi / 96f : 1f));
+        }
+
+        private void ConfigureActionTooltips()
+        {
+            SetActionTooltip(pathBox, "Drop a game folder here or choose it with Browse.");
+            SetActionTooltip(browseButton, "Select the root folder of a game.");
+            SetActionTooltip(dryRunButton, "Inspect supported archives and estimate the input size without extracting files.");
+            SetActionTooltip(toggleLogButton, "Show or hide technical extraction messages.");
+            UpdateActionTooltips();
+        }
+
+        private void UpdateActionTooltips()
+        {
+            if (actionToolTip == null) return;
+            bool busy = currentRun != null || externalRunning;
+            SetActionTooltip(startButton, busy
+                ? "Wait for the current operation to finish."
+                : CanExtractAssets(selectedEngine)
+                    ? "Extract supported assets for the detected engine."
+                    : "Select a supported game folder first.");
+            SetActionTooltip(unlockerButton, selectedEngine == GameEngine.Renpy
+                ? "Install the Ren'Py gallery unlocker. Try Soft mode first."
+                : "The gallery unlocker is available only for detected Ren'Py folders.");
+            SetActionTooltip(removeUnlockerButton, removeUnlockerButton.Enabled
+                ? "Remove previously installed Ren'Py gallery unlocker files."
+                : "No installed Ren'Py gallery unlocker was found.");
+            SetActionTooltip(pauseButton, "Pause or resume RPG Maker asset conversion.");
+            SetActionTooltip(cancelButton, busy ? "Stop the current operation." : "No operation is currently running.");
+            SetActionTooltip(openOutputButton, Directory.Exists(lastOutputDir)
+                ? "Open the most recent extraction output folder."
+                : "Run an extraction first to create an output folder.");
+        }
+
+        private void SetActionTooltip(Control control, string text)
+        {
+            if (control == null || actionToolTip == null) return;
+            actionToolTip.SetToolTip(control, text);
+            control.AccessibleDescription = text;
+        }
+
+        private void CreateDragHighlightBorders()
+        {
+            const int thickness = 4;
+            dragHighlightPanels.Add(new Panel { Location = new Point(0, 0), Size = new Size(ClientSize.Width, thickness), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right });
+            dragHighlightPanels.Add(new Panel { Location = new Point(0, ClientSize.Height - thickness), Size = new Size(ClientSize.Width, thickness), Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right });
+            dragHighlightPanels.Add(new Panel { Location = new Point(0, 0), Size = new Size(thickness, ClientSize.Height), Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left });
+            dragHighlightPanels.Add(new Panel { Location = new Point(ClientSize.Width - thickness, 0), Size = new Size(thickness, ClientSize.Height), Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Right });
+            foreach (Panel panel in dragHighlightPanels)
+            {
+                panel.BackColor = accentColor;
+                panel.Enabled = false;
+                panel.Visible = false;
+                Controls.Add(panel);
+                panel.BringToFront();
+            }
+        }
+
+        private void SetDragHighlight(bool visible)
+        {
+            foreach (Panel panel in dragHighlightPanels)
+            {
+                panel.Visible = visible;
+                if (visible) panel.BringToFront();
+            }
         }
 
         private void UpdateRuntimeStatusForEngine(GameEngine engine)
@@ -1458,7 +1767,9 @@ namespace RpgmvpConverterWinForms
         {
             bool hasWww = Directory.Exists(Path.Combine(rootPath, "www"));
             bool hasPackage = File.Exists(Path.Combine(rootPath, "package.json"));
-            return hasWww || hasPackage;
+            bool hasPackageNw = File.Exists(Path.Combine(rootPath, "package.nw")) || Directory.Exists(Path.Combine(rootPath, "package.nw"));
+            bool hasAppNw = File.Exists(Path.Combine(rootPath, "app.nw")) || Directory.Exists(Path.Combine(rootPath, "app.nw"));
+            return hasWww || hasPackage || hasPackageNw || hasAppNw;
         }
 
         private static bool HasRpgmFiles(string rootPath)
@@ -1591,6 +1902,15 @@ namespace RpgmvpConverterWinForms
                 files = EnumerateFilesSafe(rootPath, "*.pak").Concat(EnumerateFilesSafe(rootPath, "*.utoc")).ToList();
                 archives = files.Count();
             }
+            else if (engine == GameEngine.Nwjs)
+            {
+                List<string> nwjsArchives = FindNwjsPackageArchives(rootPath);
+                files = GetNwjsLooseFiles(rootPath, Path.Combine(rootPath, "extracted", "nwjs"))
+                    .Concat(nwjsArchives)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                archives = nwjsArchives.Count;
+            }
             else
             {
                 files = GetFilesToConvert(rootPath);
@@ -1637,6 +1957,45 @@ namespace RpgmvpConverterWinForms
             return EnumerateFilesSafe(rootPath, "*.bundle").Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         }
 
+        private static List<string> FindNwjsPackageArchives(string rootPath)
+        {
+            return new[] { "package.nw", "app.nw" }
+                .Select(delegate(string name) { return Path.Combine(rootPath, name); })
+                .Where(File.Exists)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private static List<string> GetNwjsLooseFiles(string rootPath, string outputDir)
+        {
+            List<string> roots = new List<string>();
+            foreach (string relative in new[] { "www", "package.nw", "app.nw" })
+            {
+                string candidate = Path.Combine(rootPath, relative);
+                if (Directory.Exists(candidate)) roots.Add(candidate);
+            }
+            if (roots.Count == 0 && File.Exists(Path.Combine(rootPath, "package.json")))
+                roots.Add(rootPath);
+
+            string outputPrefix = AppendDirectorySeparator(Path.GetFullPath(outputDir));
+            string extractedPrefix = AppendDirectorySeparator(Path.GetFullPath(Path.Combine(rootPath, "extracted")));
+            HashSet<string> archivePaths = new HashSet<string>(FindNwjsPackageArchives(rootPath), StringComparer.OrdinalIgnoreCase);
+            return roots
+                .SelectMany(delegate(string root) { return EnumerateFilesSafe(root, "*.*"); })
+                .Where(delegate(string path)
+                {
+                    string fullPath = Path.GetFullPath(path);
+                    if (fullPath.StartsWith(outputPrefix, StringComparison.OrdinalIgnoreCase)
+                        || fullPath.StartsWith(extractedPrefix, StringComparison.OrdinalIgnoreCase)
+                        || archivePaths.Contains(fullPath))
+                        return false;
+                    string extension = Path.GetExtension(fullPath);
+                    return !new[] { ".exe", ".dll", ".pdb", ".log" }.Contains(extension, StringComparer.OrdinalIgnoreCase);
+                })
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
         private static string TryFindGameRoot(string path)
         {
             if (string.IsNullOrWhiteSpace(path)) return null;
@@ -1651,7 +2010,11 @@ namespace RpgmvpConverterWinForms
                     || IsUnrealGameFast(root)
                     || Directory.Exists(Path.Combine(root, "www"))
                     || Directory.Exists(Path.Combine(root, "game"))
-                    || File.Exists(Path.Combine(root, "package.json"));
+                    || File.Exists(Path.Combine(root, "package.json"))
+                    || File.Exists(Path.Combine(root, "package.nw"))
+                    || Directory.Exists(Path.Combine(root, "package.nw"))
+                    || File.Exists(Path.Combine(root, "app.nw"))
+                    || Directory.Exists(Path.Combine(root, "app.nw"));
                 if (known) return root;
                 current = current.Parent;
             }
@@ -1773,6 +2136,31 @@ namespace RpgmvpConverterWinForms
             return cleaned.Length == 0 ? "archive" : Path.Combine(cleaned);
         }
 
+        private static string GetSafeOutputPath(string outputDir, string relativePath)
+        {
+            string root = AppendDirectorySeparator(Path.GetFullPath(outputDir));
+            string destination = Path.GetFullPath(Path.Combine(outputDir, SanitizeRelativePath(relativePath)));
+            if (!destination.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Output path escapes extraction folder: " + relativePath);
+            return destination;
+        }
+
+        private static string GetUniqueFilePath(string path, out bool renamed)
+        {
+            string directory = Path.GetDirectoryName(path);
+            string filename = Path.GetFileNameWithoutExtension(path);
+            string extension = Path.GetExtension(path);
+            string candidate = path;
+            int suffix = 2;
+            while (File.Exists(candidate))
+            {
+                candidate = Path.Combine(directory, filename + " (" + suffix + ")" + extension);
+                suffix++;
+            }
+            renamed = !string.Equals(candidate, path, StringComparison.OrdinalIgnoreCase);
+            return candidate;
+        }
+
         private static string GetUniqueDirectoryPath(string path, out bool renamed)
         {
             string candidate = path;
@@ -1826,9 +2214,30 @@ namespace RpgmvpConverterWinForms
             public long Bytes { get; private set; }
         }
 
+        private sealed class NwjsCopyStats
+        {
+            public NwjsCopyStats(int extracted, long bytes, int renamed, int skipped)
+            {
+                Extracted = extracted;
+                Bytes = bytes;
+                Renamed = renamed;
+                Skipped = skipped;
+            }
+
+            public int Extracted { get; private set; }
+            public long Bytes { get; private set; }
+            public int Renamed { get; private set; }
+            public int Skipped { get; private set; }
+        }
+
         private sealed class OperationResult
         {
             public OperationResult(string engine, string outputDir, int extracted, long bytes, int errors, int renamed, TimeSpan duration)
+                : this(engine, outputDir, extracted, bytes, errors, renamed, 0, duration)
+            {
+            }
+
+            public OperationResult(string engine, string outputDir, int extracted, long bytes, int errors, int renamed, int skipped, TimeSpan duration)
             {
                 Engine = engine;
                 OutputDir = outputDir;
@@ -1836,6 +2245,7 @@ namespace RpgmvpConverterWinForms
                 Bytes = bytes;
                 Errors = errors;
                 Renamed = renamed;
+                Skipped = skipped;
                 Duration = duration;
             }
 
@@ -1845,6 +2255,7 @@ namespace RpgmvpConverterWinForms
             public long Bytes { get; private set; }
             public int Errors { get; private set; }
             public int Renamed { get; private set; }
+            public int Skipped { get; private set; }
             public TimeSpan Duration { get; private set; }
 
             public static OperationResult Failed(string engine, string outputDir, string message)
@@ -1861,6 +2272,7 @@ namespace RpgmvpConverterWinForms
                     "Extracted files: " + Extracted,
                     "Extracted size: " + FormatBytes(Bytes),
                     "Renamed conflicts: " + Renamed,
+                    "Skipped items: " + Skipped,
                     "Errors: " + Errors,
                     "Elapsed: " + FormatDuration(Duration.TotalSeconds),
                     "Output: " + OutputDir,
