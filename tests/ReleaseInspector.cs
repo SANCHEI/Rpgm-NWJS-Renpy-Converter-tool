@@ -98,6 +98,13 @@ internal static class ReleaseInspector
                 Directory.CreateDirectory(path);
                 File.WriteAllBytes(Path.Combine(path, "game.jar"), new byte[] { 0 });
             });
+            string javaLooseEngine = DetectEngine(detectEngine, Path.Combine(temp, "java-loose"), delegate(string path)
+            {
+                Directory.CreateDirectory(Path.Combine(path, "jre1.8.0"));
+                Directory.CreateDirectory(Path.Combine(path, "res", "images"));
+                File.WriteAllBytes(Path.Combine(path, "Game.exe"), new byte[] { 0 });
+                File.WriteAllText(Path.Combine(path, "res", "images", "hero.png"), "png");
+            });
             string flashEngine = DetectEngine(detectEngine, Path.Combine(temp, "flash"), delegate(string path)
             {
                 Directory.CreateDirectory(path);
@@ -120,6 +127,7 @@ internal static class ReleaseInspector
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "wolf")) == "WolfRpg"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "tyrano")) == "TyranoScript"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "java")) == "JavaJar"
+                && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "java-loose")) == "JavaJar"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "flash")) == "Flash"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "generic-game-folder")) == "Unknown";
 
@@ -210,6 +218,7 @@ internal static class ReleaseInspector
             Console.WriteLine("DetectWolfRpg=" + wolfEngine);
             Console.WriteLine("DetectTyranoScript=" + tyranoEngine);
             Console.WriteLine("DetectJavaJar=" + javaEngine);
+            Console.WriteLine("DetectJavaLoose=" + javaLooseEngine);
             Console.WriteLine("DetectFlash=" + flashEngine);
             Console.WriteLine("DetectGenericGameFolder=" + genericGameFolderEngine);
             Console.WriteLine("RenpyUnlockerScope=" + renpyUnlockerScope);
@@ -243,6 +252,7 @@ internal static class ReleaseInspector
                 && wolfEngine == "WolfRpg"
                 && tyranoEngine == "TyranoScript"
                 && javaEngine == "JavaJar"
+                && javaLooseEngine == "JavaJar"
                 && flashEngine == "Flash"
                 && genericGameFolderEngine == "Unknown"
                 && renpyUnlockerScope
@@ -445,6 +455,10 @@ internal static class ReleaseInspector
 
         string java = Path.Combine(root, "java");
         Directory.CreateDirectory(java);
+        Directory.CreateDirectory(Path.Combine(java, "jre1.8.0"));
+        Directory.CreateDirectory(Path.Combine(java, "res", "images"));
+        File.WriteAllBytes(Path.Combine(java, "Game.exe"), new byte[] { 0 });
+        File.WriteAllText(Path.Combine(java, "res", "images", "hero.png"), "loose-png");
         using (FileStream stream = File.Create(Path.Combine(java, "game.jar")))
         using (ZipArchive archive = new ZipArchive(stream, ZipArchiveMode.Create))
         {
@@ -474,8 +488,9 @@ internal static class ReleaseInspector
             object wolfResult = InvokeExtraction(formType, form, "RunWolfExtraction", wolf, Path.Combine(wolf, "extracted", "wolf"));
             return GetInt(tyranoResult, "Extracted") == 1
                 && File.Exists(Path.Combine(tyrano, "extracted", "tyrano", "data", "scenario", "first.ks"))
-                && GetInt(javaResult, "Extracted") == 2
+                && GetInt(javaResult, "Extracted") == 3
                 && GetInt(javaResult, "Errors") == 0
+                && File.Exists(Path.Combine(java, "extracted", "java", "loose", "res", "images", "hero.png"))
                 && File.Exists(Path.Combine(java, "extracted", "java", "archives", "game", "assets", "picture.png"))
                 && !File.Exists(Path.Combine(java, "extracted", "outside.txt"))
                 && GetInt(flashResult, "Extracted") == 2

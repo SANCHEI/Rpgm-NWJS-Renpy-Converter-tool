@@ -5,7 +5,7 @@
 - Accept a game-folder argument so dropping a folder onto `GameAssetTool.exe` opens the application with that path selected.
 - Added WOLF RPG detection, loose `Data` copying and encrypted archive extraction through the embedded MIT-licensed `UberWolfCli v0.6.3`.
 - Added TyranoScript project-data extraction.
-- Added safe Java `.jar` archive extraction.
+- Added safe Java `.jar` archive extraction and loose `res` copying for bundled Java games without duplicating their JRE.
 - Added experimental Flash `.swf` inspection with original-file copying and embedded JPEG, PNG and GIF extraction.
 - Added an `EN` / `RU` interface switch with localized contextual hints, tooltips and results dialog.
 

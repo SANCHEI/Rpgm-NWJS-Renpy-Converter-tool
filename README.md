@@ -108,9 +108,9 @@ WOLF RPG extraction copies loose `Data` files and uses the embedded MIT-licensed
 
 TyranoScript extraction copies project files from the `data` folder while preserving their structure, including scenarios, images, audio and video.
 
-## Java JAR
+## Java Games / JAR
 
-Java `.jar` files are treated as ZIP-compatible containers and unpacked into separate folders with path traversal protection.
+Java `.jar` files are treated as ZIP-compatible containers and unpacked into separate folders with path traversal protection. For bundled Java games with a top-level `res` folder, `jre*` runtime folder and launcher `.exe`, loose resources are copied without duplicating the bundled JRE.
 
 ## Flash Experimental
 

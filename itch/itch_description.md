@@ -63,9 +63,9 @@ Copies loose `Data` files and extracts encrypted WOLF archives through the embed
 
 Copies project files from the `data` folder while preserving scenarios, images, audio, video and their original structure.
 
-### Java JAR
+### Java Games / JAR
 
-Safely unpacks ZIP-compatible `.jar` archives into separate output folders.
+Safely unpacks ZIP-compatible `.jar` archives into separate output folders. Bundled Java games with a loose `res` folder are copied without duplicating their included JRE.
 
 ### Flash SWF Experimental
 

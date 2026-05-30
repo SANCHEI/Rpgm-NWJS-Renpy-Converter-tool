@@ -1094,7 +1094,7 @@ namespace RpgmvpConverterWinForms
 
         private async Task StartJavaExtractionAsync()
         {
-            await StartLocalExtractionAsync("Java JAR", "java", delegate(string rootPath, string outputDir)
+            await StartLocalExtractionAsync("Java game / JAR", "java", delegate(string rootPath, string outputDir)
             {
                 return RunJavaExtraction(rootPath, outputDir);
             });
@@ -1164,11 +1164,17 @@ namespace RpgmvpConverterWinForms
             DateTime start = DateTime.UtcNow;
             Directory.CreateDirectory(outputDir);
             List<string> archives = FindJavaArchives(rootPath);
-            int extracted = 0;
-            long bytes = 0;
+            List<string> looseFiles = GetJavaLooseFiles(rootPath, outputDir);
+            NwjsCopyStats loose = CopyLooseFiles(rootPath, looseFiles, outputDir, "loose");
+            int extracted = loose.Extracted;
+            long bytes = loose.Bytes;
             int errors = 0;
-            int renamed = 0;
-            int skipped = 0;
+            int renamed = loose.Renamed;
+            int skipped = loose.Skipped;
+            int total = looseFiles.Count + archives.Count;
+
+            if (looseFiles.Count > 0)
+                UpdateLocalProgress("Java", looseFiles.Count, total, bytes);
 
             for (int i = 0; i < archives.Count; i++)
             {
@@ -1192,10 +1198,10 @@ namespace RpgmvpConverterWinForms
                     errors++;
                     SafeLog("WARN:" + archive + ":" + ex.Message);
                 }
-                UpdateLocalProgress("Java JAR", i + 1, archives.Count, bytes);
+                UpdateLocalProgress("Java", looseFiles.Count + i + 1, total, bytes);
             }
 
-            return new OperationResult("Java JAR", outputDir, extracted, bytes, errors, renamed, skipped, DateTime.UtcNow - start);
+            return new OperationResult("Java game / JAR", outputDir, extracted, bytes, errors, renamed, skipped, DateTime.UtcNow - start);
         }
 
         private OperationResult RunFlashExtraction(string rootPath, string outputDir)
@@ -1963,8 +1969,8 @@ namespace RpgmvpConverterWinForms
                     break;
                 case GameEngine.JavaJar:
                     extractionHintLabel.Text = T(
-                        "Java JAR archives will be safely unpacked into separate folders.",
-                        "Архивы Java JAR будут безопасно распакованы в отдельные папки.");
+                        "Java JAR archives will be safely unpacked. Loose res folders from bundled Java games are copied without the JRE.",
+                        "Архивы Java JAR будут безопасно распакованы. Открытая папка res из Java-игры копируется без JRE.");
                     break;
                 case GameEngine.Flash:
                     extractionHintLabel.Text = T(
@@ -2406,7 +2412,7 @@ namespace RpgmvpConverterWinForms
 
         private static bool IsJavaJarGame(string rootPath)
         {
-            return EnumerateFilesTopLevelSafe(rootPath, "*.jar").Any();
+            return EnumerateFilesTopLevelSafe(rootPath, "*.jar").Any() || IsJavaLooseResourceGame(rootPath);
         }
 
         private static bool IsFlashGame(string rootPath)
@@ -2569,8 +2575,12 @@ namespace RpgmvpConverterWinForms
             }
             else if (engine == GameEngine.JavaJar)
             {
-                files = FindJavaArchives(rootPath);
-                archives = files.Count();
+                List<string> javaArchives = FindJavaArchives(rootPath);
+                files = GetJavaLooseFiles(rootPath, Path.Combine(rootPath, "extracted", "java"))
+                    .Concat(javaArchives)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                archives = javaArchives.Count;
             }
             else if (engine == GameEngine.Flash)
             {
@@ -2664,6 +2674,24 @@ namespace RpgmvpConverterWinForms
             return EnumerateFilesTopLevelSafe(rootPath, "*.jar")
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
+        }
+
+        private static bool IsJavaLooseResourceGame(string rootPath)
+        {
+            string resources = Path.Combine(rootPath, "res");
+            if (!Directory.Exists(resources) || !EnumerateFilesTopLevelSafe(rootPath, "*.exe").Any())
+                return false;
+            try
+            {
+                return Directory.EnumerateDirectories(rootPath, "jre*", SearchOption.TopDirectoryOnly).Any();
+            }
+            catch { return false; }
+        }
+
+        private static List<string> GetJavaLooseFiles(string rootPath, string outputDir)
+        {
+            string resources = Path.Combine(rootPath, "res");
+            return IsJavaLooseResourceGame(rootPath) ? GetLooseFiles(resources, outputDir) : new List<string>();
         }
 
         private static List<string> FindFlashFiles(string rootPath)
@@ -2772,7 +2800,7 @@ namespace RpgmvpConverterWinForms
                 case GameEngine.Nwjs: return "NWJS";
                 case GameEngine.WolfRpg: return "WOLF RPG";
                 case GameEngine.TyranoScript: return "TyranoScript";
-                case GameEngine.JavaJar: return "Java JAR";
+                case GameEngine.JavaJar: return "Java game / JAR";
                 case GameEngine.Flash: return "Flash SWF experimental";
                 default: return "not detected";
             }
