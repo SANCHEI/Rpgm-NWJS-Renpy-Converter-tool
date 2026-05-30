@@ -386,19 +386,22 @@ namespace RpgmvpConverterWinForms
 
         private Button CreateButton(string text, Point location, Size size, Color backColor, Color foreColor, Font font)
         {
-            Button button = new Button
+            ReadableButton button = new ReadableButton
             {
                 Text = text,
                 Location = location,
                 Size = size,
                 BackColor = backColor,
                 ForeColor = foreColor,
+                ActiveBackColor = backColor,
+                ActiveForeColor = foreColor,
+                DisabledBackColor = Color.FromArgb(42, 48, 58),
+                DisabledForeColor = Color.FromArgb(190, 200, 212),
+                BorderColor = border,
                 Font = font,
                 FlatStyle = FlatStyle.Flat,
                 Cursor = Cursors.Hand
             };
-            button.FlatAppearance.BorderColor = border;
-            button.FlatAppearance.BorderSize = 1;
             return button;
         }
 
@@ -1926,6 +1929,49 @@ namespace RpgmvpConverterWinForms
                 };
                 closeButton.Click += delegate { Close(); };
                 Controls.Add(closeButton);
+            }
+        }
+
+        private sealed class ReadableButton : Button
+        {
+            public Color ActiveBackColor { get; set; }
+            public Color ActiveForeColor { get; set; }
+            public Color DisabledBackColor { get; set; }
+            public Color DisabledForeColor { get; set; }
+            public Color BorderColor { get; set; }
+
+            protected override void OnEnabledChanged(EventArgs e)
+            {
+                base.OnEnabledChanged(e);
+                Cursor = Enabled ? Cursors.Hand : Cursors.Default;
+                Invalidate();
+            }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                Rectangle bounds = ClientRectangle;
+                using (SolidBrush background = new SolidBrush(Enabled ? ActiveBackColor : DisabledBackColor))
+                    e.Graphics.FillRectangle(background, bounds);
+
+                if (bounds.Width > 0 && bounds.Height > 0)
+                {
+                    using (Pen outline = new Pen(BorderColor))
+                        e.Graphics.DrawRectangle(outline, 0, 0, bounds.Width - 1, bounds.Height - 1);
+                }
+
+                TextRenderer.DrawText(
+                    e.Graphics,
+                    Text,
+                    Font,
+                    bounds,
+                    Enabled ? ActiveForeColor : DisabledForeColor,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
+
+                if (Focused && ShowFocusCues)
+                {
+                    Rectangle focus = Rectangle.Inflate(bounds, -4, -4);
+                    ControlPaint.DrawFocusRectangle(e.Graphics, focus);
+                }
             }
         }
 

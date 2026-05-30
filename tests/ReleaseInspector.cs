@@ -213,6 +213,10 @@ internal static class ReleaseInspector
             object unityMode = GetField(formType, form, "unityExtractModeBox");
             object extractionHint = GetField(formType, form, "extractionHintLabel");
             object unlockerButton = GetField(formType, form, "unlockerButton");
+            object removeUnlockerButton = GetField(formType, form, "removeUnlockerButton");
+            object pauseButton = GetField(formType, form, "pauseButton");
+            object cancelButton = GetField(formType, form, "cancelButton");
+            object openOutputButton = GetField(formType, form, "openOutputButton");
             object logPanel = GetField(formType, form, "logPanel");
             object toggleLogButton = GetField(formType, form, "toggleLogButton");
             object runtimeStatus = GetField(formType, form, "runtimeStatusLabel");
@@ -244,6 +248,12 @@ internal static class ReleaseInspector
             bool nwjs = !GetBool(startButton, "Enabled")
                 && !GetBool(unlockerButton, "Enabled")
                 && GetString(extractionHint, "Text").IndexOf("Unlocker", StringComparison.OrdinalIgnoreCase) < 0;
+            bool readableDisabledButtons = HasReadableDisabledContrast(startButton)
+                && HasReadableDisabledContrast(unlockerButton)
+                && HasReadableDisabledContrast(removeUnlockerButton)
+                && HasReadableDisabledContrast(pauseButton)
+                && HasReadableDisabledContrast(cancelButton)
+                && HasReadableDisabledContrast(openOutputButton);
 
             int compactHeight = GetSizeHeight(form, "ClientSize");
             toggleLog.Invoke(form, null);
@@ -253,7 +263,7 @@ internal static class ReleaseInspector
             bool collapsed = GetString(toggleLogButton, "Text") == "Show Log"
                 && GetSizeHeight(form, "ClientSize") == compactHeight;
 
-            return initial && unity && rpgm && unreal && nwjs && expanded && collapsed;
+            return initial && unity && rpgm && unreal && nwjs && readableDisabledButtons && expanded && collapsed;
         }
         finally
         {
@@ -294,5 +304,31 @@ internal static class ReleaseInspector
             current = current.BaseType;
         }
         throw new MissingMethodException("Control.GetState");
+    }
+
+    private static bool HasReadableDisabledContrast(object button)
+    {
+        Type type = button.GetType();
+        object foreground = type.GetProperty("DisabledForeColor").GetValue(button, null);
+        object background = type.GetProperty("DisabledBackColor").GetValue(button, null);
+        double foregroundLuminance = GetLuminance(foreground);
+        double backgroundLuminance = GetLuminance(background);
+        double lighter = Math.Max(foregroundLuminance, backgroundLuminance);
+        double darker = Math.Min(foregroundLuminance, backgroundLuminance);
+        return (lighter + 0.05) / (darker + 0.05) >= 4.5;
+    }
+
+    private static double GetLuminance(object color)
+    {
+        Type type = color.GetType();
+        return 0.2126 * GetLinearColor(type, color, "R")
+            + 0.7152 * GetLinearColor(type, color, "G")
+            + 0.0722 * GetLinearColor(type, color, "B");
+    }
+
+    private static double GetLinearColor(Type type, object color, string property)
+    {
+        double value = (byte)type.GetProperty(property).GetValue(color, null) / 255.0;
+        return value <= 0.03928 ? value / 12.92 : Math.Pow((value + 0.055) / 1.055, 2.4);
     }
 }

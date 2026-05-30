@@ -9,6 +9,7 @@
 - Added a collapsible log panel and a compact default window height.
 - Added a visible silent-runtime status in the application header.
 - Restricted the embedded `.rpy` gallery unlocker to Ren'Py folders and marked NWJS as detection-only.
+- Improved disabled-button contrast so secondary actions remain readable before a folder is selected.
 
 ## 1.5.2 - 2026-05-30
 
