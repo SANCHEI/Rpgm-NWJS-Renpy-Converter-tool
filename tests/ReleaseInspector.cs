@@ -33,6 +33,7 @@ internal static class ReleaseInspector
             bool hasUnrealScript = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.scripts.extract_unreal.py");
             bool hasPortableRuntime = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.runtime.runtime-win-x64.zip");
             bool hasWolfCli = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.tools.UberWolfCli.exe");
+            bool hasResvg = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.tools.resvg.exe");
 
             Type unlockerType = assembly.GetType("RpgmvpConverterWinForms.UnlockerResources", true);
             MethodInfo extractUnlocker = unlockerType.GetMethod("ExtractUnlocker", BindingFlags.Public | BindingFlags.Static);
@@ -185,6 +186,8 @@ internal static class ReleaseInspector
             bool runtimeRemoved = false;
             bool wolfCliExtracted = false;
             bool wolfCliRemoved = false;
+            bool resvgExtracted = false;
+            bool resvgRemoved = false;
             try
             {
                 string staleSession = Path.Combine(
@@ -214,17 +217,22 @@ internal static class ReleaseInspector
 
             Type toolRuntimeType = assembly.GetType("RpgmvpConverterWinForms.ToolRuntime", true);
             MethodInfo ensureWolfCli = toolRuntimeType.GetMethod("EnsureWolfCliExtracted", BindingFlags.Public | BindingFlags.Static);
+            MethodInfo ensureResvg = toolRuntimeType.GetMethod("EnsureResvgExtracted", BindingFlags.Public | BindingFlags.Static);
             MethodInfo cleanupTools = toolRuntimeType.GetMethod("Cleanup", BindingFlags.Public | BindingFlags.Static);
             string wolfCliPath = null;
+            string resvgPath = null;
             try
             {
                 wolfCliPath = (string)ensureWolfCli.Invoke(null, null);
                 wolfCliExtracted = File.Exists(wolfCliPath);
+                resvgPath = (string)ensureResvg.Invoke(null, null);
+                resvgExtracted = File.Exists(resvgPath);
             }
             finally
             {
                 cleanupTools.Invoke(null, null);
                 wolfCliRemoved = string.IsNullOrWhiteSpace(wolfCliPath) || !File.Exists(wolfCliPath);
+                resvgRemoved = string.IsNullOrWhiteSpace(resvgPath) || !File.Exists(resvgPath);
             }
 
             Console.WriteLine("AssemblyVersion=" + assembly.GetName().Version);
@@ -235,10 +243,13 @@ internal static class ReleaseInspector
             Console.WriteLine("EmbeddedUnrealScript=" + hasUnrealScript);
             Console.WriteLine("EmbeddedPortableRuntime=" + hasPortableRuntime);
             Console.WriteLine("EmbeddedWolfCli=" + hasWolfCli);
+            Console.WriteLine("EmbeddedResvg=" + hasResvg);
             Console.WriteLine("PortableRuntimeImports=" + portableImports);
             Console.WriteLine("PortableRuntimeRemoved=" + runtimeRemoved);
             Console.WriteLine("WolfCliExtracted=" + wolfCliExtracted);
             Console.WriteLine("WolfCliRemoved=" + wolfCliRemoved);
+            Console.WriteLine("ResvgExtracted=" + resvgExtracted);
+            Console.WriteLine("ResvgRemoved=" + resvgRemoved);
             Console.WriteLine("UnlockerFiles=" + files.Length);
             Console.WriteLine("UnexpectedNestedGameFolder=" + nestedGameFolder);
             Console.WriteLine("DetectUnity=" + unityEngine);
@@ -277,10 +288,13 @@ internal static class ReleaseInspector
                 && hasUnrealScript
                 && hasPortableRuntime
                 && hasWolfCli
+                && hasResvg
                 && portableImports
                 && runtimeRemoved
                 && wolfCliExtracted
                 && wolfCliRemoved
+                && resvgExtracted
+                && resvgRemoved
                 && files.Length > 0
                 && !nestedGameFolder
                 && unityEngine == "Unity"
@@ -523,11 +537,17 @@ internal static class ReleaseInspector
         Directory.CreateDirectory(Path.Combine(java, "res", "images"));
         File.WriteAllBytes(Path.Combine(java, "Game.exe"), new byte[] { 0 });
         File.WriteAllText(Path.Combine(java, "res", "images", "hero.png"), "loose-png");
+        File.WriteAllText(Path.Combine(java, "res", "images", "vector.svg"), "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 16 16\"><rect width=\"16\" height=\"16\" fill=\"#f00\"/></svg>");
+        File.WriteAllText(Path.Combine(java, "res", "images", "metadata.xml"), "<metadata/>");
         using (FileStream stream = File.Create(Path.Combine(java, "game.jar")))
         using (ZipArchive archive = new ZipArchive(stream, ZipArchiveMode.Create))
         {
             using (StreamWriter writer = new StreamWriter(archive.CreateEntry("assets/picture.png").Open()))
                 writer.Write("png");
+            using (StreamWriter writer = new StreamWriter(archive.CreateEntry("assets/vector.svg").Open()))
+                writer.Write("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 16 16\"><circle cx=\"8\" cy=\"8\" r=\"8\" fill=\"#0f0\"/></svg>");
+            using (StreamWriter writer = new StreamWriter(archive.CreateEntry("assets/metadata.xml").Open()))
+                writer.Write("<metadata/>");
             using (StreamWriter writer = new StreamWriter(archive.CreateEntry("../outside.txt").Open()))
                 writer.Write("inside-output");
         }
@@ -552,10 +572,16 @@ internal static class ReleaseInspector
             object wolfResult = InvokeExtraction(formType, form, "RunWolfExtraction", wolf, Path.Combine(wolf, "extracted", "wolf"));
             return GetInt(tyranoResult, "Extracted") == 1
                 && File.Exists(Path.Combine(tyrano, "extracted", "tyrano", "data", "scenario", "first.ks"))
-                && GetInt(javaResult, "Extracted") == 3
+                && GetInt(javaResult, "Extracted") == 6
                 && GetInt(javaResult, "Errors") == 0
                 && File.Exists(Path.Combine(java, "extracted", "java", "loose", "res", "images", "hero.png"))
+                && File.Exists(Path.Combine(java, "extracted", "java", "loose", "res", "images", "vector.svg"))
+                && IsPng(Path.Combine(java, "extracted", "java", "loose", "res", "images", "vector.png"))
+                && !File.Exists(Path.Combine(java, "extracted", "java", "loose", "res", "images", "metadata.xml"))
                 && File.Exists(Path.Combine(java, "extracted", "java", "archives", "game", "assets", "picture.png"))
+                && File.Exists(Path.Combine(java, "extracted", "java", "archives", "game", "assets", "vector.svg"))
+                && IsPng(Path.Combine(java, "extracted", "java", "archives", "game", "assets", "vector.png"))
+                && !File.Exists(Path.Combine(java, "extracted", "java", "archives", "game", "assets", "metadata.xml"))
                 && !File.Exists(Path.Combine(java, "extracted", "outside.txt"))
                 && GetInt(flashResult, "Extracted") == 2
                 && GetInt(flashResult, "Errors") == 0
@@ -702,6 +728,13 @@ internal static class ReleaseInspector
     private static void WriteMinimalRags(string path)
     {
         File.WriteAllBytes(path, new byte[] { 1, 2, 3, 0xff, 0xd8, 0xff, 0x00, 0xff, 0xd9, 4, 5, 6 });
+    }
+
+    private static bool IsPng(string path)
+    {
+        if (!File.Exists(path)) return false;
+        byte[] signature = File.ReadAllBytes(path).Take(8).ToArray();
+        return signature.SequenceEqual(new byte[] { 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a });
     }
 
     private static object GetField(Type type, object instance, string name)

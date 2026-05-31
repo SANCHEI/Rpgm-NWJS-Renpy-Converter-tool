@@ -66,7 +66,7 @@ Copies project files from the `data` folder while preserving scenarios, images, 
 
 ### Java Games / JAR
 
-Safely unpacks ZIP-compatible `.jar` archives into separate output folders. Bundled Java games with a loose `res` folder are copied without duplicating their included JRE.
+Extracts image assets only from ZIP-compatible `.jar` archives and loose `res` folders without duplicating an included JRE. SVG originals are preserved and automatically rendered into adjacent PNG previews with the built-in `resvg` helper.
 
 ### Flash SWF Experimental
 

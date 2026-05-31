@@ -58,6 +58,9 @@
     <EmbeddedResource Include="third_party\uberwolf\UberWolfCli.exe">
       <LogicalName>RpgmvpConverterWinForms.tools.UberWolfCli.exe</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="third_party\resvg\resvg.exe">
+      <LogicalName>RpgmvpConverterWinForms.tools.resvg.exe</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

@@ -6,7 +6,7 @@
 
 Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **Ren'Py**, **NWJS**, **Unity**, **Godot**, **KiriKiri**, **WOLF RPG**, **TyranoScript**, **Java**, **HTML** and **QSP** games. Experimental Unreal `.pak`, Flash `.swf` and RAGS `.rag` recovery is included.
 
-![Version](https://img.shields.io/badge/version-1.8.0-blue)
+![Version](https://img.shields.io/badge/version-1.8.1-blue)
 ![.NET](https://img.shields.io/badge/.NET_Framework-4.7.2-blue)
 ![Runtime](https://img.shields.io/badge/runtime-built--in-green)
 
@@ -121,7 +121,7 @@ TyranoScript extraction copies project files from the `data` folder while preser
 
 ## Java Games / JAR
 
-Java `.jar` files are treated as ZIP-compatible containers and unpacked into separate folders with path traversal protection. For bundled Java games with a top-level `res` folder, `jre*` runtime folder and launcher `.exe`, loose resources are copied without duplicating the bundled JRE.
+Java `.jar` files and loose `res` folders are filtered to image assets only, without duplicating an included JRE. SVG originals are preserved and rendered into adjacent PNG previews through the embedded [`resvg v0.47.0`](https://github.com/linebender/resvg) helper. The helper appears only in the temporary tool session while it is needed.
 
 ## Flash Experimental
 
@@ -177,7 +177,7 @@ powershell -ExecutionPolicy Bypass -File .\build_release.ps1
 Release output:
 
 ```text
-release/GameAssetTool-v1.8.0.exe
+release/GameAssetTool-v1.8.1.exe
 ```
 
 The release contains one supported executable. Users do not need any neighboring files.

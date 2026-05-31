@@ -66,6 +66,7 @@ namespace RpgmvpConverterWinForms
         private readonly object processSync = new object();
         private readonly object runtimeWarmupSync = new object();
         private readonly List<Panel> dragHighlightPanels = new List<Panel>();
+        private readonly List<Process> activeSvgProcesses = new List<Process>();
         private System.Windows.Forms.Timer uiTimer;
         private ConversionRun currentRun;
         private Task runtimeWarmupTask;
@@ -83,6 +84,11 @@ namespace RpgmvpConverterWinForms
         private const int CompactClientHeight = 570;
         private const int ExpandedClientHeight = 872;
         private const int UnlockerSectionHeight = 64;
+        private static readonly HashSet<string> JavaImageExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".ico",
+            ".tga", ".dds", ".tif", ".tiff", ".avif"
+        };
 
         public RpgmvpConverterForm() : this(null)
         {
@@ -110,7 +116,7 @@ namespace RpgmvpConverterWinForms
             Font titleFont = new Font("Segoe UI Semibold", 14f, FontStyle.Regular);
             Font logFont = new Font("Consolas", 9.5f, FontStyle.Regular);
 
-            Text = "Game Asset Tool v1.8.0";
+            Text = "Game Asset Tool v1.8.1";
             StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
@@ -1269,7 +1275,8 @@ namespace RpgmvpConverterWinForms
             Directory.CreateDirectory(outputDir);
             List<string> archives = FindJavaArchives(inputPath);
             List<string> looseFiles = GetJavaLooseFiles(rootPath, outputDir);
-            NwjsCopyStats loose = CopyLooseFiles(rootPath, looseFiles, outputDir, "loose");
+            List<string> extractedPaths = new List<string>();
+            NwjsCopyStats loose = CopyLooseFiles(rootPath, looseFiles, outputDir, "loose", extractedPaths);
             int extracted = loose.Extracted;
             long bytes = loose.Bytes;
             int errors = 0;
@@ -1286,7 +1293,12 @@ namespace RpgmvpConverterWinForms
                 string archive = archives[i];
                 try
                 {
-                    NwjsCopyStats stats = ExtractZipArchive(archive, outputDir, Path.Combine("archives", Path.GetFileNameWithoutExtension(archive)));
+                    NwjsCopyStats stats = ExtractZipArchive(
+                        archive,
+                        outputDir,
+                        Path.Combine("archives", Path.GetFileNameWithoutExtension(archive)),
+                        IsJavaImageFile,
+                        extractedPaths);
                     extracted += stats.Extracted;
                     bytes += stats.Bytes;
                     renamed += stats.Renamed;
@@ -1305,7 +1317,115 @@ namespace RpgmvpConverterWinForms
                 UpdateLocalProgress("Java", looseFiles.Count + i + 1, total, bytes);
             }
 
+            SvgPreviewStats previews = RenderSvgPreviews(extractedPaths);
+            extracted += previews.Converted;
+            bytes += previews.Bytes;
+            errors += previews.Errors;
+            renamed += previews.Renamed;
+            skipped += previews.Skipped;
+
             return new OperationResult("Java game / JAR", outputDir, extracted, bytes, errors, renamed, skipped, DateTime.UtcNow - start);
+        }
+
+        private SvgPreviewStats RenderSvgPreviews(IEnumerable<string> extractedPaths)
+        {
+            List<string> svgFiles = extractedPaths
+                .Where(delegate(string path) { return path.EndsWith(".svg", StringComparison.OrdinalIgnoreCase); })
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (svgFiles.Count == 0) return new SvgPreviewStats(0, 0, 0, 0, 0);
+
+            string renderer = ToolRuntime.EnsureResvgExtracted();
+            int converted = 0;
+            long bytes = 0;
+            int errors = 0;
+            int renamed = 0;
+            int skipped = 0;
+            int processed = 0;
+            SafeLog("Java SVG preview conversion started with embedded resvg: " + svgFiles.Count + " file(s)");
+
+            Parallel.ForEach(svgFiles, new ParallelOptions
+            {
+                MaxDegreeOfParallelism = Math.Min(8, Math.Max(1, Environment.ProcessorCount))
+            }, delegate(string source)
+            {
+                if (localCopyCancellationRequested) return;
+                bool collision;
+                string destination = GetUniqueFilePath(Path.ChangeExtension(source, ".png"), out collision);
+                try
+                {
+                    int exitCode = RunSvgRenderer(renderer, source, destination);
+                    if (exitCode != 0 || !File.Exists(destination))
+                        throw new InvalidDataException("resvg exited with code " + exitCode + ".");
+                    Interlocked.Increment(ref converted);
+                    Interlocked.Add(ref bytes, SafeFileLength(destination));
+                    if (collision) Interlocked.Increment(ref renamed);
+                }
+                catch (Exception ex)
+                {
+                    if (!localCopyCancellationRequested) Interlocked.Increment(ref errors);
+                    TryDeleteFile(destination);
+                    SafeLog("WARN:SVG preview:" + source + ":" + ex.Message);
+                }
+                int current = Interlocked.Increment(ref processed);
+                UpdateLocalProgress("Java SVG previews", current, svgFiles.Count, Interlocked.Read(ref bytes));
+            });
+            ThrowIfLocalCopyCancelled();
+            return new SvgPreviewStats(converted, bytes, errors, renamed, skipped);
+        }
+
+        private int RunSvgRenderer(string renderer, string source, string destination)
+        {
+            ProcessStartInfo psi = new ProcessStartInfo
+            {
+                FileName = renderer,
+                Arguments = (SvgNeedsSystemFonts(source) ? "" : "--skip-system-fonts ")
+                    + QuoteArg(source) + " " + QuoteArg(destination),
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            using (Process process = new Process { StartInfo = psi })
+            {
+                process.OutputDataReceived += delegate(object sender, DataReceivedEventArgs e)
+                {
+                    if (!string.IsNullOrWhiteSpace(e.Data)) SafeLog("resvg: " + e.Data);
+                };
+                process.ErrorDataReceived += delegate(object sender, DataReceivedEventArgs e)
+                {
+                    if (!string.IsNullOrWhiteSpace(e.Data)) SafeLog("resvg ERROR: " + e.Data);
+                };
+                lock (processSync) activeSvgProcesses.Add(process);
+                try
+                {
+                    process.Start();
+                    process.BeginOutputReadLine();
+                    process.BeginErrorReadLine();
+                    process.WaitForExit();
+                    return process.ExitCode;
+                }
+                finally
+                {
+                    lock (processSync) activeSvgProcesses.Remove(process);
+                }
+            }
+        }
+
+        private static bool SvgNeedsSystemFonts(string path)
+        {
+            try
+            {
+                string svg = File.ReadAllText(path);
+                return svg.IndexOf("<text", StringComparison.OrdinalIgnoreCase) >= 0
+                    || svg.IndexOf("<tspan", StringComparison.OrdinalIgnoreCase) >= 0
+                    || svg.IndexOf("font-family", StringComparison.OrdinalIgnoreCase) >= 0
+                    || svg.IndexOf("font-size", StringComparison.OrdinalIgnoreCase) >= 0;
+            }
+            catch
+            {
+                return true;
+            }
         }
 
         private OperationResult RunFlashExtraction(string rootPath, string outputDir)
@@ -1456,6 +1576,11 @@ namespace RpgmvpConverterWinForms
 
         private NwjsCopyStats CopyLooseFiles(string relativeRoot, IEnumerable<string> files, string outputDir, string prefix)
         {
+            return CopyLooseFiles(relativeRoot, files, outputDir, prefix, null);
+        }
+
+        private NwjsCopyStats CopyLooseFiles(string relativeRoot, IEnumerable<string> files, string outputDir, string prefix, List<string> extractedPaths)
+        {
             int extracted = 0;
             long bytes = 0;
             int renamed = 0;
@@ -1474,6 +1599,7 @@ namespace RpgmvpConverterWinForms
                     extracted++;
                     bytes += SafeFileLength(destination);
                     if (collision) renamed++;
+                    if (extractedPaths != null) extractedPaths.Add(destination);
                 }
                 catch (Exception ex)
                 {
@@ -1485,6 +1611,11 @@ namespace RpgmvpConverterWinForms
         }
 
         private NwjsCopyStats ExtractZipArchive(string archivePath, string outputDir, string prefix)
+        {
+            return ExtractZipArchive(archivePath, outputDir, prefix, null, null);
+        }
+
+        private NwjsCopyStats ExtractZipArchive(string archivePath, string outputDir, string prefix, Func<string, bool> includeFile, List<string> extractedPaths)
         {
             int extracted = 0;
             long bytes = 0;
@@ -1501,6 +1632,8 @@ namespace RpgmvpConverterWinForms
                         skipped++;
                         continue;
                     }
+                    if (includeFile != null && !includeFile(entry.FullName))
+                        continue;
 
                     string destination = GetSafeOutputPath(outputDir, Path.Combine(prefix, entry.FullName));
                     bool collision;
@@ -1512,6 +1645,7 @@ namespace RpgmvpConverterWinForms
                     extracted++;
                     bytes += SafeFileLength(destination);
                     if (collision) renamed++;
+                    if (extractedPaths != null) extractedPaths.Add(destination);
                 }
             }
             return new NwjsCopyStats(extracted, bytes, renamed, skipped);
@@ -1905,6 +2039,14 @@ namespace RpgmvpConverterWinForms
                     }
                     catch { }
                 }
+                foreach (Process process in activeSvgProcesses.ToArray())
+                {
+                    try
+                    {
+                        if (!process.HasExited) process.Kill();
+                    }
+                    catch { }
+                }
             }
             cancelButton.Enabled = false;
             statusLabel.Text = T("Stopping...", "Остановка...");
@@ -2084,8 +2226,8 @@ namespace RpgmvpConverterWinForms
                     break;
                 case GameEngine.JavaJar:
                     extractionHintLabel.Text = T(
-                        "Java JAR archives will be safely unpacked. Loose res folders from bundled Java games are copied without the JRE.",
-                        "Архивы Java JAR будут безопасно распакованы. Открытая папка res из Java-игры копируется без JRE.");
+                        "Java extraction keeps image assets only. SVG files are preserved and rendered to PNG previews.",
+                        "Из Java извлекаются только изображения. SVG сохраняются и дополнительно преобразуются в PNG-превью.");
                     break;
                 case GameEngine.Flash:
                     extractionHintLabel.Text = T(
@@ -2308,6 +2450,18 @@ namespace RpgmvpConverterWinForms
                     }
                 }
                 catch { }
+                foreach (Process process in activeSvgProcesses.ToArray())
+                {
+                    try
+                    {
+                        if (!process.HasExited)
+                        {
+                            process.Kill();
+                            process.WaitForExit(2000);
+                        }
+                    }
+                    catch { }
+                }
             }
             Task warmup;
             lock (runtimeWarmupSync) warmup = runtimeWarmupTask;
@@ -2896,7 +3050,14 @@ namespace RpgmvpConverterWinForms
         private static List<string> GetJavaLooseFiles(string rootPath, string outputDir)
         {
             string resources = Path.Combine(rootPath, "res");
-            return IsJavaLooseResourceGame(rootPath) ? GetLooseFiles(resources, outputDir) : new List<string>();
+            return IsJavaLooseResourceGame(rootPath)
+                ? GetLooseFiles(resources, outputDir).Where(IsJavaImageFile).ToList()
+                : new List<string>();
+        }
+
+        private static bool IsJavaImageFile(string path)
+        {
+            return JavaImageExtensions.Contains(Path.GetExtension(path));
         }
 
         private static List<string> FindFlashFiles(string rootPath)
@@ -3074,6 +3235,16 @@ namespace RpgmvpConverterWinForms
             catch { return 0; }
         }
 
+        private static void TryDeleteFile(string path)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+                    File.Delete(path);
+            }
+            catch { }
+        }
+
         private static FileStats GetFileStats(string rootPath)
         {
             List<string> files = EnumerateFilesSafe(rootPath, "*.*").Where(delegate(string file)
@@ -3232,6 +3403,24 @@ namespace RpgmvpConverterWinForms
             public int Skipped { get; private set; }
         }
 
+        private sealed class SvgPreviewStats
+        {
+            public SvgPreviewStats(int converted, long bytes, int errors, int renamed, int skipped)
+            {
+                Converted = converted;
+                Bytes = bytes;
+                Errors = errors;
+                Renamed = renamed;
+                Skipped = skipped;
+            }
+
+            public int Converted { get; private set; }
+            public long Bytes { get; private set; }
+            public int Errors { get; private set; }
+            public int Renamed { get; private set; }
+            public int Skipped { get; private set; }
+        }
+
         private sealed class OperationResult
         {
             public OperationResult(string engine, string outputDir, int extracted, long bytes, int errors, int renamed, TimeSpan duration)
@@ -3269,7 +3458,7 @@ namespace RpgmvpConverterWinForms
             {
                 return string.Join(Environment.NewLine, new[]
                 {
-                    "Game Asset Tool v1.8.0 report",
+                    "Game Asset Tool v1.8.1 report",
                     "Engine: " + Engine,
                     "Extracted files: " + Extracted,
                     "Extracted size: " + FormatBytes(Bytes),

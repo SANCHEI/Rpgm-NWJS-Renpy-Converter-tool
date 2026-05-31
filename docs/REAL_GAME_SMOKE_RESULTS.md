@@ -7,7 +7,7 @@ The source game folders were not modified.
 | Sample | Detected engine | Result |
 | --- | --- | --- |
 | `Flash ImpregDef` | Flash | Copied 6 SWF files and extracted 1 embedded JPEG |
-| `Java Lilith's Throne (exe version)` | Java | Copied 4093 loose `res` files without duplicating the bundled JRE |
+| `Java Lilith's Throne (exe version)` | Java | Extracted 1588 image sources and rendered 1169 SVG files into PNG previews; produced 2757 files with no XML and no errors |
 | `RPGM RedJill_SUCCESS` | RPG Maker | Auto-detected the HEX key and decrypted 5 sampled PNG files with valid PNG signatures |
 | `Unity resident slut 4` | Unity | Extracted 101 files; 2829 unsupported Unity objects were skipped without errors |
 | `VN Ren'Py AuraOfSin-0.1-pc` | Ren'Py | Extracted 1205 files from `archive.rpa` |

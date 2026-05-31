@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.8.1 - 2026-05-31
+
+- Changed Java extraction to keep image assets only instead of copying every loose `res` file or JAR entry.
+- Preserve Java SVG originals and automatically render adjacent PNG previews.
+- Embedded the official [`resvg v0.47.0`](https://github.com/linebender/resvg) Windows renderer so users do not need a browser, converter or separate installation.
+- Extract `resvg.exe` only when Java SVG previews are needed and remove it with the temporary tool session.
+
 ## 1.8.0 - 2026-05-31
 
 - Accept individual supported files through window drag-and-drop and by dropping a file directly onto `GameAssetTool.exe`.

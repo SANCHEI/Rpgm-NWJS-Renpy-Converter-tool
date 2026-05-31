@@ -10,6 +10,8 @@ namespace RpgmvpConverterWinForms
     {
         private const string WolfCliResourceName = "RpgmvpConverterWinForms.tools.UberWolfCli.exe";
         private const string WolfCliSha256 = "FFFBE66CAF10699865010217AEABE3A3684EC9320FFE461268F1C9509FDA8917";
+        private const string ResvgResourceName = "RpgmvpConverterWinForms.tools.resvg.exe";
+        private const string ResvgSha256 = "433A7C744CFF561ED64FCF73C7C04E239D7A07AE5F0AADBF1BA8471D63707402";
         private static readonly object Sync = new object();
         private static string runtimeDirectory;
 
@@ -22,6 +24,19 @@ namespace RpgmvpConverterWinForms
                 if (!File.Exists(path))
                     ExtractResource(WolfCliResourceName, path);
                 ValidateSha256(path, WolfCliSha256);
+                return path;
+            }
+        }
+
+        public static string EnsureResvgExtracted()
+        {
+            lock (Sync)
+            {
+                EnsureRuntimeDirectory();
+                string path = Path.Combine(runtimeDirectory, "resvg.exe");
+                if (!File.Exists(path))
+                    ExtractResource(ResvgResourceName, path);
+                ValidateSha256(path, ResvgSha256);
                 return path;
             }
         }

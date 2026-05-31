@@ -12,7 +12,7 @@
 | KiriKiri | Supported | Standard unencrypted XP3 archives |
 | WOLF RPG | Supported | Loose `Data` files and encrypted archives through embedded `UberWolfCli v0.6.3` |
 | TyranoScript | Supported | Copies project files from the `data` folder |
-| Java games / JAR | Supported | Safely unpacks ZIP-compatible `.jar` archives and copies loose `res` folders from bundled Java games without duplicating their JRE |
+| Java games / JAR | Supported | Extracts image assets only from ZIP-compatible `.jar` archives and loose `res` folders; renders preserved SVG originals into PNG previews through embedded `resvg v0.47.0` |
 | HTML games | Supported | Copies open scripts, styles and media while preserving folder structure |
 | QSP | Supported | Copies `.qsp` databases and loose media without duplicating the bundled player |
 | Flash SWF | Experimental | Copies original SWF files and extracts embedded JPEG, PNG and GIF from `FWS` / `CWS` |
