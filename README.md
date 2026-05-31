@@ -1,10 +1,8 @@
 # Game Asset Tool
 
-![Screenshot](screenshot.png)
-
 [**Watch Demo Video on YouTube**](https://youtu.be/BnjRjik9fk0)
 
-Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **RPG Maker XP/VX/VX Ace**, **Ren'Py**, **NWJS**, **Unity**, **Godot**, **KiriKiri**, **WOLF RPG**, **TyranoScript**, **Java**, **HTML** and **QSP** games. Experimental Unreal `.pak`, Flash `.swf`, RAGS `.rag` and GameMaker `data.win` recovery is included.
+Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **RPG Maker XP/VX/VX Ace**, **Ren'Py**, **NWJS**, **Electron**, **Unity**, **Godot**, **KiriKiri**, **WOLF RPG**, **TyranoScript**, **Java**, **HTML** and **QSP** games. Experimental Unreal `.pak`, Flash `.swf`, RAGS `.rag` and GameMaker `data.win` recovery is included.
 
 ![Version](https://img.shields.io/badge/version-1.9.0-blue)
 ![.NET](https://img.shields.io/badge/.NET_Framework-4.7.2-blue)
@@ -33,7 +31,7 @@ Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **RP
 - Preserves RAGS `.rag` databases and recovers confidently detected embedded media experimentally.
 - Provides **Collect Loose Files** and **Export Diagnostics** fallback actions.
 - Preserves relative paths and renames collisions with suffixes such as `image (2).png`.
-- Opens a searchable results gallery with image previews and SVG, audio and video filters.
+- Opens a searchable results gallery with background indexing, lazy thumbnail batches, enlarged image previews and SVG, audio and video filters.
 - Shows the Ren'Py gallery unlocker only for relevant folders or when installed files can be removed.
 - Writes an extraction summary to the results dialog and `GameAssetTool-report.txt`.
 
@@ -53,6 +51,7 @@ extracted/
   rgss/
   renpy/
   nwjs/
+  electron/
   unity/
   godot/
   kirikiri/
@@ -85,13 +84,17 @@ NWJS extraction copies loose files from `www`, `package.nw` and `app.nw` folders
 
 The bundled gallery unlocker is not used for NWJS games: gallery state is usually stored in game-specific save data.
 
+## Electron
+
+Electron extraction unpacks standard `resources/app.asar` archives without requiring Node.js or an external ASAR utility. Archive entries are validated before writing files.
+
 ## RPG Maker XP / VX / VX Ace
 
 Legacy RPG Maker archives with `.rgssad`, `.rgss2a` and `.rgss3a` extensions are extracted by the built-in parser. Paths are validated before writing files, and separate archives are placed into separate result folders.
 
 ## Unity
 
-Unity extraction uses [`UnityPy==1.25.0`](https://github.com/K0lb3/UnityPy). The package, its dependencies and the Python source from [`scripts/extract_unity.py`](scripts/extract_unity.py) are embedded into the release executable during the build.
+Unity extraction uses [`UnityPy==1.25.0`](https://github.com/K0lb3/UnityPy). The package, its dependencies and the Python source from [`source/scripts/extract_unity.py`](source/scripts/extract_unity.py) are embedded into the release executable during the build.
 
 Available filters:
 
@@ -133,7 +136,11 @@ Java `.jar` files and loose `res` folders can be extracted in three modes: **Ima
 
 ## Flash Experimental
 
-Flash inspection copies original `.swf` files and extracts embedded JPEG, PNG and GIF images from uncompressed `FWS` and Zlib-compressed `CWS` files. LZMA-compressed `ZWS` files are reported as unsupported.
+Flash inspection copies original `.swf` files and extracts embedded JPEG, PNG and GIF images plus FLV video streams from uncompressed `FWS` and Zlib-compressed `CWS` files. LZMA-compressed `ZWS` files are reported as unsupported.
+
+## Archive Safety
+
+Built-in ZIP, JAR, NWJS, ASAR and RGSS extraction rejects absolute paths and `..` traversal entries. It also enforces limits for entry count, individual file size, total extracted size and suspicious ZIP compression ratios.
 
 ## HTML Games
 
@@ -196,8 +203,10 @@ The release contains one supported executable. Users do not need any neighboring
 
 ## Project Layout
 
-- `source/`: C# sources for the supported WinForms application.
-- `scripts/`: Python sources and the portable-runtime build script.
+- `source/Application/`: WinForms UI, engine detection and extraction orchestration.
+- `source/Extractors/`: engine extractors and shared archive safety helpers.
+- `source/Runtime/`: embedded runtime lifecycle helpers.
+- `source/scripts/`: Python sources and the portable-runtime build script.
 - `tools/`: experimental utilities excluded from the release.
 - `payload/`: generated embedded Python runtime archive, excluded from Git.
 

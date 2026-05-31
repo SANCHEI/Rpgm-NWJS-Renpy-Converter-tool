@@ -121,6 +121,8 @@ internal static class RealGameSmoke
             return FromOperation(Invoke(formType, form, "RunJavaExtraction", game, Path.Combine(gameOutput, "java")));
         if (engine == "Flash")
             return FromOperation(Invoke(formType, form, "RunFlashExtraction", game, Path.Combine(gameOutput, "flash")));
+        if (engine == "Electron")
+            return FromOperation(Invoke(formType, form, "RunElectronExtraction", game, Path.Combine(gameOutput, "electron")));
         if (engine == "Html")
             return RunCollector(formType.Assembly, "GetHtmlFiles", game, Path.Combine(gameOutput, "html"));
         if (engine == "Qsp")

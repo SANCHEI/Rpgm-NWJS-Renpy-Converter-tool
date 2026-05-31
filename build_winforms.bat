@@ -1,7 +1,7 @@
 @echo off
 setlocal
 
-call powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\build_portable_runtime.ps1"
+call powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0source\scripts\build_portable_runtime.ps1"
 if errorlevel 1 exit /b 1
 
 set "MSBUILD=C:\Windows\Microsoft.NET\Framework64\v4.0.30319\MSBuild.exe"

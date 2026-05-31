@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
@@ -122,6 +123,11 @@ internal static class ReleaseInspector
                 Directory.CreateDirectory(path);
                 WriteMinimalSwf(Path.Combine(path, "game.swf"));
             });
+            string electronEngine = DetectEngine(detectEngine, Path.Combine(temp, "electron"), delegate(string path)
+            {
+                Directory.CreateDirectory(Path.Combine(path, "resources"));
+                WriteMinimalAsar(Path.Combine(path, "resources", "app.asar"));
+            });
             string htmlEngine = DetectEngine(detectEngine, Path.Combine(temp, "html"), delegate(string path)
             {
                 Directory.CreateDirectory(Path.Combine(path, "assets"));
@@ -147,6 +153,7 @@ internal static class ReleaseInspector
                 WriteMinimalDataWin(Path.Combine(path, "data.win"));
             });
             string directFlashEngine = DetectExistingEngine(detectEngine, Path.Combine(temp, "flash", "game.swf"));
+            string directElectronEngine = DetectExistingEngine(detectEngine, Path.Combine(temp, "electron", "resources", "app.asar"));
             string genericGameFolderEngine = DetectEngine(detectEngine, Path.Combine(temp, "generic-game-folder"), delegate(string path)
             {
                 Directory.CreateDirectory(Path.Combine(path, "game"));
@@ -167,12 +174,14 @@ internal static class ReleaseInspector
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "java")) == "JavaJar"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "java-loose")) == "JavaJar"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "flash")) == "Flash"
+                && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "electron")) == "Electron"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "html")) == "Html"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "qsp")) == "Qsp"
                 && DetectExistingEngine(detectEngineFast, ragsPath) == "Rags"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "legacy-rpg-maker")) == "LegacyRpgMaker"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "gamemaker")) == "GameMaker"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "flash", "game.swf")) == "Flash"
+                && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "electron", "resources", "app.asar")) == "Electron"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "generic-game-folder")) == "Unknown";
 
             string rootLookup = Path.Combine(temp, "root-lookup");
@@ -189,6 +198,8 @@ internal static class ReleaseInspector
             bool upstreamRgssFixtures = args.Length < 2 || VerifyUpstreamRgssFixtures(assembly, args[1], temp);
             bool startupFolderArgument = VerifyStartupFolderArgument(formType, temp);
             bool startupFileArgument = VerifyStartupFileArgument(formType, temp);
+            bool extractorRegistry = assembly.GetType("RpgmvpConverterWinForms.IAssetExtractor", true).IsInterface
+                && assembly.GetType("RpgmvpConverterWinForms.AssetExtractorRegistry", true) != null;
 
             Type runtimeType = assembly.GetType("RpgmvpConverterWinForms.PortableRuntime", true);
             MethodInfo ensureRuntime = runtimeType.GetMethod("EnsureExtracted", BindingFlags.Public | BindingFlags.Static);
@@ -280,12 +291,14 @@ internal static class ReleaseInspector
             Console.WriteLine("DetectJavaJar=" + javaEngine);
             Console.WriteLine("DetectJavaLoose=" + javaLooseEngine);
             Console.WriteLine("DetectFlash=" + flashEngine);
+            Console.WriteLine("DetectElectron=" + electronEngine);
             Console.WriteLine("DetectHtml=" + htmlEngine);
             Console.WriteLine("DetectQsp=" + qspEngine);
             Console.WriteLine("DetectRags=" + ragsEngine);
             Console.WriteLine("DetectLegacyRpgMaker=" + legacyRpgMakerEngine);
             Console.WriteLine("DetectGameMaker=" + gameMakerEngine);
             Console.WriteLine("DetectDirectFlash=" + directFlashEngine);
+            Console.WriteLine("DetectDirectElectron=" + directElectronEngine);
             Console.WriteLine("DetectGenericGameFolder=" + genericGameFolderEngine);
             Console.WriteLine("RenpyUnlockerScope=" + renpyUnlockerScope);
             Console.WriteLine("FastDetection=" + fastDetection);
@@ -298,6 +311,7 @@ internal static class ReleaseInspector
             Console.WriteLine("UpstreamRgssFixtures=" + upstreamRgssFixtures);
             Console.WriteLine("StartupFolderArgument=" + startupFolderArgument);
             Console.WriteLine("StartupFileArgument=" + startupFileArgument);
+            Console.WriteLine("ExtractorRegistry=" + extractorRegistry);
 
             return hasUnityScript
                 && unityFilteringFix
@@ -329,12 +343,14 @@ internal static class ReleaseInspector
                 && javaEngine == "JavaJar"
                 && javaLooseEngine == "JavaJar"
                 && flashEngine == "Flash"
+                && electronEngine == "Electron"
                 && htmlEngine == "Html"
                 && qspEngine == "Qsp"
                 && ragsEngine == "Rags"
                 && legacyRpgMakerEngine == "LegacyRpgMaker"
                 && gameMakerEngine == "GameMaker"
                 && directFlashEngine == "Flash"
+                && directElectronEngine == "Electron"
                 && genericGameFolderEngine == "Unknown"
                 && renpyUnlockerScope
                 && fastDetection
@@ -347,6 +363,7 @@ internal static class ReleaseInspector
                 && upstreamRgssFixtures
                 && startupFolderArgument
                 && startupFileArgument
+                && extractorRegistry
                 ? 0
                 : 1;
         }
@@ -459,7 +476,10 @@ internal static class ReleaseInspector
 
             updateContext.Invoke(form, new[] { Enum.Parse(engineType, "Flash") });
             bool flash = GetBool(startButton, "Enabled")
-                && GetString(extractionHint, "Text").IndexOf("JPEG", StringComparison.OrdinalIgnoreCase) >= 0;
+                && GetString(extractionHint, "Text").IndexOf("FLV", StringComparison.OrdinalIgnoreCase) >= 0;
+            updateContext.Invoke(form, new[] { Enum.Parse(engineType, "Electron") });
+            bool electron = GetBool(startButton, "Enabled")
+                && GetString(extractionHint, "Text").IndexOf("app.asar", StringComparison.OrdinalIgnoreCase) >= 0;
             updateContext.Invoke(form, new[] { Enum.Parse(engineType, "Html") });
             bool html = GetBool(startButton, "Enabled")
                 && GetString(extractionHint, "Text").IndexOf("HTML", StringComparison.OrdinalIgnoreCase) >= 0;
@@ -509,7 +529,7 @@ internal static class ReleaseInspector
             bool collapsed = GetString(toggleLogButton, "Text") == "Show Log"
                 && GetSizeHeight(form, "ClientSize") == compactHeight;
 
-            return initial && unity && renpy && rpgm && unreal && nwjs && wolf && tyrano && java && flash
+            return initial && unity && renpy && rpgm && unreal && nwjs && wolf && tyrano && java && flash && electron
                 && html && qsp && rags && legacyRpgMaker && gameMaker && unknown && russian
                 && readableDisabledButtons && tooltips && dpi && dragHighlight && expanded && collapsed;
         }
@@ -543,7 +563,7 @@ internal static class ReleaseInspector
             object result = extract.Invoke(form, new object[] { game, output });
             int extracted = (int)result.GetType().GetProperty("Extracted").GetValue(result, null);
             int errors = (int)result.GetType().GetProperty("Errors").GetValue(result, null);
-            return extracted == 3
+            return extracted == 2
                 && errors == 0
                 && File.Exists(Path.Combine(output, "loose", "www", "index.html"))
                 && File.Exists(Path.Combine(output, "archives", "package", "scripts", "app.js"))
@@ -589,6 +609,10 @@ internal static class ReleaseInspector
         Directory.CreateDirectory(flash);
         WriteMinimalSwf(Path.Combine(flash, "movie.swf"));
 
+        string electron = Path.Combine(root, "electron");
+        Directory.CreateDirectory(Path.Combine(electron, "resources"));
+        WriteMinimalAsar(Path.Combine(electron, "resources", "app.asar"));
+
         string wolf = Path.Combine(root, "wolf");
         Directory.CreateDirectory(Path.Combine(wolf, "Data", "BasicData"));
         Directory.CreateDirectory(Path.Combine(wolf, "Data", "Picture"));
@@ -608,6 +632,7 @@ internal static class ReleaseInspector
             string javaAllOutput = Path.Combine(java, "extracted", "java-all");
             object javaAllResult = InvokeExtractionWithMode(formType, form, java, javaAllOutput, "all");
             object flashResult = InvokeExtraction(formType, form, "RunFlashExtraction", flash, Path.Combine(flash, "extracted", "flash"));
+            object electronResult = InvokeExtraction(formType, form, "RunElectronExtraction", electron, Path.Combine(electron, "extracted", "electron"));
             object wolfResult = InvokeExtraction(formType, form, "RunWolfExtraction", wolf, Path.Combine(wolf, "extracted", "wolf"));
             return GetInt(tyranoResult, "Extracted") == 1
                 && File.Exists(Path.Combine(tyrano, "extracted", "tyrano", "data", "scenario", "first.ks"))
@@ -631,10 +656,14 @@ internal static class ReleaseInspector
                 && File.Exists(Path.Combine(javaAllOutput, "archives", "game", "assets", "metadata.xml"))
                 && !File.Exists(Path.Combine(java, "extracted", "java", "archives", "game", "assets", "metadata.xml"))
                 && !File.Exists(Path.Combine(java, "extracted", "outside.txt"))
-                && GetInt(flashResult, "Extracted") == 2
+                && GetInt(flashResult, "Extracted") == 3
                 && GetInt(flashResult, "Errors") == 0
                 && File.Exists(Path.Combine(flash, "extracted", "flash", "originals", "movie.swf"))
                 && File.Exists(Path.Combine(flash, "extracted", "flash", "embedded", "movie", "image-7.jpg"))
+                && IsFlv(Path.Combine(flash, "extracted", "flash", "embedded", "movie", "video-9.flv"))
+                && GetInt(electronResult, "Extracted") == 1
+                && GetInt(electronResult, "Errors") == 0
+                && File.ReadAllText(Path.Combine(electron, "extracted", "electron", "archives", "app", "scripts", "app.js")) == "console.log('asar');"
                 && GetInt(wolfResult, "Extracted") == 2
                 && GetInt(wolfResult, "Errors") == 0
                 && File.Exists(Path.Combine(wolf, "extracted", "wolf", "loose", "Data", "Picture", "hero.png"));
@@ -729,6 +758,11 @@ internal static class ReleaseInspector
         MethodInfo getMatchingFiles = gallery.GetMethod("GetMatchingFiles", BindingFlags.NonPublic | BindingFlags.Static);
         IEnumerable galleryImages = (IEnumerable)getMatchingFiles.Invoke(null, new object[] { gameMakerOutput, 1, "texture-page" });
         bool galleryFilter = galleryImages.Cast<object>().Count() == 1;
+        for (int i = 0; i < 305; i++)
+            File.WriteAllText(Path.Combine(gameMakerOutput, "gallery-" + i.ToString("D3") + ".png"), "png");
+        IEnumerable galleryAll = (IEnumerable)getMatchingFiles.Invoke(null, new object[] { gameMakerOutput, 0, "" });
+        bool galleryNoHardCap = gallery.GetField("MaxVisibleItems", BindingFlags.NonPublic | BindingFlags.Static) == null
+            && galleryAll.Cast<object>().Count() == 306;
 
         string unknown = Path.Combine(root, "unknown");
         Directory.CreateDirectory(unknown);
@@ -750,6 +784,7 @@ internal static class ReleaseInspector
             && File.Exists(Path.Combine(gameMakerOutput, "originals", "data.win"))
             && IsPng(Path.Combine(gameMakerOutput, "embedded", "data", "texture-page-0001.png"))
             && galleryFilter
+            && galleryNoHardCap
             && File.Exists(report)
             && File.ReadAllText(report).Contains("archive.bin | 01-02-03");
     }
@@ -813,25 +848,62 @@ internal static class ReleaseInspector
     private static void WriteMinimalSwf(string path)
     {
         byte[] jpeg = { 0xff, 0xd8, 0xff, 0xd9 };
-        byte[] body =
+        List<byte> body = new List<byte>(new byte[]
         {
             0x08, 0x00,
             0x00, 0x00,
-            0x01, 0x00,
-            0x46, 0x05,
-            0x07, 0x00,
-            jpeg[0], jpeg[1], jpeg[2], jpeg[3],
-            0x00, 0x00
-        };
-        byte[] file = new byte[8 + body.Length];
+            0x01, 0x00
+        });
+        WriteSwfTag(body, 21, new byte[] { 0x07, 0x00, jpeg[0], jpeg[1], jpeg[2], jpeg[3] });
+        WriteSwfTag(body, 60, new byte[] { 0x09, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x02 });
+        WriteSwfTag(body, 61, new byte[] { 0x09, 0x00, 0x00, 0x00, 0x11, 0x22, 0x33 });
+        WriteSwfTag(body, 0, new byte[0]);
+
+        byte[] file = new byte[8 + body.Count];
         file[0] = (byte)'F';
         file[1] = (byte)'W';
         file[2] = (byte)'S';
         file[3] = 9;
         byte[] length = BitConverter.GetBytes(file.Length);
         Array.Copy(length, 0, file, 4, length.Length);
-        Array.Copy(body, 0, file, 8, body.Length);
+        Array.Copy(body.ToArray(), 0, file, 8, body.Count);
         File.WriteAllBytes(path, file);
+    }
+
+    private static void WriteSwfTag(List<byte> body, int code, byte[] data)
+    {
+        int header = (code << 6) | data.Length;
+        body.Add((byte)(header & 0xff));
+        body.Add((byte)((header >> 8) & 0xff));
+        body.AddRange(data);
+    }
+
+    private static void WriteMinimalAsar(string path)
+    {
+        byte[] content = System.Text.Encoding.UTF8.GetBytes("console.log('asar');");
+        string json = "{\"files\":{\"scripts\":{\"files\":{\"app.js\":{\"size\":" + content.Length + ",\"offset\":\"0\"}}}}}";
+        byte[] jsonBytes = System.Text.Encoding.UTF8.GetBytes(json);
+        int headerSize = ((8 + jsonBytes.Length + 3) / 4) * 4;
+        byte[] header = new byte[headerSize];
+        WriteUInt32(header, 0, (uint)(4 + jsonBytes.Length));
+        WriteUInt32(header, 4, (uint)jsonBytes.Length);
+        Array.Copy(jsonBytes, 0, header, 8, jsonBytes.Length);
+
+        using (BinaryWriter writer = new BinaryWriter(File.Create(path)))
+        {
+            writer.Write((uint)4);
+            writer.Write((uint)header.Length);
+            writer.Write(header);
+            writer.Write(content);
+        }
+    }
+
+    private static void WriteUInt32(byte[] bytes, int offset, uint value)
+    {
+        bytes[offset] = (byte)(value & 0xff);
+        bytes[offset + 1] = (byte)((value >> 8) & 0xff);
+        bytes[offset + 2] = (byte)((value >> 16) & 0xff);
+        bytes[offset + 3] = (byte)((value >> 24) & 0xff);
     }
 
     private static void WriteMinimalRags(string path)
@@ -929,6 +1001,12 @@ internal static class ReleaseInspector
         if (!File.Exists(path)) return false;
         byte[] signature = File.ReadAllBytes(path).Take(8).ToArray();
         return signature.SequenceEqual(new byte[] { 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a });
+    }
+
+    private static bool IsFlv(string path)
+    {
+        return File.Exists(path)
+            && File.ReadAllBytes(path).Take(3).SequenceEqual(System.Text.Encoding.ASCII.GetBytes("FLV"));
     }
 
     private static object GetField(Type type, object instance, string name)

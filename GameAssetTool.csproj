@@ -27,34 +27,42 @@
     <Reference Include="System.Core" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.IO.Compression" />
+    <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Windows.Forms" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="source\Program.cs" />
-    <Compile Include="source\AssetCollectors.cs" />
-    <Compile Include="source\ExtractionPathUtils.cs" />
-    <Compile Include="source\FlashSwfExtractor.cs" />
-    <Compile Include="source\JavaSvgPreviewRenderer.cs" />
-    <Compile Include="source\LegacyRpgMakerExtractor.cs" />
-    <Compile Include="source\ResultsGalleryForm.cs" />
-    <Compile Include="source\PortableRuntime.cs" />
-    <Compile Include="source\ToolRuntime.cs" />
-    <Compile Include="source\RpgmvpConverterForm.cs" />
-    <Compile Include="source\UnlockerResources.cs" />
-    <Compile Include="source\EmbeddedScripts.cs" />
+    <Compile Include="source\Application\ResultsGalleryForm.cs" />
+    <Compile Include="source\Application\RpgmvpConverterForm.cs" />
+    <Compile Include="source\Application\RpgmvpConverterForm.Ui.cs" />
+    <Compile Include="source\Application\RpgmvpConverterForm.Extraction.cs" />
+    <Compile Include="source\Application\RpgmvpConverterForm.Detection.cs" />
+    <Compile Include="source\Extractors\ArchiveSafetyPolicy.cs" />
+    <Compile Include="source\Extractors\AssetCollectors.cs" />
+    <Compile Include="source\Extractors\ElectronAsarExtractor.cs" />
+    <Compile Include="source\Extractors\ExtractionPathUtils.cs" />
+    <Compile Include="source\Extractors\FlashSwfExtractor.cs" />
+    <Compile Include="source\Extractors\IAssetExtractor.cs" />
+    <Compile Include="source\Extractors\JavaSvgPreviewRenderer.cs" />
+    <Compile Include="source\Extractors\LegacyRpgMakerExtractor.cs" />
+    <Compile Include="source\Features\UnlockerResources.cs" />
+    <Compile Include="source\Runtime\EmbeddedScripts.cs" />
+    <Compile Include="source\Runtime\ApplicationIcon.cs" />
+    <Compile Include="source\Runtime\PortableRuntime.cs" />
+    <Compile Include="source\Runtime\ToolRuntime.cs" />
     <Compile Include="source\Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="scripts\extract_unity.py">
+    <EmbeddedResource Include="source\scripts\extract_unity.py">
       <LogicalName>RpgmvpConverterWinForms.scripts.extract_unity.py</LogicalName>
     </EmbeddedResource>
-    <EmbeddedResource Include="scripts\extract_godot.py">
+    <EmbeddedResource Include="source\scripts\extract_godot.py">
       <LogicalName>RpgmvpConverterWinForms.scripts.extract_godot.py</LogicalName>
     </EmbeddedResource>
-    <EmbeddedResource Include="scripts\extract_xp3.py">
+    <EmbeddedResource Include="source\scripts\extract_xp3.py">
       <LogicalName>RpgmvpConverterWinForms.scripts.extract_xp3.py</LogicalName>
     </EmbeddedResource>
-    <EmbeddedResource Include="scripts\extract_unreal.py">
+    <EmbeddedResource Include="source\scripts\extract_unreal.py">
       <LogicalName>RpgmvpConverterWinForms.scripts.extract_unreal.py</LogicalName>
     </EmbeddedResource>
     <EmbeddedResource Include="payload\runtime-win-x64.zip">

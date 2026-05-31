@@ -38,6 +38,11 @@ namespace RpgmvpConverterWinForms
                 else
                     throw new NotSupportedException("Unsupported RGSS archive version: " + header[7] + ".");
 
+                int entryCount = 0;
+                long totalBytes = 0;
+                foreach (ArchiveEntry entry in entries)
+                    ArchiveSafetyPolicy.ValidateEntry(entry.Name, entry.Size, ref entryCount, ref totalBytes);
+
                 foreach (ArchiveEntry entry in entries)
                 {
                     try

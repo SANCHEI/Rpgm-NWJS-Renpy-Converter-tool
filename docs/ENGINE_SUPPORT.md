@@ -8,6 +8,7 @@
 | RPG Maker XP/VX/VX Ace | Supported | Built-in extraction for RGSSAD, RGSS2A and RGSS3A archives |
 | Ren'Py | Supported | RPA 2.0, 3.0, 3.2 and 4.0 through `unrpa==2.3.0`; loose resources without RPA archives |
 | NWJS | Supported | Copies loose `www`, `package.nw` and `app.nw` files; safely unpacks ZIP-compatible `.nw` archives |
+| Electron | Supported | Safely unpacks standard `resources/app.asar` archives |
 | Unity | Supported | Textures, videos, audio, OBJ meshes and direct media |
 | Godot 3/4 | Supported | Unencrypted PCK versions 1, 2 and 3, including embedded PCK |
 | KiriKiri | Supported | Standard unencrypted XP3 archives |
@@ -16,7 +17,7 @@
 | Java games / JAR | Supported | Images-only, cached SVG-preview and all-resource modes for ZIP-compatible `.jar` archives and loose `res` folders |
 | HTML games | Supported | Copies open scripts, styles and media while preserving folder structure |
 | QSP | Supported | Copies `.qsp` databases and loose media without duplicating the bundled player |
-| Flash SWF | Experimental | Copies original SWF files and extracts embedded JPEG, PNG and GIF from `FWS` / `CWS` |
+| Flash SWF | Experimental | Copies original SWF files and extracts embedded JPEG, PNG, GIF and FLV video from `FWS` / `CWS` |
 | Unreal | Experimental | Offline `.pak` extraction; ordinary, Zlib, optional AES key and local Oodle DLL workflows |
 | RAGS | Experimental | Preserves `.rag` databases and carves confidently detected JPEG, PNG, GIF and OGG media |
 | GameMaker | Experimental | Preserves `data.win`, collects open images and streams embedded PNG texture pages |
@@ -34,7 +35,6 @@
 
 ## Next Priorities
 
-1. Electron `app.asar` archives.
 2. GameMaker QOI/BZ2 and external texture layouts.
 3. Unity `TextAsset` and Sprite export.
 4. Diagnostics-guided support for additional unknown formats.

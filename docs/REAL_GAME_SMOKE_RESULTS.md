@@ -20,4 +20,4 @@ The source game folders were not modified.
 
 The reusable audit and extraction harness lives in `tests/RealGameSmoke.cs`.
 
-The built-in legacy RPG Maker parser also passed synthetic `RGSSAD`, `RGSS2A` and `RGSS3A` round trips plus the upstream `uuksu/RPGMakerDecrypter` test archives. GameMaker `data.win` PNG-page streaming and results-gallery filtering are covered by synthetic release checks.
+The built-in legacy RPG Maker parser also passed synthetic `RGSSAD`, `RGSS2A` and `RGSS3A` round trips plus the upstream `uuksu/RPGMakerDecrypter` test archives. Electron ASAR extraction, Flash FLV recovery, archive safety limits, GameMaker `data.win` PNG-page streaming and results-gallery filtering beyond 300 files are covered by synthetic release checks.

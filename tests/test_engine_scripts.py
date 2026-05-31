@@ -21,7 +21,7 @@ def run_script(script_name, game_path, output_path):
     environment["GAME_PATH"] = str(game_path)
     environment["OUTPUT_PATH"] = str(output_path)
     process = subprocess.run(
-        [sys.executable, str(ROOT / "scripts" / script_name)],
+        [sys.executable, str(ROOT / "source" / "scripts" / script_name)],
         env=environment,
         capture_output=True,
         text=True,

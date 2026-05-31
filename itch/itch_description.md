@@ -20,7 +20,7 @@ Drop a game folder or supported file into the window, review the detected engine
 - Visible runtime status while the built-in extraction tools are prepared silently
 - Collision-safe output names such as `image (2).png`
 - Extraction summary dialog and saved `GameAssetTool-report.txt`
-- Searchable results gallery with thumbnails and image, SVG, audio and video filters
+- Searchable results gallery with background indexing, lazy thumbnail batches, enlarged image previews and image, SVG, audio and video filters
 - Separate **Install Unlocker** and **Remove Unlocker** buttons
 - One portable `GameAssetTool.exe` with no neighboring files or installers
 - Offline operation: no internet connection is required while using the application
@@ -42,6 +42,10 @@ Extracts `.rpa` archives for supported RPA formats `2.0`, `3.0`, `3.2` and `4.0`
 ### NWJS
 
 Copies loose files from `www`, `package.nw` and `app.nw` folders while preserving paths. ZIP-compatible `.nw` archives are unpacked safely. The bundled gallery unlocker is not used for NWJS games because gallery state is usually stored in game-specific save data.
+
+### Electron
+
+Safely unpacks standard `resources/app.asar` archives without requiring Node.js or an external ASAR utility.
 
 ### Unity
 
@@ -75,7 +79,7 @@ Provides three modes for ZIP-compatible `.jar` archives and loose `res` folders:
 
 ### Flash SWF Experimental
 
-Copies original `.swf` files and extracts embedded JPEG, PNG and GIF images from `FWS` and `CWS` files. LZMA-compressed `ZWS` files are reported as unsupported.
+Copies original `.swf` files and extracts embedded JPEG, PNG and GIF images plus FLV video streams from `FWS` and `CWS` files. LZMA-compressed `ZWS` files are reported as unsupported.
 
 ### HTML Games
 
@@ -115,6 +119,7 @@ Use **Hard** mode only when the soft mode is insufficient.
 - RPG Maker XP/VX/VX Ace: `game_folder/extracted/rgss/`
 - Ren'Py: `game_folder/extracted/renpy/`
 - NWJS: `game_folder/extracted/nwjs/`
+- Electron: `game_folder/extracted/electron/`
 - Unity: `game_folder/extracted/unity/`
 - Godot: `game_folder/extracted/godot/`
 - KiriKiri: `game_folder/extracted/kirikiri/`

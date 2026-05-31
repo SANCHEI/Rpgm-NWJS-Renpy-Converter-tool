@@ -49,6 +49,17 @@ The **Show Log** button expands the same fixed-width window vertically.
 - Ren'Py: RPA extraction or explicit loose-resource collection without unnecessary inputs.
 - Godot and KiriKiri: extractor description without unnecessary inputs.
 - NWJS: copies loose files and safely unpacks ZIP-compatible `.nw` archives without a gallery unlocker.
+
+## Warning Panel Example
+
+```text
+! Archive warning
+Some files were skipped for safety.
+Reason: entry path escapes the extraction folder: ../outside.txt
+Action: extracted safe files were kept. Review GameAssetTool-report.txt.
+```
+
+The same panel can later be used for encrypted archives, a missing Unreal Oodle DLL or formats that require a HEX key.
 - HTML and QSP: copies open project resources while preserving paths.
 - RAGS: accepts a standalone `.rag` file and exposes experimental media recovery.
 - Java: Images only, Images + SVG previews or All resources mode.
@@ -61,4 +72,4 @@ The header includes an `EN` / `RU` language switch. Dropping a folder or support
 
 ## Results Dialog
 
-Results are shown after extraction and saved as `GameAssetTool-report.txt` in the extractor output folder. The **Results Gallery** button opens a searchable thumbnail grid with image, SVG, audio and video filters.
+Results are shown after extraction and saved as `GameAssetTool-report.txt` in the extractor output folder. The **Results Gallery** button opens a searchable thumbnail grid with image, SVG, audio and video filters. Files are indexed in the background, loaded in batches while scrolling and shown in a larger preview panel when selected.

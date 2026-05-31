@@ -5,6 +5,13 @@
 - Split Java SVG preview rendering and Flash SWF image recovery out of the main WinForms class into dedicated modules.
 - Removed duplicated standalone Unity tools, obsolete v1.3.4 source snapshots and unused itch asset-generation scripts from the working tree. Their history remains available through Git.
 - Moved the supported application's C# sources into `source/` to keep the project root focused on build and release files.
+- Split the main WinForms class into `Application` UI, detection and extraction-orchestration partials.
+- Added an `IAssetExtractor` registry with Electron ASAR and Flash implementations.
+- Added built-in Electron `app.asar` extraction and Flash FLV video recovery.
+- Added archive safety limits for ZIP-compatible NWJS packages, JAR files, Electron ASAR and RGSS archives.
+- Reworked the results gallery with background indexing, debounced search, scaled asynchronous thumbnails and lazy batches without a 300-file cap.
+- Added an enlarged image preview panel in the gallery, kept double-click opening and removed the redundant **Open File** button.
+- Applied the executable's embedded icon to the main, results and gallery windows without requiring a neighboring `.ico` file.
 
 ## 1.9.0 - 2026-05-31
 

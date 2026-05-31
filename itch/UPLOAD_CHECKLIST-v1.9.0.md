@@ -6,7 +6,7 @@
 - Display name: `Game Asset Tool v1.9.0 - Windows x64`
 - Platform: Windows
 - Architecture: x64
-- SHA-256: `5A57771EF3C459766CAFABAA932D545AAA0511E9EBA7D6287292D68AE084C386`
+- SHA-256: `DA3E6AAAD722E74495D39971269F545738326D8645313014B57477B1ED763AFD`
 
 ## Page Update
 
@@ -14,7 +14,7 @@
 - Use `itch/itch_form_template.txt` for project fields and tags.
 - Upload `itch/logo-game-asset-tool.png` as the project cover image.
 - Upload `itch/background-game-asset-tool.png` as the page background image.
-- Keep the existing screenshot and demo video.
+- Keep the existing demo video.
 
 ## Manual Verification
 
@@ -26,5 +26,5 @@
 - Confirm that **Collect Loose Files** is available for a selected path.
 - Select an unknown folder and confirm that **Export Diagnostics** creates a report.
 - Select a Java game and confirm that all three Java extraction modes are visible.
-- Complete an extraction and confirm that **Results Gallery** opens.
+- Complete an extraction and confirm that **Results Gallery** stays responsive while filtering, loads beyond 300 files while scrolling and shows an enlarged selected image.
 - Switch the interface between `EN` and `RU`.

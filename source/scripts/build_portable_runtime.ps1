@@ -4,7 +4,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
+$root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 $payloadDir = [IO.Path]::GetFullPath((Join-Path $root "payload"))
 $payloadZip = [IO.Path]::GetFullPath((Join-Path $payloadDir "runtime-win-x64.zip"))
 $payloadVersionFile = [IO.Path]::GetFullPath((Join-Path $payloadDir "runtime-win-x64.version.txt"))
