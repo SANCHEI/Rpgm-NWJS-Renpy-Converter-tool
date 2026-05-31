@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.0.0 - 2026-06-01
 
 - Split Java SVG preview rendering and Flash SWF image recovery out of the main WinForms class into dedicated modules.
 - Removed duplicated standalone Unity tools, obsolete v1.3.4 source snapshots and unused itch asset-generation scripts from the working tree. Their history remains available through Git.

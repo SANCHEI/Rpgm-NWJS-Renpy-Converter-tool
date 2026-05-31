@@ -2,7 +2,8 @@ $ErrorActionPreference = "Stop"
 
 $root = [IO.Path]::GetFullPath($PSScriptRoot)
 $release = [IO.Path]::GetFullPath((Join-Path $root "release"))
-$releaseExe = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v1.9.0.exe"))
+$releaseExe = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v2.0.0.exe"))
+$obsoleteCurrentMajorExe = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v1.9.0.exe"))
 $obsoletePreviousMinorPatchExe = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v1.8.1.exe"))
 $obsoleteCurrentPatchExe = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v1.8.0.exe"))
 $obsoletePreviousMinorExe = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v1.7.0.exe"))
@@ -16,7 +17,7 @@ $obsoleteZip = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v1.4.0.
 $obj = [IO.Path]::GetFullPath((Join-Path $root "obj"))
 $releaseBin = [IO.Path]::GetFullPath((Join-Path $root "bin\Release"))
 
-foreach ($path in @($release, $releaseExe, $obsoletePreviousMinorPatchExe, $obsoleteCurrentPatchExe, $obsoletePreviousMinorExe, $obsoleteMinorExe, $obsoleteEarlierMinorExe, $obsoletePatchExe, $obsoletePreviousPatchExe, $obsoleteOlderPatchExe, $obsoleteReleaseExe, $obsoleteZip, $obj, $releaseBin)) {
+foreach ($path in @($release, $releaseExe, $obsoleteCurrentMajorExe, $obsoletePreviousMinorPatchExe, $obsoleteCurrentPatchExe, $obsoletePreviousMinorExe, $obsoleteMinorExe, $obsoleteEarlierMinorExe, $obsoletePatchExe, $obsoletePreviousPatchExe, $obsoleteOlderPatchExe, $obsoleteReleaseExe, $obsoleteZip, $obj, $releaseBin)) {
     if (-not $path.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) {
         throw "Refusing to use path outside workspace: $path"
     }
@@ -36,6 +37,9 @@ if (Test-Path -LiteralPath $releaseExe) {
 }
 Copy-Item -LiteralPath (Join-Path $root "bin\GameAssetTool.exe") -Destination $releaseExe
 
+if (Test-Path -LiteralPath $obsoleteCurrentMajorExe) {
+    Remove-Item -LiteralPath $obsoleteCurrentMajorExe -Force
+}
 if (Test-Path -LiteralPath $obsoletePreviousMinorPatchExe) {
     Remove-Item -LiteralPath $obsoletePreviousMinorPatchExe -Force
 }
