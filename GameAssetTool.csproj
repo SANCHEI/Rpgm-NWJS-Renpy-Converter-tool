@@ -30,19 +30,19 @@
     <Reference Include="System.Windows.Forms" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Program.cs" />
-    <Compile Include="AssetCollectors.cs" />
-    <Compile Include="ExtractionPathUtils.cs" />
-    <Compile Include="FlashSwfExtractor.cs" />
-    <Compile Include="JavaSvgPreviewRenderer.cs" />
-    <Compile Include="LegacyRpgMakerExtractor.cs" />
-    <Compile Include="ResultsGalleryForm.cs" />
-    <Compile Include="PortableRuntime.cs" />
-    <Compile Include="ToolRuntime.cs" />
-    <Compile Include="RpgmvpConverterForm.cs" />
-    <Compile Include="UnlockerResources.cs" />
-    <Compile Include="EmbeddedScripts.cs" />
-    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="source\Program.cs" />
+    <Compile Include="source\AssetCollectors.cs" />
+    <Compile Include="source\ExtractionPathUtils.cs" />
+    <Compile Include="source\FlashSwfExtractor.cs" />
+    <Compile Include="source\JavaSvgPreviewRenderer.cs" />
+    <Compile Include="source\LegacyRpgMakerExtractor.cs" />
+    <Compile Include="source\ResultsGalleryForm.cs" />
+    <Compile Include="source\PortableRuntime.cs" />
+    <Compile Include="source\ToolRuntime.cs" />
+    <Compile Include="source\RpgmvpConverterForm.cs" />
+    <Compile Include="source\UnlockerResources.cs" />
+    <Compile Include="source\EmbeddedScripts.cs" />
+    <Compile Include="source\Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="scripts\extract_unity.py">

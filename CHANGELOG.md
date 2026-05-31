@@ -4,6 +4,7 @@
 
 - Split Java SVG preview rendering and Flash SWF image recovery out of the main WinForms class into dedicated modules.
 - Removed duplicated standalone Unity tools, obsolete v1.3.4 source snapshots and unused itch asset-generation scripts from the working tree. Their history remains available through Git.
+- Moved the supported application's C# sources into `source/` to keep the project root focused on build and release files.
 
 ## 1.9.0 - 2026-05-31
 

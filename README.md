@@ -196,9 +196,9 @@ The release contains one supported executable. Users do not need any neighboring
 
 ## Project Layout
 
-- `RpgmvpConverterForm.cs`: supported WinForms application.
+- `source/`: C# sources for the supported WinForms application.
 - `scripts/`: Python sources and the portable-runtime build script.
-- `tools/`: legacy and experimental utilities excluded from the release.
+- `tools/`: experimental utilities excluded from the release.
 - `payload/`: generated embedded Python runtime archive, excluded from Git.
 
 See [`docs/ENGINE_SUPPORT.md`](docs/ENGINE_SUPPORT.md) for limits and the next engine priorities.
