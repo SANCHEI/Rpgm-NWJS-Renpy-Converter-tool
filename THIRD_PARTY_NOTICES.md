@@ -7,7 +7,7 @@ Game Asset Tool embeds a private portable runtime for optional Ren'Py, Unity and
 - `UnityPy==1.25.0` for Unity asset extraction: https://github.com/K0lb3/UnityPy
 - `pyuepak==0.2.7` for experimental Unreal `.pak` extraction: https://github.com/stas96111/pyUEpak
 
-The upstream `pyuepak` package can acquire an Oodle DLL at runtime and normally uses the `cryptography` package for AES. Game Asset Tool replaces those integrations with an offline-only Oodle stub and the built-in Windows `bcrypt.dll` API. It does not download or redistribute the Oodle DLL. Oodle-compressed Unreal archives are reported as unsupported.
+The upstream `pyuepak` package can acquire an Oodle DLL at runtime and normally uses the `cryptography` package for AES. Game Asset Tool replaces those integrations with offline local-DLL discovery and the built-in Windows `bcrypt.dll` API. It does not download or redistribute the Oodle DLL. For Oodle-compressed Unreal archives, it searches for `oo2core*_win64.dll` inside the selected game and installed Unreal Engine folders; if no local decoder is available, the archive is reported and skipped.
 
 The built-in Godot PCK and standard KiriKiri XP3 extractors are project source files. The Godot implementation follows the public pack format in the official Godot source tree: https://github.com/godotengine/godot
 

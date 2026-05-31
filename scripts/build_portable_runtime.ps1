@@ -13,13 +13,31 @@ $runtime = [IO.Path]::GetFullPath((Join-Path $work "runtime"))
 $sitePackages = [IO.Path]::GetFullPath((Join-Path $runtime "Lib\site-packages"))
 $pythonArchive = [IO.Path]::GetFullPath((Join-Path $env:TEMP "python-3.12.10-embed-amd64.zip"))
 $requirements = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "portable-runtime-requirements.txt"))
-$offlineOodle = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "pyuepak_oodle_offline.py"))
+$localOodle = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "pyuepak_oodle_local.py"))
 $windowsAes = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "pyuepak_aes_windows.py"))
 $patchPyuepak = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "patch_pyuepak_offline.py"))
 
-$runtimeVersion = "python-3.12.10-unrpa-2.3.0-unitypy-1.25.0-pyuepak-0.2.7-win-x64-v6"
+$runtimeVersion = "python-3.12.10-unrpa-2.3.0-unitypy-1.25.0-pyuepak-0.2.7-win-x64-v7"
 $pythonUrl = "https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip"
 $pythonSha256 = "4ACBED6DD1C744B0376E3B1CF57CE906F9DC9E95E68824584C8099A63025A3C3"
+
+function Get-Sha256 {
+    param([string]$Path)
+
+    $stream = [IO.File]::OpenRead($Path)
+    try {
+        $sha = [Security.Cryptography.SHA256]::Create()
+        try {
+            return ([BitConverter]::ToString($sha.ComputeHash($stream))).Replace("-", "")
+        }
+        finally {
+            $sha.Dispose()
+        }
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
 
 foreach ($path in @($payloadDir, $payloadZip, $payloadVersionFile, $work, $runtime, $sitePackages)) {
     if (-not $path.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) {
@@ -38,7 +56,7 @@ if ($LASTEXITCODE -ne 0 -or $bootstrapInfo.Trim() -ne "3.12|64bit") {
     throw "Building the portable runtime requires Python 3.12 x64."
 }
 
-if ((Test-Path -LiteralPath $pythonArchive) -and ((Get-FileHash -LiteralPath $pythonArchive -Algorithm SHA256).Hash -ne $pythonSha256)) {
+if ((Test-Path -LiteralPath $pythonArchive) -and ((Get-Sha256 $pythonArchive) -ne $pythonSha256)) {
     Remove-Item -LiteralPath $pythonArchive -Force
 }
 
@@ -47,7 +65,7 @@ if (-not (Test-Path -LiteralPath $pythonArchive)) {
     Invoke-WebRequest -Uri $pythonUrl -OutFile $pythonArchive
 }
 
-if ((Get-FileHash -LiteralPath $pythonArchive -Algorithm SHA256).Hash -ne $pythonSha256) {
+if ((Get-Sha256 $pythonArchive) -ne $pythonSha256) {
     throw "Python embeddable runtime SHA-256 mismatch."
 }
 
@@ -77,7 +95,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "pip install failed with exit code $LASTEXITCODE"
 }
 
-Copy-Item -LiteralPath $offlineOodle -Destination (Join-Path $sitePackages "pyuepak\oodle.py") -Force
+Copy-Item -LiteralPath $localOodle -Destination (Join-Path $sitePackages "pyuepak\oodle.py") -Force
 Copy-Item -LiteralPath $windowsAes -Destination (Join-Path $sitePackages "pyuepak\aes_windows.py") -Force
 & $bootstrap.Source $patchPyuepak $sitePackages
 if ($LASTEXITCODE -ne 0) {

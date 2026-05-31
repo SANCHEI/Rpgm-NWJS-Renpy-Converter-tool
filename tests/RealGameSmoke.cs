@@ -38,7 +38,7 @@ internal static class RealGameSmoke
         int failures = 0;
         try
         {
-            foreach (string game in Directory.GetDirectories(gamesRoot).OrderBy(delegate(string path) { return path; }, StringComparer.OrdinalIgnoreCase))
+            foreach (string game in EnumerateInputs(gamesRoot).OrderBy(delegate(string path) { return path; }, StringComparer.OrdinalIgnoreCase))
             {
                 if (!string.IsNullOrWhiteSpace(gameFilter)
                     && !Path.GetFileName(game).Equals(gameFilter, StringComparison.OrdinalIgnoreCase))
@@ -121,7 +121,25 @@ internal static class RealGameSmoke
             return FromOperation(Invoke(formType, form, "RunJavaExtraction", game, Path.Combine(gameOutput, "java")));
         if (engine == "Flash")
             return FromOperation(Invoke(formType, form, "RunFlashExtraction", game, Path.Combine(gameOutput, "flash")));
+        if (engine == "Html")
+            return RunCollector(formType.Assembly, "GetHtmlFiles", game, Path.Combine(gameOutput, "html"));
+        if (engine == "Qsp")
+            return RunCollector(formType.Assembly, "GetQspFiles", game, Path.Combine(gameOutput, "qsp"));
+        if (engine == "Rags")
+            return FromCollector(InvokeCollectorStatic(formType.Assembly, "ExtractRags", game, Path.Combine(gameOutput, "rags")), Path.Combine(gameOutput, "rags"));
         return SmokeResult.CreateSkipped(gameOutput, "unsupported or undetected");
+    }
+
+    private static IEnumerable<string> EnumerateInputs(string gamesRoot)
+    {
+        return Directory.GetDirectories(gamesRoot)
+            .Concat(Directory.GetFiles(gamesRoot, "*.rag", SearchOption.TopDirectoryOnly));
+    }
+
+    private static SmokeResult RunCollector(Assembly assembly, string listMethod, string game, string output)
+    {
+        object files = InvokeCollectorStatic(assembly, listMethod, game, output);
+        return FromCollector(InvokeCollectorStatic(assembly, "CopyFiles", game, files, output, ""), output);
     }
 
     private static SmokeResult RunRpgmSample(Type formType, object form, string game, string gameOutput)
@@ -187,6 +205,19 @@ internal static class RealGameSmoke
         }
     }
 
+    private static object InvokeCollectorStatic(Assembly assembly, string name, params object[] args)
+    {
+        try
+        {
+            Type collectors = assembly.GetType("RpgmvpConverterWinForms.AssetCollectors", true);
+            return RequireMethod(collectors, name, BindingFlags.Public | BindingFlags.Static).Invoke(null, args);
+        }
+        catch (TargetInvocationException ex)
+        {
+            throw Unwrap(ex);
+        }
+    }
+
     private static MethodInfo RequireMethod(Type type, string name, BindingFlags flags)
     {
         MethodInfo method = type.GetMethod(name, flags);
@@ -202,6 +233,18 @@ internal static class RealGameSmoke
             GetInt(result, "Extracted"),
             GetLong(result, "Bytes"),
             GetInt(result, "Errors"),
+            GetInt(result, "Renamed"),
+            GetInt(result, "Skipped"));
+    }
+
+    private static SmokeResult FromCollector(object result, string output)
+    {
+        return new SmokeResult(
+            "ok",
+            output,
+            GetInt(result, "Extracted"),
+            GetLong(result, "Bytes"),
+            0,
             GetInt(result, "Renamed"),
             GetInt(result, "Skipped"));
     }

@@ -53,6 +53,7 @@ namespace RpgmvpConverterWinForms
         private Button browseButton;
         private Button dryRunButton;
         private Button startButton;
+        private Button collectLooseButton;
         private Button unlockerButton;
         private Button removeUnlockerButton;
         private Button pauseButton;
@@ -109,7 +110,7 @@ namespace RpgmvpConverterWinForms
             Font titleFont = new Font("Segoe UI Semibold", 14f, FontStyle.Regular);
             Font logFont = new Font("Consolas", 9.5f, FontStyle.Regular);
 
-            Text = "Game Asset Tool v1.7.0";
+            Text = "Game Asset Tool v1.8.0";
             StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
@@ -138,7 +139,7 @@ namespace RpgmvpConverterWinForms
             });
             subtitleLabel = new Label
             {
-                Text = "Drop a game folder here, scan it, then extract or unlock",
+                Text = "Drop a game folder or file here, scan it, then extract or unlock",
                 ForeColor = mutedColor,
                 Location = new Point(19, 39),
                 Size = new Size(700, 20),
@@ -299,9 +300,12 @@ namespace RpgmvpConverterWinForms
             unityExtractModeBox.Items.Add("All");
             unityExtractModeBox.SelectedIndex = 4;
             extractionPanel.Controls.Add(unityExtractModeBox);
-            startButton = CreateButton("Extract Assets", new Point(704, 20), new Size(180, 34), successColor, formBack, uiBold);
+            startButton = CreateButton("Extract Assets", new Point(704, 8), new Size(180, 26), successColor, formBack, uiBold);
             startButton.Click += async delegate { await StartDetectedExtractionAsync(); };
             extractionPanel.Controls.Add(startButton);
+            collectLooseButton = CreateButton("Collect Loose Files", new Point(704, 39), new Size(180, 26), Color.FromArgb(45, 50, 60), textColor, uiBold);
+            collectLooseButton.Click += async delegate { await StartLooseResourceCollectionAsync(); };
+            extractionPanel.Controls.Add(collectLooseButton);
             y += 82;
 
             unlockerSectionLabel = CreateSectionLabel("Gallery Unlocker for Ren'Py", y);
@@ -470,14 +474,15 @@ namespace RpgmvpConverterWinForms
         {
             if (subtitleLabel == null) return;
 
-            subtitleLabel.Text = T("Drop a game folder here, scan it, then extract or unlock", "Перетащите папку игры, проверьте её и извлеките ресурсы");
-            folderSectionLabel.Text = T("Game Folder", "Папка игры");
+            subtitleLabel.Text = T("Drop a game folder or file here, scan it, then extract or unlock", "Перетащите папку или файл игры, проверьте и извлеките ресурсы");
+            folderSectionLabel.Text = T("Game Folder or File", "Папка или файл игры");
             extractSectionLabel.Text = T("Extract Assets", "Извлечение ресурсов");
             unlockerSectionLabel.Text = T("Gallery Unlocker for Ren'Py", "Анлокер галереи для Ren'Py");
             logSectionLabel.Text = T("Log", "Лог");
             browseButton.Text = T("Browse...", "Обзор...");
             dryRunButton.Text = T("Dry Run / Scan", "Проверить");
             startButton.Text = T("Extract Assets", "Извлечь ресурсы");
+            collectLooseButton.Text = T("Collect Loose Files", "Собрать открытые");
             unlockerButton.Text = T("Install Unlocker", "Установить анлокер");
             removeUnlockerButton.Text = T("Remove Unlocker", "Удалить анлокер");
             pauseButton.Text = T("Pause", "Пауза");
@@ -502,7 +507,7 @@ namespace RpgmvpConverterWinForms
             unlockerModeBox.SelectedIndex = unlockerMode >= 0 ? unlockerMode : 0;
 
             string path = pathBox.Text.Trim();
-            if (Directory.Exists(path))
+            if (IsExistingInput(path))
             {
                 detectedEngineLabel.Text = T("Engine: ", "Движок: ") + EngineName(DetectEngineFast(path));
                 scanSummaryLabel.Text = T(
@@ -512,7 +517,7 @@ namespace RpgmvpConverterWinForms
             else
             {
                 detectedEngineLabel.Text = T("Engine: not detected", "Движок: не определён");
-                scanSummaryLabel.Text = T("Select a folder or drop it into this window.", "Выберите папку или перетащите её в это окно.");
+                scanSummaryLabel.Text = T("Select a folder or file, or drop it into this window.", "Выберите папку или файл либо перетащите в это окно.");
             }
 
             if (currentRun == null && !externalRunning)
@@ -559,7 +564,7 @@ namespace RpgmvpConverterWinForms
             SetDragHighlight(false);
             string[] paths = e.Data == null ? null : e.Data.GetData(DataFormats.FileDrop) as string[];
             if (paths == null || paths.Length == 0) return;
-            string path = Directory.Exists(paths[0]) ? paths[0] : Path.GetDirectoryName(paths[0]);
+            string path = paths[0];
             if (!string.IsNullOrWhiteSpace(path))
                 ApplyGamePath(path, true);
         }
@@ -567,8 +572,8 @@ namespace RpgmvpConverterWinForms
         private void ApplyGamePath(string path, bool scan)
         {
             string detectedRoot = TryFindGameRoot(path);
-            pathBox.Text = string.IsNullOrWhiteSpace(detectedRoot) ? path : detectedRoot;
-            TryAutoDetectKey(pathBox.Text);
+            pathBox.Text = File.Exists(path) || string.IsNullOrWhiteSpace(detectedRoot) ? path : detectedRoot;
+            TryAutoDetectKey(InputDirectory(pathBox.Text));
             if (scan) RunDryScan(false);
         }
 
@@ -580,25 +585,25 @@ namespace RpgmvpConverterWinForms
                 ? startupGamePath
                 : AppDomain.CurrentDomain.BaseDirectory;
             string initialRoot = TryFindGameRoot(requestedPath);
-            if (string.IsNullOrWhiteSpace(initialRoot) && hasStartupArgument && Directory.Exists(requestedPath))
+            if (string.IsNullOrWhiteSpace(initialRoot) && hasStartupArgument && IsExistingInput(requestedPath))
                 initialRoot = requestedPath;
             if (!string.IsNullOrWhiteSpace(initialRoot))
-                ApplyGamePath(initialRoot, false);
+                ApplyGamePath(hasStartupArgument ? requestedPath : initialRoot, false);
         }
 
         private void OnPathChanged()
         {
             string path = pathBox.Text.Trim();
-            if (!Directory.Exists(path))
+            if (!IsExistingInput(path))
             {
                 detectedEngineLabel.Text = T("Engine: not detected", "Движок: не определён");
                 detectedEngineLabel.ForeColor = mutedColor;
-                scanSummaryLabel.Text = T("Select a folder or drop it into this window.", "Выберите папку или перетащите её в это окно.");
+                scanSummaryLabel.Text = T("Select a folder or file, or drop it into this window.", "Выберите папку или файл либо перетащите в это окно.");
                 UpdateEngineContext(GameEngine.Unknown);
                 return;
             }
 
-            TryAutoDetectKey(path);
+            TryAutoDetectKey(InputDirectory(path));
             GameEngine engine = DetectEngineFast(path);
             detectedEngineLabel.Text = T("Engine: ", "Движок: ") + EngineName(engine);
             detectedEngineLabel.ForeColor = EngineColor(engine);
@@ -611,8 +616,8 @@ namespace RpgmvpConverterWinForms
 
         private void RunDryScan(bool showLog)
         {
-            string rootPath = pathBox.Text.Trim();
-            if (!Directory.Exists(rootPath))
+            string inputPath = pathBox.Text.Trim();
+            if (!IsExistingInput(inputPath))
             {
                 WriteLog("Invalid path");
                 return;
@@ -622,7 +627,7 @@ namespace RpgmvpConverterWinForms
             Cursor = Cursors.WaitCursor;
             try
             {
-                ScanSummary summary = BuildScanSummary(rootPath);
+                ScanSummary summary = BuildScanSummary(inputPath);
                 detectedEngineLabel.Text = T("Engine: ", "Движок: ") + EngineName(summary.Engine);
                 detectedEngineLabel.ForeColor = EngineColor(summary.Engine);
                 scanSummaryLabel.Text = string.Format(
@@ -648,14 +653,15 @@ namespace RpgmvpConverterWinForms
 
         private async Task StartDetectedExtractionAsync()
         {
-            string rootPath = pathBox.Text.Trim();
+            string inputPath = pathBox.Text.Trim();
+            string rootPath = InputDirectory(inputPath);
             if (!Directory.Exists(rootPath))
             {
                 WriteLog("Invalid path");
                 return;
             }
 
-            GameEngine engine = DetectEngine(rootPath);
+            GameEngine engine = DetectEngine(inputPath);
             if (engine == GameEngine.Unity)
             {
                 await StartUnityExtractionAsync();
@@ -706,9 +712,24 @@ namespace RpgmvpConverterWinForms
                 await StartFlashExtractionAsync();
                 return;
             }
+            if (engine == GameEngine.Html)
+            {
+                await StartHtmlExtractionAsync();
+                return;
+            }
+            if (engine == GameEngine.Qsp)
+            {
+                await StartQspExtractionAsync();
+                return;
+            }
+            if (engine == GameEngine.Rags)
+            {
+                await StartRagsExtractionAsync();
+                return;
+            }
             if (engine != GameEngine.RpgMaker)
             {
-                MessageBox.Show("No supported game assets found. Run Dry Run / Scan and check the selected folder.", "Game Asset Tool", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                await StartDiagnosticExportAsync();
                 return;
             }
 
@@ -774,12 +795,13 @@ namespace RpgmvpConverterWinForms
         {
             if (currentRun != null || externalRunning) return;
 
-            string rootPath = pathBox.Text.Trim();
-            string gameFolder = Path.Combine(rootPath, "game");
-            List<string> archives = EnumerateFilesSafe(gameFolder, "*.rpa").ToList();
+            string inputPath = pathBox.Text.Trim();
+            string rootPath = InputDirectory(inputPath);
+            string gameFolder = GetRenpyGameFolder(inputPath);
+            List<string> archives = FindRenpyArchives(inputPath);
             if (archives.Count == 0)
             {
-                MessageBox.Show("No RPA archives found in the game folder.", "Ren'Py Extractor", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                await StartRenpyLooseExtractionAsync(rootPath, gameFolder);
                 return;
             }
 
@@ -795,7 +817,7 @@ namespace RpgmvpConverterWinForms
             OperationResult result;
             try
             {
-                result = await Task.Run(delegate { return RunRenpyExtraction(rootPath, archives, outputDir); });
+                result = await Task.Run(delegate { return RunRenpyExtraction(gameFolder, archives, outputDir); });
             }
             catch (Exception ex)
             {
@@ -805,14 +827,12 @@ namespace RpgmvpConverterWinForms
             CompleteExternalOperation(result);
         }
 
-        private OperationResult RunRenpyExtraction(string rootPath, List<string> archives, string outputDir)
+        private OperationResult RunRenpyExtraction(string gameFolder, List<string> archives, string outputDir)
         {
             DateTime start = DateTime.UtcNow;
             int errors = 0;
             int renamed = 0;
             Directory.CreateDirectory(outputDir);
-            string gameFolder = Path.Combine(rootPath, "game");
-
             for (int i = 0; i < archives.Count; i++)
             {
                 string archive = archives[i];
@@ -842,11 +862,36 @@ namespace RpgmvpConverterWinForms
             return new OperationResult("Ren'Py", outputDir, stats.Count, stats.Bytes, errors, renamed, DateTime.UtcNow - start);
         }
 
+        private async Task StartRenpyLooseExtractionAsync(string rootPath, string gameFolder)
+        {
+            string outputDir = Path.Combine(rootPath, "extracted", "renpy", "loose");
+            lastOutputDir = outputDir;
+            SetExternalRunningState(true, "Ren'Py loose files");
+            WriteLog("Ren'Py resources are already open. Collecting loose files.");
+            OperationResult result;
+            try
+            {
+                result = await Task.Run(delegate
+                {
+                    DateTime start = DateTime.UtcNow;
+                    List<string> files = AssetCollectors.GetLooseResourceFiles(gameFolder, outputDir);
+                    CollectorResult copied = AssetCollectors.CopyFiles(gameFolder, files, outputDir, "");
+                    return new OperationResult("Ren'Py loose resources", outputDir, copied.Extracted, copied.Bytes, 0, copied.Renamed, copied.Skipped, DateTime.UtcNow - start);
+                });
+            }
+            catch (Exception ex)
+            {
+                result = OperationResult.Failed("Ren'Py loose resources", outputDir, ex.Message);
+            }
+            SetExternalRunningState(false, "Ren'Py loose files");
+            CompleteExternalOperation(result);
+        }
+
         private async Task StartUnityExtractionAsync()
         {
             if (currentRun != null || externalRunning) return;
 
-            string rootPath = pathBox.Text.Trim();
+            string rootPath = InputDirectory(pathBox.Text.Trim());
             if (!Directory.Exists(rootPath) || !IsUnityGame(rootPath))
             {
                 MessageBox.Show("No Unity game found. Select a folder containing *_Data or UnityPlayer.dll.", "Unity Extractor", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -954,7 +999,7 @@ namespace RpgmvpConverterWinForms
         {
             if (currentRun != null || externalRunning) return;
 
-            string rootPath = pathBox.Text.Trim();
+            string rootPath = InputDirectory(pathBox.Text.Trim());
             if (!Directory.Exists(rootPath) || !IsNwjsGame(rootPath))
             {
                 MessageBox.Show("No NWJS game found. Select a folder containing www, package.json, package.nw or app.nw.", "NWJS Extractor", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -1116,11 +1161,67 @@ namespace RpgmvpConverterWinForms
             });
         }
 
+        private async Task StartHtmlExtractionAsync()
+        {
+            await StartLocalExtractionAsync("HTML game", "html", delegate(string inputPath, string outputDir)
+            {
+                return RunCollectorExtraction("HTML game", inputPath, outputDir, AssetCollectors.GetHtmlFiles(inputPath, outputDir));
+            });
+        }
+
+        private async Task StartQspExtractionAsync()
+        {
+            await StartLocalExtractionAsync("QSP", "qsp", delegate(string inputPath, string outputDir)
+            {
+                return RunCollectorExtraction("QSP", inputPath, outputDir, AssetCollectors.GetQspFiles(inputPath, outputDir));
+            });
+        }
+
+        private async Task StartRagsExtractionAsync()
+        {
+            await StartLocalExtractionAsync("RAGS experimental", "rags", delegate(string inputPath, string outputDir)
+            {
+                DateTime start = DateTime.UtcNow;
+                CollectorResult extracted = AssetCollectors.ExtractRags(inputPath, outputDir);
+                AssetCollectors.WriteDiagnostics(inputPath, outputDir);
+                return new OperationResult("RAGS experimental media recovery", outputDir, extracted.Extracted, extracted.Bytes, 0, extracted.Renamed, extracted.Skipped, DateTime.UtcNow - start);
+            });
+        }
+
+        private async Task StartLooseResourceCollectionAsync()
+        {
+            await StartLocalExtractionAsync("Loose resources", "loose-assets", delegate(string inputPath, string outputDir)
+            {
+                List<string> files = AssetCollectors.GetLooseResourceFiles(inputPath, outputDir);
+                return RunCollectorExtraction("Loose resources", inputPath, outputDir, files);
+            });
+        }
+
+        private async Task StartDiagnosticExportAsync()
+        {
+            await StartLocalExtractionAsync("Diagnostics", "diagnostics", delegate(string inputPath, string outputDir)
+            {
+                DateTime start = DateTime.UtcNow;
+                string report = AssetCollectors.WriteDiagnostics(inputPath, outputDir);
+                SafeLog("Unknown-engine diagnostics: " + report);
+                return new OperationResult("Unknown engine diagnostics", outputDir, 1, SafeFileLength(report), 0, 0, DateTime.UtcNow - start);
+            });
+        }
+
+        private OperationResult RunCollectorExtraction(string engineName, string inputPath, string outputDir, List<string> files)
+        {
+            DateTime start = DateTime.UtcNow;
+            string rootPath = InputDirectory(inputPath);
+            CollectorResult copied = AssetCollectors.CopyFiles(rootPath, files, outputDir, "");
+            return new OperationResult(engineName, outputDir, copied.Extracted, copied.Bytes, 0, copied.Renamed, copied.Skipped, DateTime.UtcNow - start);
+        }
+
         private async Task StartLocalExtractionAsync(string engineName, string outputFolder, Func<string, string, OperationResult> extract)
         {
             if (currentRun != null || externalRunning) return;
 
-            string rootPath = pathBox.Text.Trim();
+            string inputPath = pathBox.Text.Trim();
+            string rootPath = InputDirectory(inputPath);
             if (!Directory.Exists(rootPath))
             {
                 WriteLog("Invalid path");
@@ -1136,7 +1237,7 @@ namespace RpgmvpConverterWinForms
             OperationResult result;
             try
             {
-                result = await Task.Run(delegate { return extract(rootPath, outputDir); });
+                result = await Task.Run(delegate { return extract(inputPath, outputDir); });
             }
             catch (OperationCanceledException)
             {
@@ -1152,6 +1253,7 @@ namespace RpgmvpConverterWinForms
 
         private OperationResult RunTyranoExtraction(string rootPath, string outputDir)
         {
+            rootPath = InputDirectory(rootPath);
             DateTime start = DateTime.UtcNow;
             Directory.CreateDirectory(outputDir);
             List<string> files = GetTyranoFiles(rootPath, outputDir);
@@ -1161,9 +1263,11 @@ namespace RpgmvpConverterWinForms
 
         private OperationResult RunJavaExtraction(string rootPath, string outputDir)
         {
+            string inputPath = rootPath;
+            rootPath = InputDirectory(rootPath);
             DateTime start = DateTime.UtcNow;
             Directory.CreateDirectory(outputDir);
-            List<string> archives = FindJavaArchives(rootPath);
+            List<string> archives = FindJavaArchives(inputPath);
             List<string> looseFiles = GetJavaLooseFiles(rootPath, outputDir);
             NwjsCopyStats loose = CopyLooseFiles(rootPath, looseFiles, outputDir, "loose");
             int extracted = loose.Extracted;
@@ -1206,9 +1310,11 @@ namespace RpgmvpConverterWinForms
 
         private OperationResult RunFlashExtraction(string rootPath, string outputDir)
         {
+            string inputPath = rootPath;
+            rootPath = InputDirectory(rootPath);
             DateTime start = DateTime.UtcNow;
             Directory.CreateDirectory(outputDir);
-            List<string> files = FindFlashFiles(rootPath);
+            List<string> files = FindFlashFiles(inputPath);
             int extracted = 0;
             long bytes = 0;
             int errors = 0;
@@ -1254,6 +1360,7 @@ namespace RpgmvpConverterWinForms
 
         private OperationResult RunWolfExtraction(string rootPath, string outputDir)
         {
+            rootPath = InputDirectory(rootPath);
             DateTime start = DateTime.UtcNow;
             Directory.CreateDirectory(outputDir);
             List<string> looseFiles = GetWolfLooseFiles(rootPath, outputDir);
@@ -1537,7 +1644,7 @@ namespace RpgmvpConverterWinForms
         {
             if (currentRun != null || externalRunning) return;
 
-            string rootPath = pathBox.Text.Trim();
+            string rootPath = InputDirectory(pathBox.Text.Trim());
             if (!Directory.Exists(rootPath))
             {
                 WriteLog("Invalid path");
@@ -1629,7 +1736,7 @@ namespace RpgmvpConverterWinForms
 
         private void InstallUnlocker()
         {
-            string rootPath = pathBox.Text.Trim();
+            string rootPath = InputDirectory(pathBox.Text.Trim());
             if (!CanInstallUnlocker(rootPath))
             {
                 MessageBox.Show("Unlocker works with Ren'Py game folders.", "Unlocker", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -1663,7 +1770,7 @@ namespace RpgmvpConverterWinForms
 
         private void RemoveUnlocker()
         {
-            string rootPath = pathBox.Text.Trim();
+            string rootPath = InputDirectory(pathBox.Text.Trim());
             List<string> directories = GetUnlockerDirectories(rootPath).ToList();
             if (directories.Count == 0)
             {
@@ -1867,6 +1974,7 @@ namespace RpgmvpConverterWinForms
             browseButton.Enabled = !running;
             dryRunButton.Enabled = !running;
             startButton.Enabled = !running;
+            collectLooseButton.Enabled = !running;
             UpdateUnlockerControls(running);
             pauseButton.Enabled = running;
             cancelButton.Enabled = running;
@@ -1884,6 +1992,7 @@ namespace RpgmvpConverterWinForms
                 browseButton.Enabled = !running;
                 dryRunButton.Enabled = !running;
                 startButton.Enabled = !running;
+                collectLooseButton.Enabled = !running;
                 UpdateUnlockerControls(running);
                 pauseButton.Enabled = false;
                 cancelButton.Enabled = running;
@@ -1923,7 +2032,11 @@ namespace RpgmvpConverterWinForms
             keyBox.Visible = showKey;
             unityModeLabel.Visible = showUnityMode;
             unityExtractModeBox.Visible = showUnityMode;
-            startButton.Enabled = !busy && CanExtractAssets(engine);
+            startButton.Enabled = !busy && (CanExtractAssets(engine) || IsExistingInput(pathBox.Text.Trim()));
+            startButton.Text = engine == GameEngine.Unknown
+                ? T("Export Diagnostics", "Экспорт диагностики")
+                : T("Extract Assets", "Извлечь ресурсы");
+            collectLooseButton.Enabled = !busy && IsExistingInput(pathBox.Text.Trim());
             UpdateUnlockerControls(busy);
 
             switch (engine)
@@ -1938,7 +2051,9 @@ namespace RpgmvpConverterWinForms
                     extractionHintLabel.Text = T("Choose the Unity asset types to export.", "Выберите типы ресурсов Unity для извлечения.");
                     break;
                 case GameEngine.Renpy:
-                    extractionHintLabel.Text = T("RPA archives will be extracted into separate folders.", "Архивы RPA будут извлечены в отдельные папки.");
+                    extractionHintLabel.Text = FindRenpyArchives(pathBox.Text.Trim()).Count > 0
+                        ? T("RPA archives will be extracted into separate folders.", "Архивы RPA будут извлечены в отдельные папки.")
+                        : T("No RPA archives found. Open Ren'Py resources will be collected.", "Архивы RPA не найдены. Будут собраны открытые ресурсы Ren'Py.");
                     break;
                 case GameEngine.Godot:
                     extractionHintLabel.Text = T("Standard unencrypted PCK archives will be extracted.", "Будут извлечены стандартные незашифрованные архивы PCK.");
@@ -1977,10 +2092,25 @@ namespace RpgmvpConverterWinForms
                         "Experimental Flash inspection copies SWF files and extracts embedded JPEG, PNG and GIF images.",
                         "Экспериментальный анализ Flash копирует SWF и извлекает встроенные JPEG, PNG и GIF.");
                     break;
+                case GameEngine.Html:
+                    extractionHintLabel.Text = T(
+                        "Static HTML game files and open media resources will be collected with their folder structure.",
+                        "Файлы статической HTML-игры и открытые медиа будут собраны с сохранением структуры.");
+                    break;
+                case GameEngine.Qsp:
+                    extractionHintLabel.Text = T(
+                        "QSP databases and open media resources will be collected without copying the bundled player.",
+                        "Базы QSP и открытые медиа будут собраны без копирования встроенного проигрывателя.");
+                    break;
+                case GameEngine.Rags:
+                    extractionHintLabel.Text = T(
+                        "Experimental RAGS recovery copies the encrypted database and carves confidently detected embedded media.",
+                        "Экспериментальное восстановление RAGS копирует зашифрованную базу и извлекает уверенно найденные медиа.");
+                    break;
                 default:
                     extractionHintLabel.Text = T(
-                        "Select a supported game folder to see its extraction options.",
-                        "Выберите поддерживаемую папку игры, чтобы увидеть доступные действия.");
+                        "Unknown format. Export diagnostics or collect loose resources for further analysis.",
+                        "Неизвестный формат. Экспортируйте диагностику или соберите открытые ресурсы для анализа.");
                     break;
             }
 
@@ -1990,7 +2120,7 @@ namespace RpgmvpConverterWinForms
 
         private void UpdateUnlockerControls(bool busy)
         {
-            string rootPath = pathBox.Text.Trim();
+            string rootPath = InputDirectory(pathBox.Text.Trim());
             bool installed = GetUnlockerDirectories(rootPath).Any();
             UpdateUnlockerLayout(selectedEngine == GameEngine.Renpy || installed);
             bool canInstall = !busy && selectedEngine == GameEngine.Renpy && Directory.Exists(rootPath);
@@ -2011,7 +2141,10 @@ namespace RpgmvpConverterWinForms
                 || engine == GameEngine.WolfRpg
                 || engine == GameEngine.TyranoScript
                 || engine == GameEngine.JavaJar
-                || engine == GameEngine.Flash;
+                || engine == GameEngine.Flash
+                || engine == GameEngine.Html
+                || engine == GameEngine.Qsp
+                || engine == GameEngine.Rags;
         }
 
         private void UpdateUnlockerLayout(bool visible)
@@ -2053,7 +2186,7 @@ namespace RpgmvpConverterWinForms
 
         private void ConfigureActionTooltips()
         {
-            SetActionTooltip(pathBox, T("Drop a game folder here or choose it with Browse.", "Перетащите папку игры сюда или выберите её через «Обзор»."));
+            SetActionTooltip(pathBox, T("Drop a game folder or a supported file here, or choose a folder with Browse.", "Перетащите папку или поддерживаемый файл игры либо выберите папку через «Обзор»."));
             SetActionTooltip(browseButton, T("Select the root folder of a game.", "Выберите корневую папку игры."));
             SetActionTooltip(dryRunButton, T("Inspect supported archives and estimate the input size without extracting files.", "Проверьте архивы и входной размер без извлечения файлов."));
             SetActionTooltip(toggleLogButton, T("Show or hide technical extraction messages.", "Показать или скрыть технические сообщения."));
@@ -2069,7 +2202,8 @@ namespace RpgmvpConverterWinForms
                 ? T("Wait for the current operation to finish.", "Дождитесь завершения текущей операции.")
                 : CanExtractAssets(selectedEngine)
                     ? T("Extract supported assets for the detected engine.", "Извлечь поддерживаемые ресурсы определённого движка.")
-                    : T("Select a supported game folder first.", "Сначала выберите поддерживаемую папку игры."));
+                    : T("Export a diagnostic report for this unknown format.", "Экспортировать диагностический отчёт для неизвестного формата."));
+            SetActionTooltip(collectLooseButton, T("Collect open media, scripts and project files without unpacking archives.", "Собрать открытые медиа, скрипты и файлы проекта без распаковки архивов."));
             SetActionTooltip(unlockerButton, selectedEngine == GameEngine.Renpy
                 ? T("Install the Ren'Py gallery unlocker. Try Soft mode first.", "Установить анлокер галереи Ren'Py. Сначала попробуйте мягкий режим.")
                 : T("The gallery unlocker is available only for detected Ren'Py folders.", "Анлокер галереи доступен только для определённых папок Ren'Py."));
@@ -2315,8 +2449,11 @@ namespace RpgmvpConverterWinForms
             return bytes;
         }
 
-        private static GameEngine DetectEngine(string rootPath)
+        private static GameEngine DetectEngine(string inputPath)
         {
+            GameEngine direct = DetectDirectFileEngine(inputPath);
+            if (direct != GameEngine.Unknown) return direct;
+            string rootPath = InputDirectory(inputPath);
             if (!Directory.Exists(rootPath)) return GameEngine.Unknown;
             if (IsUnityGame(rootPath)) return GameEngine.Unity;
             if (IsRenpyGame(rootPath)) return GameEngine.Renpy;
@@ -2329,11 +2466,17 @@ namespace RpgmvpConverterWinForms
             if (IsNwjsGame(rootPath)) return GameEngine.Nwjs;
             if (IsJavaJarGame(rootPath)) return GameEngine.JavaJar;
             if (IsFlashGame(rootPath)) return GameEngine.Flash;
+            if (AssetCollectors.IsHtmlGame(rootPath)) return GameEngine.Html;
+            if (AssetCollectors.IsQspGame(rootPath)) return GameEngine.Qsp;
+            if (AssetCollectors.IsRagsInput(rootPath)) return GameEngine.Rags;
             return GameEngine.Unknown;
         }
 
-        private static GameEngine DetectEngineFast(string rootPath)
+        private static GameEngine DetectEngineFast(string inputPath)
         {
+            GameEngine direct = DetectDirectFileEngine(inputPath);
+            if (direct != GameEngine.Unknown) return direct;
+            string rootPath = InputDirectory(inputPath);
             if (!Directory.Exists(rootPath)) return GameEngine.Unknown;
             if (IsUnityGame(rootPath)) return GameEngine.Unity;
             if (IsRenpyGameFast(rootPath)) return GameEngine.Renpy;
@@ -2346,7 +2489,29 @@ namespace RpgmvpConverterWinForms
             if (IsNwjsGame(rootPath)) return GameEngine.Nwjs;
             if (IsJavaJarGame(rootPath)) return GameEngine.JavaJar;
             if (IsFlashGame(rootPath)) return GameEngine.Flash;
+            if (AssetCollectors.IsHtmlGame(rootPath)) return GameEngine.Html;
+            if (AssetCollectors.IsQspGame(rootPath)) return GameEngine.Qsp;
+            if (AssetCollectors.IsRagsInput(rootPath)) return GameEngine.Rags;
             return GameEngine.Unknown;
+        }
+
+        private static GameEngine DetectDirectFileEngine(string path)
+        {
+            if (!File.Exists(path)) return GameEngine.Unknown;
+            string extension = Path.GetExtension(path).ToLowerInvariant();
+            switch (extension)
+            {
+                case ".rpa": return GameEngine.Renpy;
+                case ".pck": return GameEngine.Godot;
+                case ".xp3": return GameEngine.Kirikiri;
+                case ".pak":
+                case ".utoc": return GameEngine.Unreal;
+                case ".jar": return GameEngine.JavaJar;
+                case ".swf": return GameEngine.Flash;
+                case ".qsp": return GameEngine.Qsp;
+                case ".rag": return GameEngine.Rags;
+                default: return GameEngine.Unknown;
+            }
         }
 
         private static bool IsUnityGame(string rootPath)
@@ -2364,7 +2529,10 @@ namespace RpgmvpConverterWinForms
             string gameFolder = Path.Combine(rootPath, "game");
             if (!Directory.Exists(gameFolder)) return false;
             return EnumerateFilesSafe(gameFolder, "*.rpa").Any()
+                || EnumerateFilesSafe(gameFolder, "*.rpy").Any()
                 || EnumerateFilesSafe(gameFolder, "*.rpyc").Any()
+                || EnumerateFilesSafe(gameFolder, "*.rpym").Any()
+                || EnumerateFilesSafe(gameFolder, "*.rpymc").Any()
                 || File.Exists(Path.Combine(rootPath, "renpy.exe"));
         }
 
@@ -2373,7 +2541,10 @@ namespace RpgmvpConverterWinForms
             string gameFolder = Path.Combine(rootPath, "game");
             if (!Directory.Exists(gameFolder)) return false;
             return EnumerateFilesTopLevelSafe(gameFolder, "*.rpa").Any()
+                || EnumerateFilesTopLevelSafe(gameFolder, "*.rpy").Any()
                 || EnumerateFilesTopLevelSafe(gameFolder, "*.rpyc").Any()
+                || EnumerateFilesTopLevelSafe(gameFolder, "*.rpym").Any()
+                || EnumerateFilesTopLevelSafe(gameFolder, "*.rpymc").Any()
                 || File.Exists(Path.Combine(rootPath, "renpy.exe"));
         }
 
@@ -2510,9 +2681,10 @@ namespace RpgmvpConverterWinForms
             return folders;
         }
 
-        private static ScanSummary BuildScanSummary(string rootPath)
+        private static ScanSummary BuildScanSummary(string inputPath)
         {
-            GameEngine engine = DetectEngine(rootPath);
+            string rootPath = InputDirectory(inputPath);
+            GameEngine engine = DetectEngine(inputPath);
             IEnumerable<string> files;
             int archives;
             if (engine == GameEngine.Unity)
@@ -2532,8 +2704,11 @@ namespace RpgmvpConverterWinForms
             }
             else if (engine == GameEngine.Renpy)
             {
-                files = EnumerateFilesSafe(Path.Combine(rootPath, "game"), "*.rpa").ToList();
-                archives = files.Count();
+                List<string> renpyArchives = FindRenpyArchives(inputPath);
+                files = renpyArchives.Count > 0
+                    ? renpyArchives
+                    : AssetCollectors.GetLooseResourceFiles(GetRenpyGameFolder(inputPath), Path.Combine(rootPath, "extracted", "renpy", "loose"));
+                archives = renpyArchives.Count;
             }
             else if (engine == GameEngine.Godot)
             {
@@ -2575,7 +2750,7 @@ namespace RpgmvpConverterWinForms
             }
             else if (engine == GameEngine.JavaJar)
             {
-                List<string> javaArchives = FindJavaArchives(rootPath);
+                List<string> javaArchives = FindJavaArchives(inputPath);
                 files = GetJavaLooseFiles(rootPath, Path.Combine(rootPath, "extracted", "java"))
                     .Concat(javaArchives)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -2584,7 +2759,22 @@ namespace RpgmvpConverterWinForms
             }
             else if (engine == GameEngine.Flash)
             {
-                files = FindFlashFiles(rootPath);
+                files = FindFlashFiles(inputPath);
+                archives = files.Count();
+            }
+            else if (engine == GameEngine.Html)
+            {
+                files = AssetCollectors.GetHtmlFiles(inputPath, Path.Combine(rootPath, "extracted", "html"));
+                archives = 0;
+            }
+            else if (engine == GameEngine.Qsp)
+            {
+                files = AssetCollectors.GetQspFiles(inputPath, Path.Combine(rootPath, "extracted", "qsp"));
+                archives = files.Count(delegate(string path) { return path.EndsWith(".qsp", StringComparison.OrdinalIgnoreCase); });
+            }
+            else if (engine == GameEngine.Rags)
+            {
+                files = AssetCollectors.FindInputFiles(inputPath, ".rag");
                 archives = files.Count();
             }
             else
@@ -2642,6 +2832,21 @@ namespace RpgmvpConverterWinForms
                 .ToList();
         }
 
+        private static string GetRenpyGameFolder(string inputPath)
+        {
+            if (File.Exists(inputPath)) return Path.GetDirectoryName(Path.GetFullPath(inputPath));
+            string rootPath = InputDirectory(inputPath);
+            string gameFolder = Path.Combine(rootPath, "game");
+            return Directory.Exists(gameFolder) ? gameFolder : rootPath;
+        }
+
+        private static List<string> FindRenpyArchives(string inputPath)
+        {
+            if (File.Exists(inputPath) && inputPath.EndsWith(".rpa", StringComparison.OrdinalIgnoreCase))
+                return new List<string> { Path.GetFullPath(inputPath) };
+            return EnumerateFilesSafe(GetRenpyGameFolder(inputPath), "*.rpa").ToList();
+        }
+
         private static List<string> FindWolfArchiveFiles(string rootPath)
         {
             string[] extensions = { ".wolf", ".data", ".pak", ".bin", ".assets", ".content", ".res", ".resource" };
@@ -2671,7 +2876,7 @@ namespace RpgmvpConverterWinForms
 
         private static List<string> FindJavaArchives(string rootPath)
         {
-            return EnumerateFilesTopLevelSafe(rootPath, "*.jar")
+            return AssetCollectors.FindInputFiles(rootPath, ".jar")
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
         }
@@ -2696,9 +2901,19 @@ namespace RpgmvpConverterWinForms
 
         private static List<string> FindFlashFiles(string rootPath)
         {
-            return EnumerateFilesTopLevelSafe(rootPath, "*.swf")
+            return AssetCollectors.FindInputFiles(rootPath, ".swf")
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
+        }
+
+        private static bool IsExistingInput(string path)
+        {
+            return Directory.Exists(path) || File.Exists(path);
+        }
+
+        private static string InputDirectory(string path)
+        {
+            return AssetCollectors.InputDirectory(path);
         }
 
         private static List<string> GetLooseFiles(string sourceRoot, string outputDir)
@@ -2762,6 +2977,9 @@ namespace RpgmvpConverterWinForms
                     || IsUnrealGameFast(root)
                     || IsJavaJarGame(root)
                     || IsFlashGame(root)
+                    || AssetCollectors.IsHtmlGame(root)
+                    || AssetCollectors.IsQspGame(root)
+                    || AssetCollectors.IsRagsInput(root)
                     || Directory.Exists(Path.Combine(root, "www"))
                     || Directory.Exists(Path.Combine(root, "game"))
                     || File.Exists(Path.Combine(root, "package.json"))
@@ -2802,6 +3020,9 @@ namespace RpgmvpConverterWinForms
                 case GameEngine.TyranoScript: return "TyranoScript";
                 case GameEngine.JavaJar: return "Java game / JAR";
                 case GameEngine.Flash: return "Flash SWF experimental";
+                case GameEngine.Html: return "HTML game";
+                case GameEngine.Qsp: return "QSP";
+                case GameEngine.Rags: return "RAGS experimental";
                 default: return "not detected";
             }
         }
@@ -2821,6 +3042,9 @@ namespace RpgmvpConverterWinForms
                 case GameEngine.TyranoScript: return Color.FromArgb(255, 140, 190);
                 case GameEngine.JavaJar: return Color.FromArgb(235, 155, 75);
                 case GameEngine.Flash: return Color.FromArgb(225, 80, 75);
+                case GameEngine.Html: return Color.FromArgb(85, 180, 235);
+                case GameEngine.Qsp: return Color.FromArgb(205, 165, 85);
+                case GameEngine.Rags: return Color.FromArgb(190, 120, 210);
                 default: return mutedColor;
             }
         }
@@ -2958,7 +3182,10 @@ namespace RpgmvpConverterWinForms
             WolfRpg,
             TyranoScript,
             JavaJar,
-            Flash
+            Flash,
+            Html,
+            Qsp,
+            Rags
         }
 
         private sealed class ScanSummary
@@ -3042,7 +3269,7 @@ namespace RpgmvpConverterWinForms
             {
                 return string.Join(Environment.NewLine, new[]
                 {
-                    "Game Asset Tool v1.7.0 report",
+                    "Game Asset Tool v1.8.0 report",
                     "Engine: " + Engine,
                     "Extracted files: " + Extracted,
                     "Extracted size: " + FormatBytes(Bytes),

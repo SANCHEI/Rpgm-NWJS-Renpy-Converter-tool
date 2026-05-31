@@ -4,17 +4,17 @@
 
 [**Watch Demo Video on YouTube**](https://youtu.be/BnjRjik9fk0)
 
-Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **Ren'Py**, **NWJS**, **Unity**, **Godot**, **KiriKiri**, **WOLF RPG**, **TyranoScript** and **Java** games. Experimental Unreal `.pak` and Flash `.swf` extraction is included.
+Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **Ren'Py**, **NWJS**, **Unity**, **Godot**, **KiriKiri**, **WOLF RPG**, **TyranoScript**, **Java**, **HTML** and **QSP** games. Experimental Unreal `.pak`, Flash `.swf` and RAGS `.rag` recovery is included.
 
-![Version](https://img.shields.io/badge/version-1.7.0-blue)
+![Version](https://img.shields.io/badge/version-1.8.0-blue)
 ![.NET](https://img.shields.io/badge/.NET_Framework-4.7.2-blue)
 ![Runtime](https://img.shields.io/badge/runtime-built--in-green)
 
 ## Highlights
 
 - Detects the selected game engine automatically.
-- Supports drag-and-drop for game folders.
-- Opens with a selected folder when you drop that folder directly onto `GameAssetTool.exe`.
+- Supports drag-and-drop for game folders and individual supported files.
+- Opens with a selected path when you drop a game folder or supported file directly onto `GameAssetTool.exe`.
 - Includes an `EN` / `RU` interface switch.
 - Provides a **Dry Run / Scan** before extraction with archive count, candidate file count and input size.
 - Shows only the extraction settings relevant to the detected engine.
@@ -23,10 +23,14 @@ Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **Re
 - Displays the built-in runtime state while it is prepared silently in the background.
 - Converts RPGMVP assets with key auto-detection and key reconstruction.
 - Extracts Ren'Py RPA archives through verified `unrpa==2.3.0`.
+- Collects open Ren'Py resources when a game does not use RPA archives.
 - Extracts Unity textures, videos, audio, meshes and direct media through one built-in workflow.
 - Extracts unencrypted Godot PCK archives for Godot 3 and 4.
 - Extracts standard unencrypted KiriKiri XP3 archives.
 - Extracts Unreal PAK archives in an experimental offline mode.
+- Collects static HTML games, QSP databases and loose resources.
+- Preserves RAGS `.rag` databases and recovers confidently detected embedded media experimentally.
+- Provides **Collect Loose Files** and **Export Diagnostics** fallback actions.
 - Preserves relative paths and renames collisions with suffixes such as `image (2).png`.
 - Shows the Ren'Py gallery unlocker only for relevant folders or when installed files can be removed.
 - Writes an extraction summary to the results dialog and `GameAssetTool-report.txt`.
@@ -34,7 +38,7 @@ Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **Re
 ## Usage
 
 1. Run `GameAssetTool.exe`.
-2. Drop a game folder into the window or click **Browse...**.
+2. Drop a game folder or supported file into the window, or click **Browse...** for a folder.
 3. Click **Dry Run / Scan** to review detected engine, archive count and input size.
 4. Review the engine-specific options and click **Extract Assets**.
 5. Review the results dialog and open the output folder.
@@ -54,6 +58,11 @@ extracted/
   tyrano/
   java/
   flash/
+  html/
+  qsp/
+  rags/
+  loose/
+  diagnostics/
 ```
 
 Each extractor writes `GameAssetTool-report.txt` into its own output folder.
@@ -63,6 +72,8 @@ Each extractor writes `GameAssetTool-report.txt` into its own output folder.
 Ren'Py extraction uses the maintained [`unrpa`](https://github.com/Lattyware/unrpa) package and supports RPA `2.0`, `3.0`, `3.2` and `4.0` archives. The pinned `unrpa==2.3.0` package is embedded into `GameAssetTool.exe`.
 
 Archives are extracted into separate subfolders to prevent files from different RPA archives overwriting one another.
+
+When a Ren'Py game contains loose resources instead of `.rpa` archives, the application reports that mode explicitly and collects the open files into `extracted/renpy/loose/`.
 
 ## NWJS
 
@@ -98,7 +109,7 @@ KiriKiri extraction supports standard unencrypted `.xp3` archives, compressed in
 
 Unreal extraction uses [`pyuepak==0.2.7`](https://github.com/stas96111/pyUEpak) inside the built-in runtime. It supports ordinary and Zlib-compressed `.pak` archives and accepts an optional AES key in the shared key field.
 
-The application does not download or redistribute an Oodle DLL. Oodle-compressed archives and IoStore `.utoc/.ucas` containers are reported as unsupported.
+The application does not download or redistribute an Oodle DLL. For Oodle-compressed archives it automatically searches for `oo2core*_win64.dll` inside the selected game and installed Unreal Engine folders. If no local decoder is available, the archive is reported and skipped. IoStore `.utoc/.ucas` containers are reported as unsupported.
 
 ## WOLF RPG
 
@@ -115,6 +126,22 @@ Java `.jar` files are treated as ZIP-compatible containers and unpacked into sep
 ## Flash Experimental
 
 Flash inspection copies original `.swf` files and extracts embedded JPEG, PNG and GIF images from uncompressed `FWS` and Zlib-compressed `CWS` files. LZMA-compressed `ZWS` files are reported as unsupported.
+
+## HTML Games
+
+Static HTML games are collected with their open scripts, styles, images, audio and video while preserving the original folder structure.
+
+## QSP
+
+QSP collection copies the `.qsp` database and loose media without duplicating the bundled `qsp` player folder.
+
+## RAGS Experimental
+
+RAGS recovery accepts a standalone `.rag` file or a folder containing one. It preserves the original database and carves confidently detected JPEG, PNG, GIF and OGG media. It is a recovery tool, not a complete RAGS database parser.
+
+## Loose Files And Diagnostics
+
+Use **Collect Loose Files** to copy open resources independently of archive extraction. When an engine is unknown, **Export Diagnostics** writes `GameAssetTool-diagnostics.txt` with file extensions, sizes, top-level entries and signatures for further analysis.
 
 ## Gallery Unlocker
 
@@ -150,7 +177,7 @@ powershell -ExecutionPolicy Bypass -File .\build_release.ps1
 Release output:
 
 ```text
-release/GameAssetTool-v1.7.0.exe
+release/GameAssetTool-v1.8.0.exe
 ```
 
 The release contains one supported executable. Users do not need any neighboring files.

@@ -133,12 +133,29 @@ def main():
             assert_extracted(output, content)
             print("{}=ok".format(label))
 
-        from pyuepak.oodle import OodleUnavailable, oodle
-        try:
-            oodle().decompress(b"data", 1)
-            raise AssertionError("Offline Oodle stub unexpectedly decompressed data.")
-        except OodleUnavailable:
-            print("offline_oodle=ok")
+        fallback_environment = os.environ.copy()
+        fallback_environment["GAME_PATH"] = str(temp / "no-local-oodle")
+        fallback_environment["ProgramFiles"] = str(temp / "no-installed-unreal")
+        fallback_environment.pop("OODLE_DLL", None)
+        fallback = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "from pyuepak.oodle import OodleUnavailable, oodle\n"
+                "try:\n"
+                "    oodle().decompress(b'data', 1)\n"
+                "    raise AssertionError('Oodle fallback unexpectedly decompressed data.')\n"
+                "except OodleUnavailable as error:\n"
+                "    assert 'no local oo2core' in str(error)\n"
+                "    print('local_oodle_fallback=ok')\n",
+            ],
+            env=fallback_environment,
+            capture_output=True,
+            text=True,
+        )
+        if fallback.returncode != 0:
+            raise AssertionError("Oodle fallback failed:\n{}\n{}".format(fallback.stdout, fallback.stderr))
+        print(fallback.stdout.strip())
 
         from pyuepak.aes_windows import aes_ecb_decrypt
         key = bytes.fromhex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")

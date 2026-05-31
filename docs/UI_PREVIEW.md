@@ -1,4 +1,4 @@
-# Game Asset Tool v1.7.0 UI Preview
+# Game Asset Tool v1.8.0 UI Preview
 
 ## Main Window
 
@@ -7,7 +7,7 @@ The default window is compact. Only settings relevant to the detected engine are
 ```text
 +--------------------------------------------------------------------------+
 | Game Asset Tool                                  Runtime: ready           |
-| Drop a game folder here, scan it, then extract or unlock                 |
+| Drop a game folder or file here, scan it, then extract or unlock         |
 +--------------------------------------------------------------------------+
 | Game Folder                                                              |
 | [ D:\Games\Example Game                                      ] [Browse] |
@@ -18,6 +18,7 @@ The default window is compact. Only settings relevant to the detected engine are
 | Extract Assets                                                           |
 | Choose the Unity asset types to export.                                  |
 | Asset type [ All v ]                                  [ Extract Assets ] |
+|                                              [ Collect Loose Files ]     |
 |                                                                          |
 | [ Pause ] [ Cancel ] [ Open Output Folder ] [ Show Log ]                |
 | [========================= 61% =====================]                     |
@@ -44,12 +45,16 @@ The **Show Log** button expands the same fixed-width window vertically.
 - RPG Maker MV/MZ: RPGM HEX key field.
 - Unity: Textures, Videos, Audio, Meshes or All filter.
 - Unreal: optional Unreal AES key field and experimental-mode notice.
-- Ren'Py, Godot and KiriKiri: extractor description without unnecessary inputs.
+- Ren'Py: RPA extraction or explicit loose-resource collection without unnecessary inputs.
+- Godot and KiriKiri: extractor description without unnecessary inputs.
 - NWJS: copies loose files and safely unpacks ZIP-compatible `.nw` archives without a gallery unlocker.
+- HTML and QSP: copies open project resources while preserving paths.
+- RAGS: accepts a standalone `.rag` file and exposes experimental media recovery.
+- Unknown formats: **Export Diagnostics** writes a report for further analysis.
 
 The Ren'Py gallery unlocker section is shown only for relevant Ren'Py folders or when previously installed files can be removed.
 
-The header includes an `EN` / `RU` language switch. Dropping a folder directly onto `GameAssetTool.exe` opens the same window with that folder already selected.
+The header includes an `EN` / `RU` language switch. Dropping a folder or supported file directly onto `GameAssetTool.exe` opens the same window with that path already selected.
 
 ## Results Dialog
 

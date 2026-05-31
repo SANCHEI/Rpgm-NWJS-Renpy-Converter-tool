@@ -45,6 +45,7 @@ internal static class ReleaseInspector
             Type formType = assembly.GetType("RpgmvpConverterWinForms.RpgmvpConverterForm", true);
             MethodInfo detectEngine = formType.GetMethod("DetectEngine", BindingFlags.NonPublic | BindingFlags.Static);
             MethodInfo detectEngineFast = formType.GetMethod("DetectEngineFast", BindingFlags.NonPublic | BindingFlags.Static);
+            MethodInfo buildScanSummary = formType.GetMethod("BuildScanSummary", BindingFlags.NonPublic | BindingFlags.Static);
             MethodInfo tryFindGameRoot = formType.GetMethod("TryFindGameRoot", BindingFlags.NonPublic | BindingFlags.Static);
             MethodInfo canInstallUnlocker = formType.GetMethod("CanInstallUnlocker", BindingFlags.NonPublic | BindingFlags.Static);
             string unityEngine = DetectEngine(detectEngine, Path.Combine(temp, "unity"), delegate(string path)
@@ -56,6 +57,16 @@ internal static class ReleaseInspector
                 Directory.CreateDirectory(Path.Combine(path, "game"));
                 File.WriteAllBytes(Path.Combine(path, "game", "archive.rpa"), new byte[] { 0 });
             });
+            string renpyLoosePath = Path.Combine(temp, "renpy-loose");
+            string renpyLooseEngine = DetectEngine(detectEngine, renpyLoosePath, delegate(string path)
+            {
+                Directory.CreateDirectory(Path.Combine(path, "game"));
+                File.WriteAllText(Path.Combine(path, "game", "script.rpy"), "label start:");
+                File.WriteAllText(Path.Combine(path, "game", "hero.png"), "png");
+            });
+            object renpyLooseSummary = buildScanSummary.Invoke(null, new object[] { renpyLoosePath });
+            bool renpyLooseScan = GetInt(renpyLooseSummary, "ArchiveCount") == 0
+                && GetInt(renpyLooseSummary, "FileCount") == 2;
             string rpgmEngine = DetectEngine(detectEngine, Path.Combine(temp, "rpgm"), delegate(string path)
             {
                 Directory.CreateDirectory(path);
@@ -110,6 +121,21 @@ internal static class ReleaseInspector
                 Directory.CreateDirectory(path);
                 WriteMinimalSwf(Path.Combine(path, "game.swf"));
             });
+            string htmlEngine = DetectEngine(detectEngine, Path.Combine(temp, "html"), delegate(string path)
+            {
+                Directory.CreateDirectory(Path.Combine(path, "assets"));
+                File.WriteAllText(Path.Combine(path, "index.html"), "<html></html>");
+                File.WriteAllText(Path.Combine(path, "assets", "hero.jpg"), "jpg");
+            });
+            string qspEngine = DetectEngine(detectEngine, Path.Combine(temp, "qsp"), delegate(string path)
+            {
+                Directory.CreateDirectory(path);
+                File.WriteAllText(Path.Combine(path, "game.qsp"), "qsp");
+            });
+            string ragsPath = Path.Combine(temp, "sample.rag");
+            WriteMinimalRags(ragsPath);
+            string ragsEngine = DetectExistingEngine(detectEngine, ragsPath);
+            string directFlashEngine = DetectExistingEngine(detectEngine, Path.Combine(temp, "flash", "game.swf"));
             string genericGameFolderEngine = DetectEngine(detectEngine, Path.Combine(temp, "generic-game-folder"), delegate(string path)
             {
                 Directory.CreateDirectory(Path.Combine(path, "game"));
@@ -119,6 +145,7 @@ internal static class ReleaseInspector
                 && !(bool)canInstallUnlocker.Invoke(null, new object[] { Path.Combine(temp, "generic-game-folder") });
             bool fastDetection = DetectExistingEngine(detectEngineFast, Path.Combine(temp, "unity")) == "Unity"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "renpy")) == "Renpy"
+                && DetectExistingEngine(detectEngineFast, renpyLoosePath) == "Renpy"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "rpgm")) == "RpgMaker"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "godot")) == "Godot"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "kirikiri")) == "Kirikiri"
@@ -129,6 +156,10 @@ internal static class ReleaseInspector
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "java")) == "JavaJar"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "java-loose")) == "JavaJar"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "flash")) == "Flash"
+                && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "html")) == "Html"
+                && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "qsp")) == "Qsp"
+                && DetectExistingEngine(detectEngineFast, ragsPath) == "Rags"
+                && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "flash", "game.swf")) == "Flash"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "generic-game-folder")) == "Unknown";
 
             string rootLookup = Path.Combine(temp, "root-lookup");
@@ -140,7 +171,9 @@ internal static class ReleaseInspector
             bool contextualGui = VerifyContextualGui(formType);
             bool nwjsExtraction = VerifyNwjsExtraction(formType, temp);
             bool localEngineExtraction = VerifyLocalEngineExtraction(formType, temp);
+            bool collectorExtraction = VerifyCollectorExtraction(assembly, temp);
             bool startupFolderArgument = VerifyStartupFolderArgument(formType, temp);
+            bool startupFileArgument = VerifyStartupFileArgument(formType, temp);
 
             Type runtimeType = assembly.GetType("RpgmvpConverterWinForms.PortableRuntime", true);
             MethodInfo ensureRuntime = runtimeType.GetMethod("EnsureExtracted", BindingFlags.Public | BindingFlags.Static);
@@ -210,6 +243,8 @@ internal static class ReleaseInspector
             Console.WriteLine("UnexpectedNestedGameFolder=" + nestedGameFolder);
             Console.WriteLine("DetectUnity=" + unityEngine);
             Console.WriteLine("DetectRenpy=" + renpyEngine);
+            Console.WriteLine("DetectRenpyLoose=" + renpyLooseEngine);
+            Console.WriteLine("RenpyLooseScan=" + renpyLooseScan);
             Console.WriteLine("DetectRpgMaker=" + rpgmEngine);
             Console.WriteLine("DetectGodot=" + godotEngine);
             Console.WriteLine("DetectKirikiri=" + kirikiriEngine);
@@ -220,6 +255,10 @@ internal static class ReleaseInspector
             Console.WriteLine("DetectJavaJar=" + javaEngine);
             Console.WriteLine("DetectJavaLoose=" + javaLooseEngine);
             Console.WriteLine("DetectFlash=" + flashEngine);
+            Console.WriteLine("DetectHtml=" + htmlEngine);
+            Console.WriteLine("DetectQsp=" + qspEngine);
+            Console.WriteLine("DetectRags=" + ragsEngine);
+            Console.WriteLine("DetectDirectFlash=" + directFlashEngine);
             Console.WriteLine("DetectGenericGameFolder=" + genericGameFolderEngine);
             Console.WriteLine("RenpyUnlockerScope=" + renpyUnlockerScope);
             Console.WriteLine("FastDetection=" + fastDetection);
@@ -227,7 +266,9 @@ internal static class ReleaseInspector
             Console.WriteLine("ContextualGui=" + contextualGui);
             Console.WriteLine("NwjsExtraction=" + nwjsExtraction);
             Console.WriteLine("LocalEngineExtraction=" + localEngineExtraction);
+            Console.WriteLine("CollectorExtraction=" + collectorExtraction);
             Console.WriteLine("StartupFolderArgument=" + startupFolderArgument);
+            Console.WriteLine("StartupFileArgument=" + startupFileArgument);
 
             return hasUnityScript
                 && unityFilteringFix
@@ -244,6 +285,8 @@ internal static class ReleaseInspector
                 && !nestedGameFolder
                 && unityEngine == "Unity"
                 && renpyEngine == "Renpy"
+                && renpyLooseEngine == "Renpy"
+                && renpyLooseScan
                 && rpgmEngine == "RpgMaker"
                 && godotEngine == "Godot"
                 && kirikiriEngine == "Kirikiri"
@@ -254,6 +297,10 @@ internal static class ReleaseInspector
                 && javaEngine == "JavaJar"
                 && javaLooseEngine == "JavaJar"
                 && flashEngine == "Flash"
+                && htmlEngine == "Html"
+                && qspEngine == "Qsp"
+                && ragsEngine == "Rags"
+                && directFlashEngine == "Flash"
                 && genericGameFolderEngine == "Unknown"
                 && renpyUnlockerScope
                 && fastDetection
@@ -261,7 +308,9 @@ internal static class ReleaseInspector
                 && contextualGui
                 && nwjsExtraction
                 && localEngineExtraction
+                && collectorExtraction
                 && startupFolderArgument
+                && startupFileArgument
                 ? 0
                 : 1;
         }
@@ -302,6 +351,7 @@ internal static class ReleaseInspector
             MethodInfo setDragHighlight = formType.GetMethod("SetDragHighlight", BindingFlags.NonPublic | BindingFlags.Instance);
             MethodInfo scaleLogicalHeightForDpi = formType.GetMethod("ScaleLogicalHeightForDpi", BindingFlags.NonPublic | BindingFlags.Static);
             object startButton = GetField(formType, form, "startButton");
+            object collectLooseButton = GetField(formType, form, "collectLooseButton");
             object keyBox = GetField(formType, form, "keyBox");
             object keyLabel = GetField(formType, form, "keyLabel");
             object unityMode = GetField(formType, form, "unityExtractModeBox");
@@ -370,7 +420,20 @@ internal static class ReleaseInspector
             updateContext.Invoke(form, new[] { Enum.Parse(engineType, "Flash") });
             bool flash = GetBool(startButton, "Enabled")
                 && GetString(extractionHint, "Text").IndexOf("JPEG", StringComparison.OrdinalIgnoreCase) >= 0;
+            updateContext.Invoke(form, new[] { Enum.Parse(engineType, "Html") });
+            bool html = GetBool(startButton, "Enabled")
+                && GetString(extractionHint, "Text").IndexOf("HTML", StringComparison.OrdinalIgnoreCase) >= 0;
+            updateContext.Invoke(form, new[] { Enum.Parse(engineType, "Qsp") });
+            bool qsp = GetBool(startButton, "Enabled")
+                && GetString(extractionHint, "Text").IndexOf("QSP", StringComparison.OrdinalIgnoreCase) >= 0;
+            updateContext.Invoke(form, new[] { Enum.Parse(engineType, "Rags") });
+            bool rags = GetBool(startButton, "Enabled")
+                && GetString(extractionHint, "Text").IndexOf("RAGS", StringComparison.OrdinalIgnoreCase) >= 0;
+            updateContext.Invoke(form, new[] { Enum.Parse(engineType, "Unknown") });
+            bool unknown = !GetBool(startButton, "Enabled")
+                && GetString(startButton, "Text") == "Export Diagnostics";
             bool readableDisabledButtons = HasReadableDisabledContrast(startButton)
+                && HasReadableDisabledContrast(collectLooseButton)
                 && HasReadableDisabledContrast(unlockerButton)
                 && HasReadableDisabledContrast(removeUnlockerButton)
                 && HasReadableDisabledContrast(pauseButton)
@@ -399,7 +462,8 @@ internal static class ReleaseInspector
             bool collapsed = GetString(toggleLogButton, "Text") == "Show Log"
                 && GetSizeHeight(form, "ClientSize") == compactHeight;
 
-            return initial && unity && renpy && rpgm && unreal && nwjs && wolf && tyrano && java && flash && russian
+            return initial && unity && renpy && rpgm && unreal && nwjs && wolf && tyrano && java && flash
+                && html && qsp && rags && unknown && russian
                 && readableDisabledButtons && tooltips && dpi && dragHighlight && expanded && collapsed;
         }
         finally
@@ -529,6 +593,78 @@ internal static class ReleaseInspector
         }
     }
 
+    private static bool VerifyStartupFileArgument(Type formType, string temp)
+    {
+        string file = Path.Combine(temp, "startup-file.rag");
+        WriteMinimalRags(file);
+        object form = Activator.CreateInstance(formType, new object[] { file });
+        try
+        {
+            MethodInfo apply = formType.GetMethod("TryApplyStartupGamePath", BindingFlags.NonPublic | BindingFlags.Instance);
+            apply.Invoke(form, null);
+            object pathBox = GetField(formType, form, "pathBox");
+            return string.Equals(GetString(pathBox, "Text"), file, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            MethodInfo dispose = formType.GetMethod("Dispose", BindingFlags.Public | BindingFlags.Instance);
+            dispose.Invoke(form, null);
+        }
+    }
+
+    private static bool VerifyCollectorExtraction(Assembly assembly, string temp)
+    {
+        Type collectors = assembly.GetType("RpgmvpConverterWinForms.AssetCollectors", true);
+        MethodInfo getHtmlFiles = collectors.GetMethod("GetHtmlFiles", BindingFlags.Public | BindingFlags.Static);
+        MethodInfo getQspFiles = collectors.GetMethod("GetQspFiles", BindingFlags.Public | BindingFlags.Static);
+        MethodInfo copyFiles = collectors.GetMethod("CopyFiles", BindingFlags.Public | BindingFlags.Static);
+        MethodInfo extractRags = collectors.GetMethod("ExtractRags", BindingFlags.Public | BindingFlags.Static);
+        MethodInfo writeDiagnostics = collectors.GetMethod("WriteDiagnostics", BindingFlags.Public | BindingFlags.Static);
+
+        string root = Path.Combine(temp, "collector-extraction");
+        string html = Path.Combine(root, "html");
+        Directory.CreateDirectory(Path.Combine(html, "assets"));
+        File.WriteAllText(Path.Combine(html, "index.html"), "<html></html>");
+        File.WriteAllText(Path.Combine(html, "assets", "hero.jpg"), "jpg");
+        string htmlOutput = Path.Combine(html, "extracted", "html");
+        object htmlFiles = getHtmlFiles.Invoke(null, new object[] { html, htmlOutput });
+        object htmlResult = copyFiles.Invoke(null, new object[] { html, htmlFiles, htmlOutput, "" });
+
+        string qsp = Path.Combine(root, "qsp");
+        Directory.CreateDirectory(Path.Combine(qsp, "qsp"));
+        Directory.CreateDirectory(Path.Combine(qsp, "images"));
+        File.WriteAllText(Path.Combine(qsp, "game.qsp"), "qsp");
+        File.WriteAllText(Path.Combine(qsp, "images", "scene.jpg"), "jpg");
+        File.WriteAllText(Path.Combine(qsp, "qsp", "runtime.jpg"), "skip");
+        string qspOutput = Path.Combine(qsp, "extracted", "qsp");
+        object qspFiles = getQspFiles.Invoke(null, new object[] { qsp, qspOutput });
+        object qspResult = copyFiles.Invoke(null, new object[] { qsp, qspFiles, qspOutput, "" });
+
+        string rags = Path.Combine(root, "sample.rag");
+        WriteMinimalRags(rags);
+        string ragsOutput = Path.Combine(root, "rags-output");
+        object ragsResult = extractRags.Invoke(null, new object[] { rags, ragsOutput });
+
+        string unknown = Path.Combine(root, "unknown");
+        Directory.CreateDirectory(unknown);
+        File.WriteAllBytes(Path.Combine(unknown, "archive.bin"), new byte[] { 1, 2, 3 });
+        string diagnosticsOutput = Path.Combine(root, "diagnostics");
+        string report = (string)writeDiagnostics.Invoke(null, new object[] { unknown, diagnosticsOutput });
+
+        return GetInt(htmlResult, "Extracted") == 2
+            && File.Exists(Path.Combine(htmlOutput, "index.html"))
+            && File.Exists(Path.Combine(htmlOutput, "assets", "hero.jpg"))
+            && GetInt(qspResult, "Extracted") == 2
+            && File.Exists(Path.Combine(qspOutput, "game.qsp"))
+            && File.Exists(Path.Combine(qspOutput, "images", "scene.jpg"))
+            && !File.Exists(Path.Combine(qspOutput, "qsp", "runtime.jpg"))
+            && GetInt(ragsResult, "Extracted") == 2
+            && File.Exists(Path.Combine(ragsOutput, "originals", "sample.rag"))
+            && File.Exists(Path.Combine(ragsOutput, "embedded", "sample", "asset-0001.jpg"))
+            && File.Exists(report)
+            && File.ReadAllText(report).Contains("archive.bin | 01-02-03");
+    }
+
     private static object InvokeExtraction(Type formType, object form, string method, string root, string output)
     {
         return formType.GetMethod(method, BindingFlags.NonPublic | BindingFlags.Instance).Invoke(form, new object[] { root, output });
@@ -561,6 +697,11 @@ internal static class ReleaseInspector
         Array.Copy(length, 0, file, 4, length.Length);
         Array.Copy(body, 0, file, 8, body.Length);
         File.WriteAllBytes(path, file);
+    }
+
+    private static void WriteMinimalRags(string path)
+    {
+        File.WriteAllBytes(path, new byte[] { 1, 2, 3, 0xff, 0xd8, 0xff, 0x00, 0xff, 0xd9, 4, 5, 6 });
     }
 
     private static object GetField(Type type, object instance, string name)

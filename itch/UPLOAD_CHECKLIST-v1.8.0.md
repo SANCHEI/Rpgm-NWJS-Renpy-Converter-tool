@@ -1,12 +1,12 @@
-# itch.io Upload Checklist - v1.7.0
+# itch.io Upload Checklist - v1.8.0
 
 ## Upload
 
-- File: `release/GameAssetTool-v1.7.0.exe`
-- Display name: `Game Asset Tool v1.7.0 - Windows x64`
+- File: `release/GameAssetTool-v1.8.0.exe`
+- Display name: `Game Asset Tool v1.8.0 - Windows x64`
 - Platform: Windows
 - Architecture: x64
-- SHA-256: `25C2A78FA1692DD7EC472F0537BFD691B4A39592754BBF44F78B8099CEB9F30A`
+- SHA-256: `C233E26364C4F8D31780A1D7756B37172400B22A902EE39BE4DA2F3824F873BC`
 
 ## Page Update
 
@@ -21,6 +21,8 @@
 - Download the uploaded file from itch.io.
 - Compare its SHA-256 with the value above.
 - Launch it without neighboring files.
-- Confirm that the application opens and Dry Run / Scan accepts a dropped folder.
-- Drop a game folder directly onto the EXE and confirm that the path is preselected.
+- Confirm that the application opens and Dry Run / Scan accepts a dropped folder or supported file.
+- Drop a game folder and a `.rag` file directly onto the EXE and confirm that each path is preselected.
+- Confirm that **Collect Loose Files** is available for a selected path.
+- Select an unknown folder and confirm that **Export Diagnostics** creates a report.
 - Switch the interface between `EN` and `RU`.

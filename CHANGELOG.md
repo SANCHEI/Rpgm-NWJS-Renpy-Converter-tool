@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.8.0 - 2026-05-31
+
+- Accept individual supported files through window drag-and-drop and by dropping a file directly onto `GameAssetTool.exe`.
+- Added loose Ren'Py detection and collection when a game has open resources instead of `.rpa` archives.
+- Added static HTML game collection with preserved folder structure.
+- Added QSP database and loose-media collection without copying the bundled player.
+- Added experimental RAGS `.rag` recovery: preserve the original database and carve confidently detected JPEG, PNG, GIF and OGG media.
+- Added **Collect Loose Files** for copying open resources independently of archive extraction.
+- Added **Export Diagnostics** for unknown game folders and files.
+- Automatically discover a local Unreal `oo2core*_win64.dll` inside the game or an installed Unreal Engine while keeping Oodle handling offline.
+- Extended synthetic checks and real-game smoke coverage for loose Ren'Py, HTML, QSP, RAGS, file arguments and diagnostics.
+
 ## 1.7.0 - 2026-05-30
 
 - Accept a game-folder argument so dropping a folder onto `GameAssetTool.exe` opens the application with that path selected.
