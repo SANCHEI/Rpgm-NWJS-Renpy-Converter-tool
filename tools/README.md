@@ -1,10 +1,8 @@
 # Experimental Tools
 
-These folders contain older or specialized utilities kept for reference and development.
+This folder contains specialized utilities kept for development.
 
-- `Unity_Version`: legacy standalone Unity extractor. The supported Unity workflow now lives in `GameAssetTool.exe`.
-- `UnityGalleryUnlocker`: experimental Unity gallery inspection utility.
 - `BsaExtractor`: experimental BSArc extractor.
-- `legacy`: v1.3.4 form and RPA parser retained for reference.
 
-They are not included in the supported v1.5 single-file release.
+Historical standalone Unity tools and old source snapshots are available through Git history instead of duplicated here.
+Experimental tools are not included in the supported single-file release.

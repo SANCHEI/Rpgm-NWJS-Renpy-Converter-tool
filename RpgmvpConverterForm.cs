@@ -6,7 +6,6 @@ using System.Drawing;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -69,7 +68,7 @@ namespace RpgmvpConverterWinForms
         private readonly object processSync = new object();
         private readonly object runtimeWarmupSync = new object();
         private readonly List<Panel> dragHighlightPanels = new List<Panel>();
-        private readonly List<Process> activeSvgProcesses = new List<Process>();
+        private readonly JavaSvgPreviewRenderer svgPreviewRenderer;
         private System.Windows.Forms.Timer uiTimer;
         private ConversionRun currentRun;
         private Task runtimeWarmupTask;
@@ -100,6 +99,11 @@ namespace RpgmvpConverterWinForms
         public RpgmvpConverterForm(string startupPath)
         {
             startupGamePath = startupPath;
+            svgPreviewRenderer = new JavaSvgPreviewRenderer(
+                delegate { return localCopyCancellationRequested; },
+                ThrowIfLocalCopyCancelled,
+                SafeLog,
+                UpdateLocalProgress);
             BuildUi();
 
             string iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app.ico");
@@ -1429,7 +1433,7 @@ namespace RpgmvpConverterWinForms
 
             if (renderPreviews)
             {
-                SvgPreviewStats previews = RenderSvgPreviews(extractedPaths, outputDir);
+                SvgPreviewResult previews = svgPreviewRenderer.Render(extractedPaths, outputDir);
                 extracted += previews.Converted;
                 bytes += previews.Bytes;
                 errors += previews.Errors;
@@ -1438,175 +1442,6 @@ namespace RpgmvpConverterWinForms
             }
 
             return new OperationResult("Java game / JAR (" + mode + ")", outputDir, extracted, bytes, errors, renamed, skipped, DateTime.UtcNow - start);
-        }
-
-        private SvgPreviewStats RenderSvgPreviews(IEnumerable<string> extractedPaths, string outputDir)
-        {
-            List<string> svgFiles = extractedPaths
-                .Where(delegate(string path) { return path.EndsWith(".svg", StringComparison.OrdinalIgnoreCase); })
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            if (svgFiles.Count == 0) return new SvgPreviewStats(0, 0, 0, 0, 0);
-
-            string renderer = ToolRuntime.EnsureResvgExtracted();
-            int converted = 0;
-            long bytes = 0;
-            int errors = 0;
-            int renamed = 0;
-            int skipped = 0;
-            int processed = 0;
-            object cacheSync = new object();
-            Dictionary<string, SvgPreviewCacheEntry> cache = LoadSvgPreviewCache(outputDir);
-            SafeLog("Java SVG preview conversion started with embedded resvg: " + svgFiles.Count + " file(s)");
-
-            Parallel.ForEach(svgFiles, new ParallelOptions
-            {
-                MaxDegreeOfParallelism = Math.Min(8, Math.Max(2, Environment.ProcessorCount))
-            }, delegate(string source)
-            {
-                if (localCopyCancellationRequested) return;
-                string relativeSource = MakeRelativePath(outputDir, source);
-                string hash = ComputeSha256(source);
-                SvgPreviewCacheEntry cached;
-                lock (cacheSync) cache.TryGetValue(relativeSource, out cached);
-                string destination = cached == null
-                    ? GetSvgPreviewDestination(source)
-                    : GetSafeOutputPath(outputDir, cached.PreviewPath);
-                if (cached != null
-                    && string.Equals(cached.SourceSha256, hash, StringComparison.OrdinalIgnoreCase)
-                    && File.Exists(destination))
-                {
-                    Interlocked.Increment(ref skipped);
-                    int cachedCurrent = Interlocked.Increment(ref processed);
-                    UpdateLocalProgress("Java SVG previews", cachedCurrent, svgFiles.Count, Interlocked.Read(ref bytes));
-                    return;
-                }
-                try
-                {
-                    TryDeleteFile(destination);
-                    int exitCode = RunSvgRenderer(renderer, source, destination);
-                    if (exitCode != 0 || !File.Exists(destination))
-                        throw new InvalidDataException("resvg exited with code " + exitCode + ".");
-                    Interlocked.Increment(ref converted);
-                    Interlocked.Add(ref bytes, SafeFileLength(destination));
-                    lock (cacheSync)
-                    {
-                        cache[relativeSource] = new SvgPreviewCacheEntry(hash, MakeRelativePath(outputDir, destination));
-                    }
-                }
-                catch (Exception ex)
-                {
-                    if (!localCopyCancellationRequested) Interlocked.Increment(ref errors);
-                    TryDeleteFile(destination);
-                    SafeLog("WARN:SVG preview:" + source + ":" + ex.Message);
-                }
-                int current = Interlocked.Increment(ref processed);
-                UpdateLocalProgress("Java SVG previews", current, svgFiles.Count, Interlocked.Read(ref bytes));
-            });
-            ThrowIfLocalCopyCancelled();
-            SaveSvgPreviewCache(outputDir, cache);
-            return new SvgPreviewStats(converted, bytes, errors, renamed, skipped);
-        }
-
-        private static string GetSvgPreviewDestination(string source)
-        {
-            string destination = Path.ChangeExtension(source, ".png");
-            if (!File.Exists(destination)) return destination;
-            return Path.Combine(Path.GetDirectoryName(source), Path.GetFileNameWithoutExtension(source) + ".preview.png");
-        }
-
-        private static Dictionary<string, SvgPreviewCacheEntry> LoadSvgPreviewCache(string outputDir)
-        {
-            Dictionary<string, SvgPreviewCacheEntry> cache = new Dictionary<string, SvgPreviewCacheEntry>(StringComparer.OrdinalIgnoreCase);
-            string path = Path.Combine(outputDir, "svg-preview-cache.tsv");
-            if (!File.Exists(path)) return cache;
-            try
-            {
-                foreach (string line in File.ReadAllLines(path))
-                {
-                    string[] values = line.Split('\t');
-                    if (values.Length == 3 && values.All(delegate(string value) { return value.IndexOf('\t') < 0; }))
-                        cache[values[0]] = new SvgPreviewCacheEntry(values[1], values[2]);
-                }
-            }
-            catch { }
-            return cache;
-        }
-
-        private static void SaveSvgPreviewCache(string outputDir, Dictionary<string, SvgPreviewCacheEntry> cache)
-        {
-            string path = Path.Combine(outputDir, "svg-preview-cache.tsv");
-            try
-            {
-                File.WriteAllLines(path, cache
-                    .OrderBy(delegate(KeyValuePair<string, SvgPreviewCacheEntry> pair) { return pair.Key; }, StringComparer.OrdinalIgnoreCase)
-                    .Select(delegate(KeyValuePair<string, SvgPreviewCacheEntry> pair)
-                    {
-                        return pair.Key + "\t" + pair.Value.SourceSha256 + "\t" + pair.Value.PreviewPath;
-                    }), new UTF8Encoding(false));
-            }
-            catch { }
-        }
-
-        private static string ComputeSha256(string path)
-        {
-            using (SHA256 sha = SHA256.Create())
-            using (FileStream input = File.OpenRead(path))
-                return BitConverter.ToString(sha.ComputeHash(input)).Replace("-", "");
-        }
-
-        private int RunSvgRenderer(string renderer, string source, string destination)
-        {
-            ProcessStartInfo psi = new ProcessStartInfo
-            {
-                FileName = renderer,
-                Arguments = (SvgNeedsSystemFonts(source) ? "" : "--skip-system-fonts ")
-                    + QuoteArg(source) + " " + QuoteArg(destination),
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            };
-            using (Process process = new Process { StartInfo = psi })
-            {
-                process.OutputDataReceived += delegate(object sender, DataReceivedEventArgs e)
-                {
-                    if (!string.IsNullOrWhiteSpace(e.Data)) SafeLog("resvg: " + e.Data);
-                };
-                process.ErrorDataReceived += delegate(object sender, DataReceivedEventArgs e)
-                {
-                    if (!string.IsNullOrWhiteSpace(e.Data)) SafeLog("resvg ERROR: " + e.Data);
-                };
-                lock (processSync) activeSvgProcesses.Add(process);
-                try
-                {
-                    process.Start();
-                    process.BeginOutputReadLine();
-                    process.BeginErrorReadLine();
-                    process.WaitForExit();
-                    return process.ExitCode;
-                }
-                finally
-                {
-                    lock (processSync) activeSvgProcesses.Remove(process);
-                }
-            }
-        }
-
-        private static bool SvgNeedsSystemFonts(string path)
-        {
-            try
-            {
-                string svg = File.ReadAllText(path);
-                return svg.IndexOf("<text", StringComparison.OrdinalIgnoreCase) >= 0
-                    || svg.IndexOf("<tspan", StringComparison.OrdinalIgnoreCase) >= 0
-                    || svg.IndexOf("font-family", StringComparison.OrdinalIgnoreCase) >= 0
-                    || svg.IndexOf("font-size", StringComparison.OrdinalIgnoreCase) >= 0;
-            }
-            catch
-            {
-                return true;
-            }
         }
 
         private OperationResult RunFlashExtraction(string rootPath, string outputDir)
@@ -1637,7 +1472,7 @@ namespace RpgmvpConverterWinForms
                     bytes += SafeFileLength(destination);
                     if (collision) renamed++;
 
-                    NwjsCopyStats images = ExtractSwfImages(source, outputDir);
+                    CollectorResult images = FlashSwfExtractor.ExtractImages(source, outputDir);
                     extracted += images.Extracted;
                     bytes += images.Bytes;
                     renamed += images.Renamed;
@@ -1842,129 +1677,6 @@ namespace RpgmvpConverterWinForms
                 }
             }
             return new NwjsCopyStats(extracted, bytes, renamed, skipped);
-        }
-
-        private NwjsCopyStats ExtractSwfImages(string source, string outputDir)
-        {
-            byte[] body = ReadSwfBody(source);
-            int position = GetSwfTagStart(body);
-            int extracted = 0;
-            long bytes = 0;
-            int renamed = 0;
-            int skipped = 0;
-            string swfName = Path.GetFileNameWithoutExtension(source);
-
-            while (position + 2 <= body.Length)
-            {
-                int tagHeader = ReadUInt16(body, position);
-                position += 2;
-                int tagCode = tagHeader >> 6;
-                int length = tagHeader & 0x3f;
-                if (length == 0x3f)
-                {
-                    if (position + 4 > body.Length) break;
-                    length = ReadInt32(body, position);
-                    position += 4;
-                }
-                if (length < 0 || position + length > body.Length) break;
-                if (tagCode == 0) break;
-
-                int imageOffset = 0;
-                int imageLength = 0;
-                int characterId = 0;
-                if (tagCode == 21 && length > 2)
-                {
-                    characterId = ReadUInt16(body, position);
-                    imageOffset = position + 2;
-                    imageLength = length - 2;
-                }
-                else if (tagCode == 35 && length > 6)
-                {
-                    characterId = ReadUInt16(body, position);
-                    imageOffset = position + 6;
-                    imageLength = Math.Min(ReadInt32(body, position + 2), length - 6);
-                }
-                else if (tagCode == 90 && length > 8)
-                {
-                    characterId = ReadUInt16(body, position);
-                    imageOffset = position + 8;
-                    imageLength = Math.Min(ReadInt32(body, position + 2), length - 8);
-                }
-
-                string extension = DetectImageExtension(body, imageOffset, imageLength);
-                if (!string.IsNullOrWhiteSpace(extension))
-                {
-                    string destination = GetSafeOutputPath(outputDir, Path.Combine("embedded", swfName, "image-" + characterId + extension));
-                    bool collision;
-                    destination = GetUniqueFilePath(destination, out collision);
-                    Directory.CreateDirectory(Path.GetDirectoryName(destination));
-                    using (FileStream output = File.Create(destination))
-                        output.Write(body, imageOffset, imageLength);
-                    extracted++;
-                    bytes += SafeFileLength(destination);
-                    if (collision) renamed++;
-                }
-                else if (imageLength > 0)
-                {
-                    skipped++;
-                }
-                position += length;
-            }
-            return new NwjsCopyStats(extracted, bytes, renamed, skipped);
-        }
-
-        private static byte[] ReadSwfBody(string path)
-        {
-            byte[] file = File.ReadAllBytes(path);
-            if (file.Length < 8 || file[1] != (byte)'W' || file[2] != (byte)'S')
-                throw new InvalidDataException("Invalid SWF header: " + path);
-            if (file[0] == (byte)'F')
-                return file.Skip(8).ToArray();
-            if (file[0] == (byte)'C')
-            {
-                if (file.Length < 14) throw new InvalidDataException("Compressed SWF is incomplete: " + path);
-                using (MemoryStream input = new MemoryStream(file, 10, file.Length - 14))
-                using (DeflateStream deflate = new DeflateStream(input, CompressionMode.Decompress))
-                using (MemoryStream output = new MemoryStream())
-                {
-                    deflate.CopyTo(output);
-                    return output.ToArray();
-                }
-            }
-            if (file[0] == (byte)'Z')
-                throw new NotSupportedException("LZMA-compressed ZWS is not supported yet: " + path);
-            throw new InvalidDataException("Unknown SWF compression: " + path);
-        }
-
-        private static int GetSwfTagStart(byte[] body)
-        {
-            if (body.Length < 5) throw new InvalidDataException("SWF body is incomplete.");
-            int rectBits = 5 + 4 * (body[0] >> 3);
-            int position = (rectBits + 7) / 8 + 4;
-            if (position > body.Length) throw new InvalidDataException("SWF frame header is incomplete.");
-            return position;
-        }
-
-        private static string DetectImageExtension(byte[] data, int offset, int length)
-        {
-            if (offset < 0 || length < 3 || offset + length > data.Length) return "";
-            if (data[offset] == 0xff && data[offset + 1] == 0xd8 && data[offset + 2] == 0xff) return ".jpg";
-            if (length >= 8 && data[offset] == 0x89 && data[offset + 1] == 0x50 && data[offset + 2] == 0x4e && data[offset + 3] == 0x47) return ".png";
-            if (length >= 6 && data[offset] == (byte)'G' && data[offset + 1] == (byte)'I' && data[offset + 2] == (byte)'F') return ".gif";
-            return "";
-        }
-
-        private static int ReadUInt16(byte[] data, int offset)
-        {
-            return data[offset] | (data[offset + 1] << 8);
-        }
-
-        private static int ReadInt32(byte[] data, int offset)
-        {
-            return data[offset]
-                | (data[offset + 1] << 8)
-                | (data[offset + 2] << 16)
-                | (data[offset + 3] << 24);
         }
 
         private async Task StartPortableScriptExtractionAsync(string engineName, string outputFolder, string scriptFile, string resourceName)
@@ -2232,15 +1944,8 @@ namespace RpgmvpConverterWinForms
                     }
                     catch { }
                 }
-                foreach (Process process in activeSvgProcesses.ToArray())
-                {
-                    try
-                    {
-                        if (!process.HasExited) process.Kill();
-                    }
-                    catch { }
-                }
             }
+            svgPreviewRenderer.Cancel();
             cancelButton.Enabled = false;
             statusLabel.Text = T("Stopping...", "Остановка...");
             WriteLog("Stop requested.");
@@ -2662,19 +2367,8 @@ namespace RpgmvpConverterWinForms
                     }
                 }
                 catch { }
-                foreach (Process process in activeSvgProcesses.ToArray())
-                {
-                    try
-                    {
-                        if (!process.HasExited)
-                        {
-                            process.Kill();
-                            process.WaitForExit(2000);
-                        }
-                    }
-                    catch { }
-                }
             }
+            svgPreviewRenderer.Cancel();
             Task warmup;
             lock (runtimeWarmupSync) warmup = runtimeWarmupTask;
             if (warmup != null)
@@ -3668,36 +3362,6 @@ namespace RpgmvpConverterWinForms
             public long Bytes { get; private set; }
             public int Renamed { get; private set; }
             public int Skipped { get; private set; }
-        }
-
-        private sealed class SvgPreviewStats
-        {
-            public SvgPreviewStats(int converted, long bytes, int errors, int renamed, int skipped)
-            {
-                Converted = converted;
-                Bytes = bytes;
-                Errors = errors;
-                Renamed = renamed;
-                Skipped = skipped;
-            }
-
-            public int Converted { get; private set; }
-            public long Bytes { get; private set; }
-            public int Errors { get; private set; }
-            public int Renamed { get; private set; }
-            public int Skipped { get; private set; }
-        }
-
-        private sealed class SvgPreviewCacheEntry
-        {
-            public SvgPreviewCacheEntry(string sourceSha256, string previewPath)
-            {
-                SourceSha256 = sourceSha256;
-                PreviewPath = previewPath;
-            }
-
-            public string SourceSha256 { get; private set; }
-            public string PreviewPath { get; private set; }
         }
 
         private sealed class OperationResult

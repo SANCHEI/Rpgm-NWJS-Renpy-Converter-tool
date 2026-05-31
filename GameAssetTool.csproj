@@ -32,6 +32,9 @@
   <ItemGroup>
     <Compile Include="Program.cs" />
     <Compile Include="AssetCollectors.cs" />
+    <Compile Include="ExtractionPathUtils.cs" />
+    <Compile Include="FlashSwfExtractor.cs" />
+    <Compile Include="JavaSvgPreviewRenderer.cs" />
     <Compile Include="LegacyRpgMakerExtractor.cs" />
     <Compile Include="ResultsGalleryForm.cs" />
     <Compile Include="PortableRuntime.cs" />
