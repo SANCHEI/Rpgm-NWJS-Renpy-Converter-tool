@@ -32,6 +32,8 @@
   <ItemGroup>
     <Compile Include="Program.cs" />
     <Compile Include="AssetCollectors.cs" />
+    <Compile Include="LegacyRpgMakerExtractor.cs" />
+    <Compile Include="ResultsGalleryForm.cs" />
     <Compile Include="PortableRuntime.cs" />
     <Compile Include="ToolRuntime.cs" />
     <Compile Include="RpgmvpConverterForm.cs" />

@@ -9,7 +9,7 @@ PROJECT URL:
 sanchei.itch.io/gameassettool
 
 SHORT DESCRIPTION:
-Portable Windows tool for extracting assets from RPG Maker, Ren'Py, NWJS, Unity, Godot, WOLF RPG, Java, HTML, QSP and more
+Portable Windows tool for extracting assets from RPG Maker, Ren'Py, NWJS, Unity, Godot, GameMaker, WOLF RPG, Java, HTML, QSP and more
 
 CLASSIFICATION:
 - Type: Tools

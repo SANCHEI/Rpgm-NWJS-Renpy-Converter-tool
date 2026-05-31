@@ -20,6 +20,7 @@ Drop a game folder or supported file into the window, review the detected engine
 - Visible runtime status while the built-in extraction tools are prepared silently
 - Collision-safe output names such as `image (2).png`
 - Extraction summary dialog and saved `GameAssetTool-report.txt`
+- Searchable results gallery with thumbnails and image, SVG, audio and video filters
 - Separate **Install Unlocker** and **Remove Unlocker** buttons
 - One portable `GameAssetTool.exe` with no neighboring files or installers
 - Offline operation: no internet connection is required while using the application
@@ -29,6 +30,10 @@ Drop a game folder or supported file into the window, review the detected engine
 ### RPG Maker MV / MZ
 
 Converts encrypted `.rpgmvp` and `.png_` image assets. The application can locate the project encryption key automatically and attempt key reconstruction when needed.
+
+### RPG Maker XP / VX / VX Ace
+
+Extracts `.rgssad`, `.rgss2a` and `.rgss3a` archives through the built-in parser. No neighboring helper application is required.
 
 ### Ren'Py
 
@@ -66,7 +71,7 @@ Copies project files from the `data` folder while preserving scenarios, images, 
 
 ### Java Games / JAR
 
-Extracts image assets only from ZIP-compatible `.jar` archives and loose `res` folders without duplicating an included JRE. SVG originals are preserved and automatically rendered into adjacent PNG previews with the built-in `resvg` helper.
+Provides three modes for ZIP-compatible `.jar` archives and loose `res` folders: **Images only**, **Images + SVG previews** and **All resources**. SVG previews use the built-in `resvg` helper and unchanged previews are reused from the cache on later runs.
 
 ### Flash SWF Experimental
 
@@ -83,6 +88,10 @@ Collects `.qsp` databases and loose media without duplicating the bundled player
 ### RAGS Experimental
 
 Accepts a standalone `.rag` file or a folder containing one. The original database is preserved and confidently detected embedded JPEG, PNG, GIF and OGG media are recovered.
+
+### GameMaker Experimental
+
+Accepts a folder containing `data.win` or the file itself. The original container is preserved, open images are collected and embedded PNG texture pages are streamed into the output folder.
 
 ## Loose Files And Unknown Formats
 
@@ -103,6 +112,7 @@ Use **Hard** mode only when the soft mode is insufficient.
 ## Output Folders
 
 - RPG Maker: `game_folder/extracted/rpgm/`
+- RPG Maker XP/VX/VX Ace: `game_folder/extracted/rgss/`
 - Ren'Py: `game_folder/extracted/renpy/`
 - NWJS: `game_folder/extracted/nwjs/`
 - Unity: `game_folder/extracted/unity/`
@@ -116,6 +126,7 @@ Use **Hard** mode only when the soft mode is insufficient.
 - HTML: `game_folder/extracted/html/`
 - QSP: `game_folder/extracted/qsp/`
 - RAGS: `game_folder/extracted/rags/`
+- GameMaker: `game_folder/extracted/gamemaker/`
 - Loose files: `game_folder/extracted/loose/`
 - Diagnostics: `game_folder/extracted/diagnostics/`
 - Unlocker files: `game_folder/game/_mods/`
@@ -139,6 +150,7 @@ The built-in extraction runtime is prepared silently under `%LocalAppData%\GameA
 - Unreal IoStore `.utoc/.ucas` containers are detected but not extracted.
 - Flash LZMA-compressed `ZWS` files are detected but not inspected.
 - RAGS recovery preserves the original database but is not a complete RAGS database parser.
+- GameMaker recovery does not yet decode newer QOI/BZ2 texture blocks or every external-texture layout.
 
 Source code: [GitHub repository](https://github.com/SANCHEI/Rpgm-NWJS-Renpy-Converter-tool)
 

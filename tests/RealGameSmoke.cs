@@ -127,6 +127,10 @@ internal static class RealGameSmoke
             return RunCollector(formType.Assembly, "GetQspFiles", game, Path.Combine(gameOutput, "qsp"));
         if (engine == "Rags")
             return FromCollector(InvokeCollectorStatic(formType.Assembly, "ExtractRags", game, Path.Combine(gameOutput, "rags")), Path.Combine(gameOutput, "rags"));
+        if (engine == "LegacyRpgMaker")
+            return FromOperation(Invoke(formType, form, "RunLegacyRpgMakerExtraction", game, Path.Combine(gameOutput, "rgss")));
+        if (engine == "GameMaker")
+            return FromCollector(InvokeCollectorStatic(formType.Assembly, "ExtractGameMaker", game, Path.Combine(gameOutput, "gamemaker")), Path.Combine(gameOutput, "gamemaker"));
         return SmokeResult.CreateSkipped(gameOutput, "unsupported or undetected");
     }
 

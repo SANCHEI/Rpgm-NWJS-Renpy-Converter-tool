@@ -1,4 +1,4 @@
-# Game Asset Tool v1.8.1 UI Preview
+# Game Asset Tool v1.9.0 UI Preview
 
 ## Main Window
 
@@ -43,6 +43,7 @@ The **Show Log** button expands the same fixed-width window vertically.
 ## Contextual Settings
 
 - RPG Maker MV/MZ: RPGM HEX key field.
+- RPG Maker XP/VX/VX Ace: built-in RGSS archive extraction notice.
 - Unity: Textures, Videos, Audio, Meshes or All filter.
 - Unreal: optional Unreal AES key field and experimental-mode notice.
 - Ren'Py: RPA extraction or explicit loose-resource collection without unnecessary inputs.
@@ -50,6 +51,8 @@ The **Show Log** button expands the same fixed-width window vertically.
 - NWJS: copies loose files and safely unpacks ZIP-compatible `.nw` archives without a gallery unlocker.
 - HTML and QSP: copies open project resources while preserving paths.
 - RAGS: accepts a standalone `.rag` file and exposes experimental media recovery.
+- Java: Images only, Images + SVG previews or All resources mode.
+- GameMaker: accepts `data.win` and exposes experimental PNG texture-page recovery.
 - Unknown formats: **Export Diagnostics** writes a report for further analysis.
 
 The Ren'Py gallery unlocker section is shown only for relevant Ren'Py folders or when previously installed files can be removed.
@@ -58,4 +61,4 @@ The header includes an `EN` / `RU` language switch. Dropping a folder or support
 
 ## Results Dialog
 
-Results are shown after extraction and saved as `GameAssetTool-report.txt` in the extractor output folder.
+Results are shown after extraction and saved as `GameAssetTool-report.txt` in the extractor output folder. The **Results Gallery** button opens a searchable thumbnail grid with image, SVG, audio and video filters.

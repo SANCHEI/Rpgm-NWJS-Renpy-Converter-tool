@@ -4,9 +4,9 @@
 
 [**Watch Demo Video on YouTube**](https://youtu.be/BnjRjik9fk0)
 
-Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **Ren'Py**, **NWJS**, **Unity**, **Godot**, **KiriKiri**, **WOLF RPG**, **TyranoScript**, **Java**, **HTML** and **QSP** games. Experimental Unreal `.pak`, Flash `.swf` and RAGS `.rag` recovery is included.
+Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **RPG Maker XP/VX/VX Ace**, **Ren'Py**, **NWJS**, **Unity**, **Godot**, **KiriKiri**, **WOLF RPG**, **TyranoScript**, **Java**, **HTML** and **QSP** games. Experimental Unreal `.pak`, Flash `.swf`, RAGS `.rag` and GameMaker `data.win` recovery is included.
 
-![Version](https://img.shields.io/badge/version-1.8.1-blue)
+![Version](https://img.shields.io/badge/version-1.9.0-blue)
 ![.NET](https://img.shields.io/badge/.NET_Framework-4.7.2-blue)
 ![Runtime](https://img.shields.io/badge/runtime-built--in-green)
 
@@ -22,6 +22,7 @@ Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **Re
 - Shows action tooltips, highlights folder drag-and-drop and scales for common Windows DPI settings.
 - Displays the built-in runtime state while it is prepared silently in the background.
 - Converts RPGMVP assets with key auto-detection and key reconstruction.
+- Extracts legacy RPG Maker `RGSSAD`, `RGSS2A` and `RGSS3A` archives without a neighboring helper.
 - Extracts Ren'Py RPA archives through verified `unrpa==2.3.0`.
 - Collects open Ren'Py resources when a game does not use RPA archives.
 - Extracts Unity textures, videos, audio, meshes and direct media through one built-in workflow.
@@ -32,6 +33,7 @@ Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **Re
 - Preserves RAGS `.rag` databases and recovers confidently detected embedded media experimentally.
 - Provides **Collect Loose Files** and **Export Diagnostics** fallback actions.
 - Preserves relative paths and renames collisions with suffixes such as `image (2).png`.
+- Opens a searchable results gallery with image previews and SVG, audio and video filters.
 - Shows the Ren'Py gallery unlocker only for relevant folders or when installed files can be removed.
 - Writes an extraction summary to the results dialog and `GameAssetTool-report.txt`.
 
@@ -48,6 +50,7 @@ Output is written inside the selected game folder:
 ```text
 extracted/
   rpgm/
+  rgss/
   renpy/
   nwjs/
   unity/
@@ -61,6 +64,7 @@ extracted/
   html/
   qsp/
   rags/
+  gamemaker/
   loose/
   diagnostics/
 ```
@@ -80,6 +84,10 @@ When a Ren'Py game contains loose resources instead of `.rpa` archives, the appl
 NWJS extraction copies loose files from `www`, `package.nw` and `app.nw` folders while preserving their relative paths. ZIP-compatible `package.nw` and `app.nw` archives are unpacked safely. Non-ZIP package formats are reported and skipped.
 
 The bundled gallery unlocker is not used for NWJS games: gallery state is usually stored in game-specific save data.
+
+## RPG Maker XP / VX / VX Ace
+
+Legacy RPG Maker archives with `.rgssad`, `.rgss2a` and `.rgss3a` extensions are extracted by the built-in parser. Paths are validated before writing files, and separate archives are placed into separate result folders.
 
 ## Unity
 
@@ -121,7 +129,7 @@ TyranoScript extraction copies project files from the `data` folder while preser
 
 ## Java Games / JAR
 
-Java `.jar` files and loose `res` folders are filtered to image assets only, without duplicating an included JRE. SVG originals are preserved and rendered into adjacent PNG previews through the embedded [`resvg v0.47.0`](https://github.com/linebender/resvg) helper. The helper appears only in the temporary tool session while it is needed.
+Java `.jar` files and loose `res` folders can be extracted in three modes: **Images only**, **Images + SVG previews** and **All resources**. SVG originals are preserved and optionally rendered into adjacent PNG previews through the embedded [`resvg v0.47.0`](https://github.com/linebender/resvg) helper. Preview hashes are cached so unchanged SVG files are not rendered again on later runs. The helper appears only in the temporary tool session while it is needed.
 
 ## Flash Experimental
 
@@ -138,6 +146,10 @@ QSP collection copies the `.qsp` database and loose media without duplicating th
 ## RAGS Experimental
 
 RAGS recovery accepts a standalone `.rag` file or a folder containing one. It preserves the original database and carves confidently detected JPEG, PNG, GIF and OGG media. It is a recovery tool, not a complete RAGS database parser.
+
+## GameMaker Experimental
+
+GameMaker recovery accepts a folder containing `data.win` or the file itself. It preserves the original container, collects open image files and streams embedded PNG texture pages into `extracted/gamemaker/`. Newer QOI/BZ2 texture blocks and external texture layouts are reported as a current limit rather than guessed at.
 
 ## Loose Files And Diagnostics
 
@@ -177,7 +189,7 @@ powershell -ExecutionPolicy Bypass -File .\build_release.ps1
 Release output:
 
 ```text
-release/GameAssetTool-v1.8.1.exe
+release/GameAssetTool-v1.9.0.exe
 ```
 
 The release contains one supported executable. Users do not need any neighboring files.

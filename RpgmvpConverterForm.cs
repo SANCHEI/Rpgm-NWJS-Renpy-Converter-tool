@@ -6,6 +6,7 @@ using System.Drawing;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -34,12 +35,14 @@ namespace RpgmvpConverterWinForms
         private ComboBox languageBox;
         private ComboBox unlockerModeBox;
         private ComboBox unityExtractModeBox;
+        private ComboBox javaExtractModeBox;
         private Label subtitleLabel;
         private Label folderSectionLabel;
         private Label extractSectionLabel;
         private Label logSectionLabel;
         private Label keyLabel;
         private Label unityModeLabel;
+        private Label javaModeLabel;
         private Label extractionHintLabel;
         private Label detectedEngineLabel;
         private Label scanSummaryLabel;
@@ -116,7 +119,7 @@ namespace RpgmvpConverterWinForms
             Font titleFont = new Font("Segoe UI Semibold", 14f, FontStyle.Regular);
             Font logFont = new Font("Consolas", 9.5f, FontStyle.Regular);
 
-            Text = "Game Asset Tool v1.8.1";
+            Text = "Game Asset Tool v1.9.0";
             StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
@@ -306,6 +309,30 @@ namespace RpgmvpConverterWinForms
             unityExtractModeBox.Items.Add("All");
             unityExtractModeBox.SelectedIndex = 4;
             extractionPanel.Controls.Add(unityExtractModeBox);
+            javaModeLabel = new Label
+            {
+                Text = "Java mode",
+                Location = new Point(8, 40),
+                Size = new Size(100, 20),
+                ForeColor = mutedColor,
+                Visible = false
+            };
+            extractionPanel.Controls.Add(javaModeLabel);
+            javaExtractModeBox = new ComboBox
+            {
+                Location = new Point(112, 36),
+                Size = new Size(250, 26),
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                BackColor = inputBack,
+                ForeColor = textColor,
+                FlatStyle = FlatStyle.Flat,
+                Visible = false
+            };
+            javaExtractModeBox.Items.Add("Images only");
+            javaExtractModeBox.Items.Add("Images + SVG previews");
+            javaExtractModeBox.Items.Add("All resources");
+            javaExtractModeBox.SelectedIndex = 1;
+            extractionPanel.Controls.Add(javaExtractModeBox);
             startButton = CreateButton("Extract Assets", new Point(704, 8), new Size(180, 26), successColor, formBack, uiBold);
             startButton.Click += async delegate { await StartDetectedExtractionAsync(); };
             extractionPanel.Controls.Add(startButton);
@@ -505,6 +532,13 @@ namespace RpgmvpConverterWinForms
             unityExtractModeBox.Items.Add(T("Meshes", "Меши"));
             unityExtractModeBox.Items.Add(T("All", "Все"));
             unityExtractModeBox.SelectedIndex = unityMode >= 0 ? unityMode : 4;
+
+            int javaMode = javaExtractModeBox.SelectedIndex;
+            javaExtractModeBox.Items.Clear();
+            javaExtractModeBox.Items.Add(T("Images only", "Только изображения"));
+            javaExtractModeBox.Items.Add(T("Images + SVG previews", "Изображения + PNG-превью SVG"));
+            javaExtractModeBox.Items.Add(T("All resources", "Все ресурсы"));
+            javaExtractModeBox.SelectedIndex = javaMode >= 0 ? javaMode : 1;
 
             int unlockerMode = unlockerModeBox.SelectedIndex;
             unlockerModeBox.Items.Clear();
@@ -731,6 +765,16 @@ namespace RpgmvpConverterWinForms
             if (engine == GameEngine.Rags)
             {
                 await StartRagsExtractionAsync();
+                return;
+            }
+            if (engine == GameEngine.LegacyRpgMaker)
+            {
+                await StartLegacyRpgMakerExtractionAsync();
+                return;
+            }
+            if (engine == GameEngine.GameMaker)
+            {
+                await StartGameMakerExtractionAsync();
                 return;
             }
             if (engine != GameEngine.RpgMaker)
@@ -1145,9 +1189,10 @@ namespace RpgmvpConverterWinForms
 
         private async Task StartJavaExtractionAsync()
         {
+            string mode = JavaModeValue();
             await StartLocalExtractionAsync("Java game / JAR", "java", delegate(string rootPath, string outputDir)
             {
-                return RunJavaExtraction(rootPath, outputDir);
+                return RunJavaExtractionWithMode(rootPath, outputDir, mode);
             });
         }
 
@@ -1194,6 +1239,24 @@ namespace RpgmvpConverterWinForms
             });
         }
 
+        private async Task StartLegacyRpgMakerExtractionAsync()
+        {
+            await StartLocalExtractionAsync("RPG Maker XP/VX/VX Ace", "rgss", delegate(string inputPath, string outputDir)
+            {
+                return RunLegacyRpgMakerExtraction(inputPath, outputDir);
+            });
+        }
+
+        private async Task StartGameMakerExtractionAsync()
+        {
+            await StartLocalExtractionAsync("GameMaker experimental", "gamemaker", delegate(string inputPath, string outputDir)
+            {
+                DateTime start = DateTime.UtcNow;
+                CollectorResult extracted = AssetCollectors.ExtractGameMaker(inputPath, outputDir);
+                return new OperationResult("GameMaker experimental PNG texture recovery", outputDir, extracted.Extracted, extracted.Bytes, 0, extracted.Renamed, extracted.Skipped, DateTime.UtcNow - start);
+            });
+        }
+
         private async Task StartLooseResourceCollectionAsync()
         {
             await StartLocalExtractionAsync("Loose resources", "loose-assets", delegate(string inputPath, string outputDir)
@@ -1220,6 +1283,45 @@ namespace RpgmvpConverterWinForms
             string rootPath = InputDirectory(inputPath);
             CollectorResult copied = AssetCollectors.CopyFiles(rootPath, files, outputDir, "");
             return new OperationResult(engineName, outputDir, copied.Extracted, copied.Bytes, 0, copied.Renamed, copied.Skipped, DateTime.UtcNow - start);
+        }
+
+        private OperationResult RunLegacyRpgMakerExtraction(string inputPath, string outputDir)
+        {
+            DateTime start = DateTime.UtcNow;
+            Directory.CreateDirectory(outputDir);
+            List<string> archives = FindLegacyRpgMakerArchives(inputPath);
+            int extracted = 0;
+            long bytes = 0;
+            int errors = 0;
+            int renamed = 0;
+            int skipped = 0;
+            for (int i = 0; i < archives.Count; i++)
+            {
+                ThrowIfLocalCopyCancelled();
+                string archive = archives[i];
+                try
+                {
+                    bool renamedDirectory;
+                    string destination = GetSafeOutputPath(outputDir, Path.Combine("archives", Path.GetFileNameWithoutExtension(archive)));
+                    destination = GetUniqueDirectoryPath(destination, out renamedDirectory);
+                    Directory.CreateDirectory(destination);
+                    CollectorResult stats = LegacyRpgMakerExtractor.ExtractArchive(archive, destination);
+                    extracted += stats.Extracted;
+                    bytes += stats.Bytes;
+                    renamed += stats.Renamed;
+                    skipped += stats.Skipped;
+                    if (renamedDirectory) renamed++;
+                }
+                catch (Exception ex)
+                {
+                    errors++;
+                    SafeLog("WARN:" + archive + ":" + ex.Message);
+                }
+                UpdateLocalProgress("RPG Maker RGSS", i + 1, archives.Count, bytes);
+            }
+
+            if (archives.Count == 0) skipped++;
+            return new OperationResult("RPG Maker XP/VX/VX Ace", outputDir, extracted, bytes, errors, renamed, skipped, DateTime.UtcNow - start);
         }
 
         private async Task StartLocalExtractionAsync(string engineName, string outputFolder, Func<string, string, OperationResult> extract)
@@ -1269,14 +1371,21 @@ namespace RpgmvpConverterWinForms
 
         private OperationResult RunJavaExtraction(string rootPath, string outputDir)
         {
+            return RunJavaExtractionWithMode(rootPath, outputDir, "images-svg");
+        }
+
+        private OperationResult RunJavaExtractionWithMode(string rootPath, string outputDir, string mode)
+        {
             string inputPath = rootPath;
             rootPath = InputDirectory(rootPath);
             DateTime start = DateTime.UtcNow;
             Directory.CreateDirectory(outputDir);
             List<string> archives = FindJavaArchives(inputPath);
-            List<string> looseFiles = GetJavaLooseFiles(rootPath, outputDir);
+            bool allResources = string.Equals(mode, "all", StringComparison.OrdinalIgnoreCase);
+            bool renderPreviews = string.Equals(mode, "images-svg", StringComparison.OrdinalIgnoreCase);
+            List<string> looseFiles = GetJavaLooseFiles(rootPath, outputDir, mode);
             List<string> extractedPaths = new List<string>();
-            NwjsCopyStats loose = CopyLooseFiles(rootPath, looseFiles, outputDir, "loose", extractedPaths);
+            NwjsCopyStats loose = CopyLooseFiles(rootPath, looseFiles, outputDir, "loose", extractedPaths, true);
             int extracted = loose.Extracted;
             long bytes = loose.Bytes;
             int errors = 0;
@@ -1297,8 +1406,9 @@ namespace RpgmvpConverterWinForms
                         archive,
                         outputDir,
                         Path.Combine("archives", Path.GetFileNameWithoutExtension(archive)),
-                        IsJavaImageFile,
-                        extractedPaths);
+                        allResources ? null : (Func<string, bool>)IsJavaImageFile,
+                        extractedPaths,
+                        true);
                     extracted += stats.Extracted;
                     bytes += stats.Bytes;
                     renamed += stats.Renamed;
@@ -1317,17 +1427,20 @@ namespace RpgmvpConverterWinForms
                 UpdateLocalProgress("Java", looseFiles.Count + i + 1, total, bytes);
             }
 
-            SvgPreviewStats previews = RenderSvgPreviews(extractedPaths);
-            extracted += previews.Converted;
-            bytes += previews.Bytes;
-            errors += previews.Errors;
-            renamed += previews.Renamed;
-            skipped += previews.Skipped;
+            if (renderPreviews)
+            {
+                SvgPreviewStats previews = RenderSvgPreviews(extractedPaths, outputDir);
+                extracted += previews.Converted;
+                bytes += previews.Bytes;
+                errors += previews.Errors;
+                renamed += previews.Renamed;
+                skipped += previews.Skipped;
+            }
 
-            return new OperationResult("Java game / JAR", outputDir, extracted, bytes, errors, renamed, skipped, DateTime.UtcNow - start);
+            return new OperationResult("Java game / JAR (" + mode + ")", outputDir, extracted, bytes, errors, renamed, skipped, DateTime.UtcNow - start);
         }
 
-        private SvgPreviewStats RenderSvgPreviews(IEnumerable<string> extractedPaths)
+        private SvgPreviewStats RenderSvgPreviews(IEnumerable<string> extractedPaths, string outputDir)
         {
             List<string> svgFiles = extractedPaths
                 .Where(delegate(string path) { return path.EndsWith(".svg", StringComparison.OrdinalIgnoreCase); })
@@ -1342,24 +1455,44 @@ namespace RpgmvpConverterWinForms
             int renamed = 0;
             int skipped = 0;
             int processed = 0;
+            object cacheSync = new object();
+            Dictionary<string, SvgPreviewCacheEntry> cache = LoadSvgPreviewCache(outputDir);
             SafeLog("Java SVG preview conversion started with embedded resvg: " + svgFiles.Count + " file(s)");
 
             Parallel.ForEach(svgFiles, new ParallelOptions
             {
-                MaxDegreeOfParallelism = Math.Min(8, Math.Max(1, Environment.ProcessorCount))
+                MaxDegreeOfParallelism = Math.Min(8, Math.Max(2, Environment.ProcessorCount))
             }, delegate(string source)
             {
                 if (localCopyCancellationRequested) return;
-                bool collision;
-                string destination = GetUniqueFilePath(Path.ChangeExtension(source, ".png"), out collision);
+                string relativeSource = MakeRelativePath(outputDir, source);
+                string hash = ComputeSha256(source);
+                SvgPreviewCacheEntry cached;
+                lock (cacheSync) cache.TryGetValue(relativeSource, out cached);
+                string destination = cached == null
+                    ? GetSvgPreviewDestination(source)
+                    : GetSafeOutputPath(outputDir, cached.PreviewPath);
+                if (cached != null
+                    && string.Equals(cached.SourceSha256, hash, StringComparison.OrdinalIgnoreCase)
+                    && File.Exists(destination))
+                {
+                    Interlocked.Increment(ref skipped);
+                    int cachedCurrent = Interlocked.Increment(ref processed);
+                    UpdateLocalProgress("Java SVG previews", cachedCurrent, svgFiles.Count, Interlocked.Read(ref bytes));
+                    return;
+                }
                 try
                 {
+                    TryDeleteFile(destination);
                     int exitCode = RunSvgRenderer(renderer, source, destination);
                     if (exitCode != 0 || !File.Exists(destination))
                         throw new InvalidDataException("resvg exited with code " + exitCode + ".");
                     Interlocked.Increment(ref converted);
                     Interlocked.Add(ref bytes, SafeFileLength(destination));
-                    if (collision) Interlocked.Increment(ref renamed);
+                    lock (cacheSync)
+                    {
+                        cache[relativeSource] = new SvgPreviewCacheEntry(hash, MakeRelativePath(outputDir, destination));
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -1371,7 +1504,55 @@ namespace RpgmvpConverterWinForms
                 UpdateLocalProgress("Java SVG previews", current, svgFiles.Count, Interlocked.Read(ref bytes));
             });
             ThrowIfLocalCopyCancelled();
+            SaveSvgPreviewCache(outputDir, cache);
             return new SvgPreviewStats(converted, bytes, errors, renamed, skipped);
+        }
+
+        private static string GetSvgPreviewDestination(string source)
+        {
+            string destination = Path.ChangeExtension(source, ".png");
+            if (!File.Exists(destination)) return destination;
+            return Path.Combine(Path.GetDirectoryName(source), Path.GetFileNameWithoutExtension(source) + ".preview.png");
+        }
+
+        private static Dictionary<string, SvgPreviewCacheEntry> LoadSvgPreviewCache(string outputDir)
+        {
+            Dictionary<string, SvgPreviewCacheEntry> cache = new Dictionary<string, SvgPreviewCacheEntry>(StringComparer.OrdinalIgnoreCase);
+            string path = Path.Combine(outputDir, "svg-preview-cache.tsv");
+            if (!File.Exists(path)) return cache;
+            try
+            {
+                foreach (string line in File.ReadAllLines(path))
+                {
+                    string[] values = line.Split('\t');
+                    if (values.Length == 3 && values.All(delegate(string value) { return value.IndexOf('\t') < 0; }))
+                        cache[values[0]] = new SvgPreviewCacheEntry(values[1], values[2]);
+                }
+            }
+            catch { }
+            return cache;
+        }
+
+        private static void SaveSvgPreviewCache(string outputDir, Dictionary<string, SvgPreviewCacheEntry> cache)
+        {
+            string path = Path.Combine(outputDir, "svg-preview-cache.tsv");
+            try
+            {
+                File.WriteAllLines(path, cache
+                    .OrderBy(delegate(KeyValuePair<string, SvgPreviewCacheEntry> pair) { return pair.Key; }, StringComparer.OrdinalIgnoreCase)
+                    .Select(delegate(KeyValuePair<string, SvgPreviewCacheEntry> pair)
+                    {
+                        return pair.Key + "\t" + pair.Value.SourceSha256 + "\t" + pair.Value.PreviewPath;
+                    }), new UTF8Encoding(false));
+            }
+            catch { }
+        }
+
+        private static string ComputeSha256(string path)
+        {
+            using (SHA256 sha = SHA256.Create())
+            using (FileStream input = File.OpenRead(path))
+                return BitConverter.ToString(sha.ComputeHash(input)).Replace("-", "");
         }
 
         private int RunSvgRenderer(string renderer, string source, string destination)
@@ -1576,10 +1757,15 @@ namespace RpgmvpConverterWinForms
 
         private NwjsCopyStats CopyLooseFiles(string relativeRoot, IEnumerable<string> files, string outputDir, string prefix)
         {
-            return CopyLooseFiles(relativeRoot, files, outputDir, prefix, null);
+            return CopyLooseFiles(relativeRoot, files, outputDir, prefix, null, false);
         }
 
         private NwjsCopyStats CopyLooseFiles(string relativeRoot, IEnumerable<string> files, string outputDir, string prefix, List<string> extractedPaths)
+        {
+            return CopyLooseFiles(relativeRoot, files, outputDir, prefix, extractedPaths, false);
+        }
+
+        private NwjsCopyStats CopyLooseFiles(string relativeRoot, IEnumerable<string> files, string outputDir, string prefix, List<string> extractedPaths, bool overwriteExisting)
         {
             int extracted = 0;
             long bytes = 0;
@@ -1592,10 +1778,11 @@ namespace RpgmvpConverterWinForms
                 {
                     string relative = MakeRelativePath(relativeRoot, source);
                     string destination = GetSafeOutputPath(outputDir, string.IsNullOrWhiteSpace(prefix) ? relative : Path.Combine(prefix, relative));
-                    bool collision;
-                    destination = GetUniqueFilePath(destination, out collision);
+                    bool collision = false;
+                    if (!overwriteExisting)
+                        destination = GetUniqueFilePath(destination, out collision);
                     Directory.CreateDirectory(Path.GetDirectoryName(destination));
-                    File.Copy(source, destination);
+                    File.Copy(source, destination, overwriteExisting);
                     extracted++;
                     bytes += SafeFileLength(destination);
                     if (collision) renamed++;
@@ -1612,10 +1799,15 @@ namespace RpgmvpConverterWinForms
 
         private NwjsCopyStats ExtractZipArchive(string archivePath, string outputDir, string prefix)
         {
-            return ExtractZipArchive(archivePath, outputDir, prefix, null, null);
+            return ExtractZipArchive(archivePath, outputDir, prefix, null, null, false);
         }
 
         private NwjsCopyStats ExtractZipArchive(string archivePath, string outputDir, string prefix, Func<string, bool> includeFile, List<string> extractedPaths)
+        {
+            return ExtractZipArchive(archivePath, outputDir, prefix, includeFile, extractedPaths, false);
+        }
+
+        private NwjsCopyStats ExtractZipArchive(string archivePath, string outputDir, string prefix, Func<string, bool> includeFile, List<string> extractedPaths, bool overwriteExisting)
         {
             int extracted = 0;
             long bytes = 0;
@@ -1636,8 +1828,9 @@ namespace RpgmvpConverterWinForms
                         continue;
 
                     string destination = GetSafeOutputPath(outputDir, Path.Combine(prefix, entry.FullName));
-                    bool collision;
-                    destination = GetUniqueFilePath(destination, out collision);
+                    bool collision = false;
+                    if (!overwriteExisting)
+                        destination = GetUniqueFilePath(destination, out collision);
                     Directory.CreateDirectory(Path.GetDirectoryName(destination));
                     using (Stream input = entry.Open())
                     using (FileStream output = File.Create(destination))
@@ -2169,11 +2362,14 @@ namespace RpgmvpConverterWinForms
             bool busy = currentRun != null || externalRunning;
             bool showKey = engine == GameEngine.RpgMaker || engine == GameEngine.Unreal;
             bool showUnityMode = engine == GameEngine.Unity;
+            bool showJavaMode = engine == GameEngine.JavaJar;
 
             keyLabel.Visible = showKey;
             keyBox.Visible = showKey;
             unityModeLabel.Visible = showUnityMode;
             unityExtractModeBox.Visible = showUnityMode;
+            javaModeLabel.Visible = showJavaMode;
+            javaExtractModeBox.Visible = showJavaMode;
             startButton.Enabled = !busy && (CanExtractAssets(engine) || IsExistingInput(pathBox.Text.Trim()));
             startButton.Text = engine == GameEngine.Unknown
                 ? T("Export Diagnostics", "Экспорт диагностики")
@@ -2225,9 +2421,10 @@ namespace RpgmvpConverterWinForms
                         "Данные проекта TyranoScript будут скопированы с исходной структурой папок.");
                     break;
                 case GameEngine.JavaJar:
+                    javaModeLabel.Text = T("Java mode", "Режим Java");
                     extractionHintLabel.Text = T(
-                        "Java extraction keeps image assets only. SVG files are preserved and rendered to PNG previews.",
-                        "Из Java извлекаются только изображения. SVG сохраняются и дополнительно преобразуются в PNG-превью.");
+                        "Choose fast images-only, cached SVG previews or all resources.",
+                        "Выберите быстрые изображения, кэшируемые PNG-превью SVG или все ресурсы.");
                     break;
                 case GameEngine.Flash:
                     extractionHintLabel.Text = T(
@@ -2248,6 +2445,16 @@ namespace RpgmvpConverterWinForms
                     extractionHintLabel.Text = T(
                         "Experimental RAGS recovery copies the encrypted database and carves confidently detected embedded media.",
                         "Экспериментальное восстановление RAGS копирует зашифрованную базу и извлекает уверенно найденные медиа.");
+                    break;
+                case GameEngine.LegacyRpgMaker:
+                    extractionHintLabel.Text = T(
+                        "RGSSAD, RGSS2A and RGSS3A archives will be extracted by the built-in parser.",
+                        "Архивы RGSSAD, RGSS2A и RGSS3A будут извлечены встроенным parser-ом.");
+                    break;
+                case GameEngine.GameMaker:
+                    extractionHintLabel.Text = T(
+                        "Experimental data.win recovery preserves the original and extracts embedded PNG texture pages.",
+                        "Экспериментальное восстановление data.win сохраняет оригинал и извлекает встроенные PNG-страницы текстур.");
                     break;
                 default:
                     extractionHintLabel.Text = T(
@@ -2286,7 +2493,9 @@ namespace RpgmvpConverterWinForms
                 || engine == GameEngine.Flash
                 || engine == GameEngine.Html
                 || engine == GameEngine.Qsp
-                || engine == GameEngine.Rags;
+                || engine == GameEngine.Rags
+                || engine == GameEngine.LegacyRpgMaker
+                || engine == GameEngine.GameMaker;
         }
 
         private void UpdateUnlockerLayout(bool visible)
@@ -2333,6 +2542,9 @@ namespace RpgmvpConverterWinForms
             SetActionTooltip(dryRunButton, T("Inspect supported archives and estimate the input size without extracting files.", "Проверьте архивы и входной размер без извлечения файлов."));
             SetActionTooltip(toggleLogButton, T("Show or hide technical extraction messages.", "Показать или скрыть технические сообщения."));
             SetActionTooltip(languageBox, T("Switch interface language.", "Переключить язык интерфейса."));
+            SetActionTooltip(javaExtractModeBox, T(
+                "Images only is fastest. SVG previews are cached after the first conversion. All resources keeps non-image JAR and res files.",
+                "«Только изображения» работает быстрее всего. PNG-превью SVG кэшируются после первой конвертации. «Все ресурсы» сохраняет и файлы других типов из JAR и res."));
             UpdateActionTooltips();
         }
 
@@ -2611,6 +2823,7 @@ namespace RpgmvpConverterWinForms
             if (!Directory.Exists(rootPath)) return GameEngine.Unknown;
             if (IsUnityGame(rootPath)) return GameEngine.Unity;
             if (IsRenpyGame(rootPath)) return GameEngine.Renpy;
+            if (IsLegacyRpgMakerGame(rootPath)) return GameEngine.LegacyRpgMaker;
             if (HasRpgmFiles(rootPath)) return GameEngine.RpgMaker;
             if (IsGodotGame(rootPath)) return GameEngine.Godot;
             if (IsKirikiriGame(rootPath)) return GameEngine.Kirikiri;
@@ -2620,6 +2833,7 @@ namespace RpgmvpConverterWinForms
             if (IsNwjsGame(rootPath)) return GameEngine.Nwjs;
             if (IsJavaJarGame(rootPath)) return GameEngine.JavaJar;
             if (IsFlashGame(rootPath)) return GameEngine.Flash;
+            if (AssetCollectors.IsGameMakerInput(rootPath)) return GameEngine.GameMaker;
             if (AssetCollectors.IsHtmlGame(rootPath)) return GameEngine.Html;
             if (AssetCollectors.IsQspGame(rootPath)) return GameEngine.Qsp;
             if (AssetCollectors.IsRagsInput(rootPath)) return GameEngine.Rags;
@@ -2634,6 +2848,7 @@ namespace RpgmvpConverterWinForms
             if (!Directory.Exists(rootPath)) return GameEngine.Unknown;
             if (IsUnityGame(rootPath)) return GameEngine.Unity;
             if (IsRenpyGameFast(rootPath)) return GameEngine.Renpy;
+            if (IsLegacyRpgMakerGame(rootPath)) return GameEngine.LegacyRpgMaker;
             if (HasRpgmFilesFast(rootPath)) return GameEngine.RpgMaker;
             if (IsGodotGameFast(rootPath)) return GameEngine.Godot;
             if (IsKirikiriGameFast(rootPath)) return GameEngine.Kirikiri;
@@ -2643,6 +2858,7 @@ namespace RpgmvpConverterWinForms
             if (IsNwjsGame(rootPath)) return GameEngine.Nwjs;
             if (IsJavaJarGame(rootPath)) return GameEngine.JavaJar;
             if (IsFlashGame(rootPath)) return GameEngine.Flash;
+            if (AssetCollectors.IsGameMakerInput(rootPath)) return GameEngine.GameMaker;
             if (AssetCollectors.IsHtmlGame(rootPath)) return GameEngine.Html;
             if (AssetCollectors.IsQspGame(rootPath)) return GameEngine.Qsp;
             if (AssetCollectors.IsRagsInput(rootPath)) return GameEngine.Rags;
@@ -2664,6 +2880,9 @@ namespace RpgmvpConverterWinForms
                 case ".swf": return GameEngine.Flash;
                 case ".qsp": return GameEngine.Qsp;
                 case ".rag": return GameEngine.Rags;
+                case ".rgssad":
+                case ".rgss2a":
+                case ".rgss3a": return GameEngine.LegacyRpgMaker;
                 default: return GameEngine.Unknown;
             }
         }
@@ -2931,6 +3150,16 @@ namespace RpgmvpConverterWinForms
                 files = AssetCollectors.FindInputFiles(inputPath, ".rag");
                 archives = files.Count();
             }
+            else if (engine == GameEngine.LegacyRpgMaker)
+            {
+                files = FindLegacyRpgMakerArchives(inputPath);
+                archives = files.Count();
+            }
+            else if (engine == GameEngine.GameMaker)
+            {
+                files = AssetCollectors.FindGameMakerFiles(inputPath);
+                archives = files.Count();
+            }
             else
             {
                 files = GetFilesToConvert(rootPath);
@@ -3035,6 +3264,19 @@ namespace RpgmvpConverterWinForms
                 .ToList();
         }
 
+        private static bool IsLegacyRpgMakerGame(string rootPath)
+        {
+            return FindLegacyRpgMakerArchives(rootPath).Count > 0;
+        }
+
+        private static List<string> FindLegacyRpgMakerArchives(string inputPath)
+        {
+            return new[] { ".rgssad", ".rgss2a", ".rgss3a" }
+                .SelectMany(delegate(string extension) { return AssetCollectors.FindInputFiles(inputPath, extension); })
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
         private static bool IsJavaLooseResourceGame(string rootPath)
         {
             string resources = Path.Combine(rootPath, "res");
@@ -3049,10 +3291,17 @@ namespace RpgmvpConverterWinForms
 
         private static List<string> GetJavaLooseFiles(string rootPath, string outputDir)
         {
+            return GetJavaLooseFiles(rootPath, outputDir, "images-svg");
+        }
+
+        private static List<string> GetJavaLooseFiles(string rootPath, string outputDir, string mode)
+        {
             string resources = Path.Combine(rootPath, "res");
-            return IsJavaLooseResourceGame(rootPath)
-                ? GetLooseFiles(resources, outputDir).Where(IsJavaImageFile).ToList()
-                : new List<string>();
+            if (!IsJavaLooseResourceGame(rootPath)) return new List<string>();
+            List<string> files = GetLooseFiles(resources, outputDir);
+            return string.Equals(mode, "all", StringComparison.OrdinalIgnoreCase)
+                ? files
+                : files.Where(IsJavaImageFile).ToList();
         }
 
         private static bool IsJavaImageFile(string path)
@@ -3138,9 +3387,11 @@ namespace RpgmvpConverterWinForms
                     || IsUnrealGameFast(root)
                     || IsJavaJarGame(root)
                     || IsFlashGame(root)
+                    || IsLegacyRpgMakerGame(root)
                     || AssetCollectors.IsHtmlGame(root)
                     || AssetCollectors.IsQspGame(root)
                     || AssetCollectors.IsRagsInput(root)
+                    || AssetCollectors.IsGameMakerInput(root)
                     || Directory.Exists(Path.Combine(root, "www"))
                     || Directory.Exists(Path.Combine(root, "game"))
                     || File.Exists(Path.Combine(root, "package.json"))
@@ -3166,6 +3417,16 @@ namespace RpgmvpConverterWinForms
             }
         }
 
+        private string JavaModeValue()
+        {
+            switch (javaExtractModeBox.SelectedIndex)
+            {
+                case 0: return "images";
+                case 2: return "all";
+                default: return "images-svg";
+            }
+        }
+
         private static string EngineName(GameEngine engine)
         {
             switch (engine)
@@ -3184,6 +3445,8 @@ namespace RpgmvpConverterWinForms
                 case GameEngine.Html: return "HTML game";
                 case GameEngine.Qsp: return "QSP";
                 case GameEngine.Rags: return "RAGS experimental";
+                case GameEngine.LegacyRpgMaker: return "RPG Maker XP/VX/VX Ace";
+                case GameEngine.GameMaker: return "GameMaker experimental";
                 default: return "not detected";
             }
         }
@@ -3206,6 +3469,8 @@ namespace RpgmvpConverterWinForms
                 case GameEngine.Html: return Color.FromArgb(85, 180, 235);
                 case GameEngine.Qsp: return Color.FromArgb(205, 165, 85);
                 case GameEngine.Rags: return Color.FromArgb(190, 120, 210);
+                case GameEngine.LegacyRpgMaker: return Color.FromArgb(85, 190, 240);
+                case GameEngine.GameMaker: return Color.FromArgb(100, 200, 190);
                 default: return mutedColor;
             }
         }
@@ -3356,7 +3621,9 @@ namespace RpgmvpConverterWinForms
             Flash,
             Html,
             Qsp,
-            Rags
+            Rags,
+            LegacyRpgMaker,
+            GameMaker
         }
 
         private sealed class ScanSummary
@@ -3421,6 +3688,18 @@ namespace RpgmvpConverterWinForms
             public int Skipped { get; private set; }
         }
 
+        private sealed class SvgPreviewCacheEntry
+        {
+            public SvgPreviewCacheEntry(string sourceSha256, string previewPath)
+            {
+                SourceSha256 = sourceSha256;
+                PreviewPath = previewPath;
+            }
+
+            public string SourceSha256 { get; private set; }
+            public string PreviewPath { get; private set; }
+        }
+
         private sealed class OperationResult
         {
             public OperationResult(string engine, string outputDir, int extracted, long bytes, int errors, int renamed, TimeSpan duration)
@@ -3458,7 +3737,7 @@ namespace RpgmvpConverterWinForms
             {
                 return string.Join(Environment.NewLine, new[]
                 {
-                    "Game Asset Tool v1.8.1 report",
+                    "Game Asset Tool v1.9.0 report",
                     "Engine: " + Engine,
                     "Extracted files: " + Extracted,
                     "Extracted size: " + FormatBytes(Bytes),
@@ -3522,6 +3801,22 @@ namespace RpgmvpConverterWinForms
                     catch { }
                 };
                 Controls.Add(openButton);
+
+                Button galleryButton = new Button
+                {
+                    Text = russian ? "Галерея файлов" : "Results Gallery",
+                    Location = new Point(210, 292),
+                    Size = new Size(160, 34),
+                    BackColor = Color.FromArgb(45, 50, 60),
+                    ForeColor = Color.White,
+                    FlatStyle = FlatStyle.Flat
+                };
+                galleryButton.Click += delegate
+                {
+                    using (ResultsGalleryForm gallery = new ResultsGalleryForm(result.OutputDir, russian))
+                        gallery.ShowDialog(this);
+                };
+                Controls.Add(galleryButton);
 
                 Button closeButton = new Button
                 {

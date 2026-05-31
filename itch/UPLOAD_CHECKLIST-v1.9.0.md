@@ -1,12 +1,12 @@
-# itch.io Upload Checklist - v1.8.1
+# itch.io Upload Checklist - v1.9.0
 
 ## Upload
 
-- File: `release/GameAssetTool-v1.8.1.exe`
-- Display name: `Game Asset Tool v1.8.1 - Windows x64`
+- File: `release/GameAssetTool-v1.9.0.exe`
+- Display name: `Game Asset Tool v1.9.0 - Windows x64`
 - Platform: Windows
 - Architecture: x64
-- SHA-256: `92C189E6AEDB90C4616D39F20D2662D2270F1A43C2CD818E100E4AEFEBCED311`
+- SHA-256: `5A57771EF3C459766CAFABAA932D545AAA0511E9EBA7D6287292D68AE084C386`
 
 ## Page Update
 
@@ -25,4 +25,6 @@
 - Drop a game folder and a `.rag` file directly onto the EXE and confirm that each path is preselected.
 - Confirm that **Collect Loose Files** is available for a selected path.
 - Select an unknown folder and confirm that **Export Diagnostics** creates a report.
+- Select a Java game and confirm that all three Java extraction modes are visible.
+- Complete an extraction and confirm that **Results Gallery** opens.
 - Switch the interface between `EN` and `RU`.

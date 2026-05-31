@@ -7,7 +7,7 @@ The source game folders were not modified.
 | Sample | Detected engine | Result |
 | --- | --- | --- |
 | `Flash ImpregDef` | Flash | Copied 6 SWF files and extracted 1 embedded JPEG |
-| `Java Lilith's Throne (exe version)` | Java | Extracted 1588 image sources and rendered 1169 SVG files into PNG previews; produced 2757 files with no XML and no errors |
+| `Java Lilith's Throne (exe version)` | Java | Extracted 1588 image sources and rendered 1169 SVG files into PNG previews; final repeat extraction reused all cached previews and completed in 18.90 seconds without duplicate output |
 | `RPGM RedJill_SUCCESS` | RPG Maker | Auto-detected the HEX key and decrypted 5 sampled PNG files with valid PNG signatures |
 | `Unity resident slut 4` | Unity | Extracted 101 files; 2829 unsupported Unity objects were skipped without errors |
 | `VN Ren'Py AuraOfSin-0.1-pc` | Ren'Py | Extracted 1205 files from `archive.rpa` |
@@ -19,3 +19,5 @@ The source game folders were not modified.
 | `Rag Dark_of_the_Night_Resurrected.rag` | RAGS | Accepted standalone file input; preserved the database and recovered 10 embedded media files without errors |
 
 The reusable audit and extraction harness lives in `tests/RealGameSmoke.cs`.
+
+The built-in legacy RPG Maker parser also passed synthetic `RGSSAD`, `RGSS2A` and `RGSS3A` round trips plus the upstream `uuksu/RPGMakerDecrypter` test archives. GameMaker `data.win` PNG-page streaming and results-gallery filtering are covered by synthetic release checks.

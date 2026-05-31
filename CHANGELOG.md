@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.9.0 - 2026-05-31
+
+- Added Java extraction modes: **Images only**, **Images + SVG previews** and **All resources**.
+- Cache Java SVG preview hashes and reuse unchanged PNG previews on repeat runs without creating duplicate output files.
+- Keep SVG rendering at an eight-process limit after real-game benchmarking to avoid slowing the first pass through CPU oversubscription.
+- Added a searchable results gallery with thumbnails plus image, SVG, audio and video filters.
+- Added built-in legacy RPG Maker XP, VX and VX Ace extraction for `.rgssad`, `.rgss2a` and `.rgss3a` archives.
+- Added experimental GameMaker `data.win` recovery: preserve the original container, collect open image files and stream embedded PNG texture pages without loading the full container into memory.
+- Extended synthetic checks and verified the legacy RPG Maker parser against the upstream `uuksu/RPGMakerDecrypter` test archives.
+
 ## 1.8.1 - 2026-05-31
 
 - Changed Java extraction to keep image assets only instead of copying every loose `res` file or JAR entry.
