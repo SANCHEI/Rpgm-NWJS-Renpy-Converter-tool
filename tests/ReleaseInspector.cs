@@ -6,6 +6,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
+using System.Windows.Forms;
 
 internal static class ReleaseInspector
 {
@@ -205,6 +206,7 @@ internal static class ReleaseInspector
             bool upstreamRgssFixtures = args.Length < 2 || VerifyUpstreamRgssFixtures(assembly, args[1], temp);
             bool startupFolderArgument = VerifyStartupFolderArgument(formType, temp);
             bool startupFileArgument = VerifyStartupFileArgument(formType, temp);
+            bool droppedFolderArgument = VerifyDroppedFolderArgument(formType, temp);
             bool extractorRegistry = assembly.GetType("RpgmvpConverterWinForms.IAssetExtractor", true).IsInterface
                 && assembly.GetType("RpgmvpConverterWinForms.AssetExtractorRegistry", true) != null;
 
@@ -319,6 +321,7 @@ internal static class ReleaseInspector
             Console.WriteLine("UpstreamRgssFixtures=" + upstreamRgssFixtures);
             Console.WriteLine("StartupFolderArgument=" + startupFolderArgument);
             Console.WriteLine("StartupFileArgument=" + startupFileArgument);
+            Console.WriteLine("DroppedFolderArgument=" + droppedFolderArgument);
             Console.WriteLine("ExtractorRegistry=" + extractorRegistry);
 
             return hasUnityScript
@@ -372,6 +375,7 @@ internal static class ReleaseInspector
                 && upstreamRgssFixtures
                 && startupFolderArgument
                 && startupFileArgument
+                && droppedFolderArgument
                 && extractorRegistry
                 ? 0
                 : 1;
@@ -721,6 +725,33 @@ internal static class ReleaseInspector
             apply.Invoke(form, null);
             object pathBox = GetField(formType, form, "pathBox");
             return string.Equals(GetString(pathBox, "Text"), file, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            MethodInfo dispose = formType.GetMethod("Dispose", BindingFlags.Public | BindingFlags.Instance);
+            dispose.Invoke(form, null);
+        }
+    }
+
+    private static bool VerifyDroppedFolderArgument(Type formType, string temp)
+    {
+        string parent = Path.Combine(temp, "drop-folder-parent");
+        string root = Path.Combine(parent, "(unknown) SPITE");
+        Directory.CreateDirectory(Path.Combine(parent, "www"));
+        Directory.CreateDirectory(Path.Combine(root, "data"));
+        WriteMinimalSpak(Path.Combine(root, "data", "media.dat"));
+        object form = Activator.CreateInstance(formType);
+        try
+        {
+            DataObject data = new DataObject();
+            data.SetData(DataFormats.FileDrop, new[] { root });
+            DragEventArgs args = new DragEventArgs(data, 0, 0, 0, DragDropEffects.Copy, DragDropEffects.Copy);
+            MethodInfo drop = formType.GetMethod("OnDragDrop", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+            drop.Invoke(form, new object[] { form, args });
+            object pathBox = GetField(formType, form, "pathBox");
+            object detectedEngineLabel = GetField(formType, form, "detectedEngineLabel");
+            return string.Equals(GetString(pathBox, "Text"), root, StringComparison.OrdinalIgnoreCase)
+                && GetString(detectedEngineLabel, "Text").EndsWith("SPAK DAT experimental", StringComparison.Ordinal);
         }
         finally
         {
