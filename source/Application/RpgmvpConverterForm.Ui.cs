@@ -515,8 +515,8 @@ namespace RpgmvpConverterWinForms
 
         private void ApplyGamePath(string path, bool scan)
         {
-            string detectedRoot = TryFindGameRoot(path);
-            pathBox.Text = File.Exists(path) || string.IsNullOrWhiteSpace(detectedRoot) ? path : detectedRoot;
+            string detectedRoot = IsExistingInput(path) ? null : TryFindGameRoot(path);
+            pathBox.Text = string.IsNullOrWhiteSpace(detectedRoot) ? path : detectedRoot;
             TryAutoDetectKey(InputDirectory(pathBox.Text));
             if (scan) RunDryScan(false);
         }
@@ -754,6 +754,11 @@ namespace RpgmvpConverterWinForms
                         "Experimental data.win recovery preserves the original and extracts PNG, QOI and BZ2QOI texture pages.",
                         "Экспериментальное восстановление data.win сохраняет оригинал и извлекает страницы текстур PNG, QOI и BZ2QOI.");
                     break;
+                case GameEngine.SpakDat:
+                    extractionHintLabel.Text = T(
+                        "Experimental SPAK DAT extraction splits container entries and collects external DAT files. Protected entries remain .dat files and are listed in the manifest.",
+                        "Экспериментальное извлечение SPAK DAT разделяет записи контейнера и собирает внешние DAT-файлы. Защищённые записи сохраняются как .dat и перечисляются в manifest.");
+                    break;
                 default:
                     extractionHintLabel.Text = T(
                         "Unknown format. Recover embedded media by signatures or collect loose resources.",
@@ -794,7 +799,8 @@ namespace RpgmvpConverterWinForms
                 || engine == GameEngine.Qsp
                 || engine == GameEngine.Rags
                 || engine == GameEngine.LegacyRpgMaker
-                || engine == GameEngine.GameMaker;
+                || engine == GameEngine.GameMaker
+                || engine == GameEngine.SpakDat;
         }
 
         private void UpdateUnlockerLayout(bool visible)

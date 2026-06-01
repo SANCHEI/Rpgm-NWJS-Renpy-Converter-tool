@@ -17,7 +17,8 @@ namespace RpgmvpConverterWinForms
         private static readonly IAssetExtractor[] extractors =
         {
             new ElectronAsarExtractor(),
-            new FlashSwfExtractor()
+            new FlashSwfExtractor(),
+            new SpakDatExtractor()
         };
 
         public static IEnumerable<IAssetExtractor> All

@@ -458,6 +458,7 @@ namespace RpgmvpConverterWinForms
                 case GameEngine.Rags: return "RAGS experimental";
                 case GameEngine.LegacyRpgMaker: return "RPG Maker XP/VX/VX Ace";
                 case GameEngine.GameMaker: return "GameMaker experimental";
+                case GameEngine.SpakDat: return "SPAK DAT experimental";
                 default: return "not detected";
             }
         }
@@ -483,6 +484,7 @@ namespace RpgmvpConverterWinForms
                 case GameEngine.Rags: return Color.FromArgb(190, 120, 210);
                 case GameEngine.LegacyRpgMaker: return Color.FromArgb(85, 190, 240);
                 case GameEngine.GameMaker: return Color.FromArgb(100, 200, 190);
+                case GameEngine.SpakDat: return Color.FromArgb(195, 150, 95);
                 default: return mutedColor;
             }
         }

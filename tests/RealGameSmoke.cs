@@ -137,6 +137,8 @@ internal static class RealGameSmoke
             return FromOperation(Invoke(formType, form, "RunLegacyRpgMakerExtraction", game, Path.Combine(gameOutput, "rgss")));
         if (engine == "GameMaker")
             return FromOperation(Invoke(formType, form, "RunPortableScriptExtraction", game, Path.Combine(gameOutput, "gamemaker"), "GameMaker experimental", "extract_gamemaker.py", "RpgmvpConverterWinForms.scripts.extract_gamemaker.py", ""));
+        if (engine == "SpakDat")
+            return FromCollector(InvokeAssetExtractor(formType.Assembly, "SpakDatExtractor", game, Path.Combine(gameOutput, "spak-dat")), Path.Combine(gameOutput, "spak-dat"));
         if (engine == "Unknown")
             return FromCollector(InvokeExtractorStatic(formType.Assembly, "SignatureAssetExtractor", "Extract", game, Path.Combine(gameOutput, "signature-recovery")), Path.Combine(gameOutput, "signature-recovery"));
         return SmokeResult.CreateSkipped(gameOutput, "unsupported");
@@ -236,6 +238,21 @@ internal static class RealGameSmoke
         {
             Type extractor = assembly.GetType("RpgmvpConverterWinForms." + typeName, true);
             return RequireMethod(extractor, name, BindingFlags.Public | BindingFlags.Static).Invoke(null, args);
+        }
+        catch (TargetInvocationException ex)
+        {
+            throw Unwrap(ex);
+        }
+    }
+
+    private static object InvokeAssetExtractor(Assembly assembly, string typeName, string inputPath, string outputDir)
+    {
+        try
+        {
+            Type extractorType = assembly.GetType("RpgmvpConverterWinForms." + typeName, true);
+            object extractor = Activator.CreateInstance(extractorType);
+            return RequireMethod(extractorType, "Extract", BindingFlags.Public | BindingFlags.Instance)
+                .Invoke(extractor, new object[] { inputPath, outputDir });
         }
         catch (TargetInvocationException ex)
         {

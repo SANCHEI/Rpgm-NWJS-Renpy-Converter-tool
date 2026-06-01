@@ -46,6 +46,7 @@
     <Compile Include="source\Extractors\JavaSvgPreviewRenderer.cs" />
     <Compile Include="source\Extractors\LegacyRpgMakerExtractor.cs" />
     <Compile Include="source\Extractors\SignatureAssetExtractor.cs" />
+    <Compile Include="source\Extractors\SpakDatExtractor.cs" />
     <Compile Include="source\Features\UnlockerResources.cs" />
     <Compile Include="source\Runtime\EmbeddedScripts.cs" />
     <Compile Include="source\Runtime\ApplicationIcon.cs" />

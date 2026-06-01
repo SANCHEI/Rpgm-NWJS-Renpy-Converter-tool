@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Preserve an explicitly selected or dropped directory instead of replacing it with a detected engine folder from one of its parents.
+- Added experimental SPAK `.dat` container detection, streaming entry extraction, adjacent DAT collection, open-media extension inference and a manifest for protected blocks.
+
 ## 2.1.0 - 2026-06-01
 
 - Added unknown-format signature recovery for embedded PNG, JPEG, GIF, OGG, WAV and WebP assets while retaining a diagnostic report.

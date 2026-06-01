@@ -107,6 +107,11 @@ namespace RpgmvpConverterWinForms
                 await StartGameMakerExtractionAsync();
                 return;
             }
+            if (engine == GameEngine.SpakDat)
+            {
+                await StartSpakDatExtractionAsync();
+                return;
+            }
             if (engine != GameEngine.RpgMaker)
             {
                 await StartSignatureRecoveryAsync();
@@ -592,6 +597,16 @@ namespace RpgmvpConverterWinForms
                 "gamemaker",
                 "extract_gamemaker.py",
                 "RpgmvpConverterWinForms.scripts.extract_gamemaker.py");
+        }
+
+        private async Task StartSpakDatExtractionAsync()
+        {
+            await StartLocalExtractionAsync("SPAK DAT experimental", "spak-dat", delegate(string inputPath, string outputDir)
+            {
+                DateTime start = DateTime.UtcNow;
+                CollectorResult extracted = AssetExtractorRegistry.Find("spak-dat").Extract(inputPath, outputDir);
+                return new OperationResult("SPAK DAT experimental", outputDir, extracted.Extracted, extracted.Bytes, 0, extracted.Renamed, extracted.Skipped, DateTime.UtcNow - start);
+            });
         }
 
         private async Task StartLooseResourceCollectionAsync()

@@ -97,6 +97,10 @@ Accepts a standalone `.rag` file or a folder containing one. The original databa
 
 Accepts a folder containing `data.win` or the file itself. The original container is preserved, open images are collected and embedded PNG, QOI and BZ2QOI texture pages are recovered. QOI and BZ2QOI pages receive PNG previews.
 
+## SPAK DAT Experimental
+
+SPAK `.dat` containers can be split into individual entries without loading the full archive into memory. Adjacent DAT files are collected as well. Open media receives a useful extension automatically, while protected blocks remain `.dat` files and are listed in `SPAK-DAT-manifest.txt`.
+
 ## Loose Files And Unknown Formats
 
 Use **Collect Loose Files** when a game stores useful media outside its archives. For an unknown engine, **Recover Embedded Assets** extracts confidently detected PNG, JPEG, GIF, OGG, WAV and WebP files by signature and creates a diagnostic text report for further analysis.

@@ -36,6 +36,7 @@ namespace RpgmvpConverterWinForms
             if (IsJavaJarGame(rootPath)) return GameEngine.JavaJar;
             if (IsFlashGame(rootPath)) return GameEngine.Flash;
             if (AssetCollectors.IsGameMakerInput(rootPath)) return GameEngine.GameMaker;
+            if (IsSpakDatGame(rootPath)) return GameEngine.SpakDat;
             if (AssetCollectors.IsHtmlGame(rootPath)) return GameEngine.Html;
             if (AssetCollectors.IsQspGame(rootPath)) return GameEngine.Qsp;
             if (AssetCollectors.IsRagsInput(rootPath)) return GameEngine.Rags;
@@ -62,6 +63,7 @@ namespace RpgmvpConverterWinForms
             if (IsJavaJarGame(rootPath)) return GameEngine.JavaJar;
             if (IsFlashGame(rootPath)) return GameEngine.Flash;
             if (AssetCollectors.IsGameMakerInput(rootPath)) return GameEngine.GameMaker;
+            if (IsSpakDatGame(rootPath)) return GameEngine.SpakDat;
             if (AssetCollectors.IsHtmlGame(rootPath)) return GameEngine.Html;
             if (AssetCollectors.IsQspGame(rootPath)) return GameEngine.Qsp;
             if (AssetCollectors.IsRagsInput(rootPath)) return GameEngine.Rags;
@@ -87,6 +89,7 @@ namespace RpgmvpConverterWinForms
                 case ".rgssad":
                 case ".rgss2a":
                 case ".rgss3a": return GameEngine.LegacyRpgMaker;
+                case ".dat": return SpakDatExtractor.IsSpakArchive(path) ? GameEngine.SpakDat : GameEngine.Unknown;
                 default: return GameEngine.Unknown;
             }
         }
@@ -171,6 +174,11 @@ namespace RpgmvpConverterWinForms
         private static bool IsElectronGame(string rootPath)
         {
             return AssetExtractorRegistry.Find("electron-asar").CanExtract(rootPath);
+        }
+
+        private static bool IsSpakDatGame(string rootPath)
+        {
+            return AssetExtractorRegistry.Find("spak-dat").CanExtract(rootPath);
         }
 
         private static bool HasRpgmFiles(string rootPath)
@@ -373,6 +381,11 @@ namespace RpgmvpConverterWinForms
             {
                 files = AssetCollectors.FindGameMakerFiles(inputPath);
                 archives = files.Count();
+            }
+            else if (engine == GameEngine.SpakDat)
+            {
+                archives = SpakDatExtractor.FindArchives(inputPath).Count;
+                files = SpakDatExtractor.FindSourceFiles(inputPath);
             }
             else
             {
@@ -605,6 +618,7 @@ namespace RpgmvpConverterWinForms
                     || IsJavaJarGame(root)
                     || IsFlashGame(root)
                     || IsElectronGame(root)
+                    || IsSpakDatGame(root)
                     || IsLegacyRpgMakerGame(root)
                     || AssetCollectors.IsHtmlGame(root)
                     || AssetCollectors.IsQspGame(root)
@@ -642,7 +656,8 @@ namespace RpgmvpConverterWinForms
             Qsp,
             Rags,
             LegacyRpgMaker,
-            GameMaker
+            GameMaker,
+            SpakDat
         }
 
         private sealed class ScanSummary

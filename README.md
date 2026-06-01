@@ -2,7 +2,7 @@
 
 [**Watch Demo Video on YouTube**](https://youtu.be/BnjRjik9fk0)
 
-Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **RPG Maker XP/VX/VX Ace**, **Ren'Py**, **NWJS**, **Electron**, **Unity**, **Godot**, **KiriKiri**, **WOLF RPG**, **TyranoScript**, **Java**, **HTML** and **QSP** games. Experimental Unreal `.pak`, Flash `.swf`, RAGS `.rag` and GameMaker `data.win` recovery is included.
+Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **RPG Maker XP/VX/VX Ace**, **Ren'Py**, **NWJS**, **Electron**, **Unity**, **Godot**, **KiriKiri**, **WOLF RPG**, **TyranoScript**, **Java**, **HTML** and **QSP** games. Experimental Unreal `.pak`, Flash `.swf`, RAGS `.rag`, GameMaker `data.win` and SPAK `.dat` recovery is included.
 
 ![Version](https://img.shields.io/badge/version-2.1.0-blue)
 ![.NET](https://img.shields.io/badge/.NET_Framework-4.7.2-blue)
@@ -29,6 +29,7 @@ Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **RP
 - Extracts Unreal PAK archives with Zlib, Gzip, LZ4, Zstd and local Oodle decoding in an experimental offline mode.
 - Collects static HTML games, QSP databases and loose resources.
 - Preserves RAGS `.rag` databases and recovers confidently detected embedded media experimentally.
+- Splits SPAK `.dat` containers into individual entries, collects adjacent DAT files and preserves protected blocks with a manifest.
 - Provides **Collect Loose Files** and unknown-format signature recovery fallback actions.
 - Preserves relative paths and renames collisions with suffixes such as `image (2).png`.
 - Opens a searchable results gallery with background indexing, lazy thumbnail batches, enlarged image previews and SVG, audio and video filters.
@@ -64,6 +65,7 @@ extracted/
   qsp/
   rags/
   gamemaker/
+  spak-dat/
   loose/
   signature-recovery/
 ```
@@ -157,6 +159,10 @@ RAGS recovery accepts a standalone `.rag` file or a folder containing one. It pr
 ## GameMaker Experimental
 
 GameMaker recovery accepts a folder containing `data.win` or the file itself. It preserves the original container, collects open image files and extracts embedded PNG, QOI and BZ2QOI texture pages into `extracted/gamemaker/`. QOI and BZ2QOI pages receive PNG previews while their original blocks are preserved.
+
+## SPAK DAT Experimental
+
+SPAK recovery accepts a folder containing `.dat` containers or an individual SPAK `.dat` file. It streams container entries into `extracted/spak-dat/archives/`, collects adjacent DAT files into `extracted/spak-dat/external/`, infers common open-media extensions and writes `SPAK-DAT-manifest.txt`. Protected SPITE payloads remain `.dat` blocks because their ChaCha20 context depends on the original runtime resource path.
 
 ## Loose Files And Diagnostics
 

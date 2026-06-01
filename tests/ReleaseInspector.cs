@@ -153,6 +153,11 @@ internal static class ReleaseInspector
                 Directory.CreateDirectory(path);
                 WriteMinimalDataWin(Path.Combine(path, "data.win"));
             });
+            string spakDatEngine = DetectEngine(detectEngine, Path.Combine(temp, "spak-dat"), delegate(string path)
+            {
+                Directory.CreateDirectory(path);
+                WriteMinimalSpak(Path.Combine(path, "media.dat"));
+            });
             string directFlashEngine = DetectExistingEngine(detectEngine, Path.Combine(temp, "flash", "game.swf"));
             string directElectronEngine = DetectExistingEngine(detectEngine, Path.Combine(temp, "electron", "resources", "app.asar"));
             string genericGameFolderEngine = DetectEngine(detectEngine, Path.Combine(temp, "generic-game-folder"), delegate(string path)
@@ -181,6 +186,7 @@ internal static class ReleaseInspector
                 && DetectExistingEngine(detectEngineFast, ragsPath) == "Rags"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "legacy-rpg-maker")) == "LegacyRpgMaker"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "gamemaker")) == "GameMaker"
+                && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "spak-dat")) == "SpakDat"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "flash", "game.swf")) == "Flash"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "electron", "resources", "app.asar")) == "Electron"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "generic-game-folder")) == "Unknown";
@@ -685,10 +691,10 @@ internal static class ReleaseInspector
 
     private static bool VerifyStartupFolderArgument(Type formType, string temp)
     {
-        string root = Path.Combine(temp, "startup-folder");
-        Directory.CreateDirectory(Path.Combine(root, "data", "scenario"));
-        Directory.CreateDirectory(Path.Combine(root, "data", "system"));
-        File.WriteAllText(Path.Combine(root, "data", "scenario", "first.ks"), "*start");
+        string parent = Path.Combine(temp, "startup-folder-parent");
+        string root = Path.Combine(parent, "(unknown) SPITE");
+        Directory.CreateDirectory(root);
+        WriteMinimalRags(Path.Combine(parent, "parent-marker.rag"));
         object form = Activator.CreateInstance(formType, new object[] { root });
         try
         {
@@ -733,6 +739,9 @@ internal static class ReleaseInspector
         MethodInfo writeDiagnostics = collectors.GetMethod("WriteDiagnostics", BindingFlags.Public | BindingFlags.Static);
         Type signatureExtractor = assembly.GetType("RpgmvpConverterWinForms.SignatureAssetExtractor", true);
         MethodInfo extractSignatures = signatureExtractor.GetMethod("Extract", BindingFlags.Public | BindingFlags.Static);
+        Type spakExtractor = assembly.GetType("RpgmvpConverterWinForms.SpakDatExtractor", true);
+        object spakExtractorInstance = Activator.CreateInstance(spakExtractor);
+        MethodInfo extractSpak = spakExtractor.GetMethod("Extract", BindingFlags.Public | BindingFlags.Instance);
 
         string root = Path.Combine(temp, "collector-extraction");
         string html = Path.Combine(root, "html");
@@ -779,6 +788,13 @@ internal static class ReleaseInspector
         string signaturesOutput = Path.Combine(root, "signature-output");
         object signatureResult = extractSignatures.Invoke(null, new object[] { unknown, signaturesOutput });
 
+        string spak = Path.Combine(root, "spak");
+        Directory.CreateDirectory(Path.Combine(spak, "data"));
+        WriteMinimalSpak(Path.Combine(spak, "data", "media.dat"));
+        File.WriteAllBytes(Path.Combine(spak, "data", "protected.dat"), new byte[] { 1, 2, 3, 4 });
+        string spakOutput = Path.Combine(root, "spak-output");
+        object spakResult = extractSpak.Invoke(spakExtractorInstance, new object[] { spak, spakOutput });
+
         return GetInt(htmlResult, "Extracted") == 2
             && File.Exists(Path.Combine(htmlOutput, "index.html"))
             && File.Exists(Path.Combine(htmlOutput, "assets", "hero.jpg"))
@@ -794,7 +810,11 @@ internal static class ReleaseInspector
             && File.Exists(report)
             && File.ReadAllText(report).Contains("archive.bin | 46-4F-52-4D")
             && GetInt(signatureResult, "Extracted") == 1
-            && IsPng(Path.Combine(signaturesOutput, "embedded", "archive", "asset-0001.png"));
+            && IsPng(Path.Combine(signaturesOutput, "embedded", "archive", "asset-0001.png"))
+            && GetInt(spakResult, "Extracted") == 2
+            && IsPng(Path.Combine(spakOutput, "archives", "media", "feedfacecafebeef.png"))
+            && File.Exists(Path.Combine(spakOutput, "external", "data", "protected.dat"))
+            && File.ReadAllText(Path.Combine(spakOutput, "SPAK-DAT-manifest.txt")).Contains("protected-or-unknown");
     }
 
     private static bool VerifyLegacyRpgMakerExtraction(Assembly assembly, Type formType, string temp)
@@ -903,6 +923,27 @@ internal static class ReleaseInspector
             writer.Write((uint)header.Length);
             writer.Write(header);
             writer.Write(content);
+        }
+    }
+
+    private static void WriteMinimalSpak(string path)
+    {
+        byte[] png =
+        {
+            0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+            0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44,
+            0xae, 0x42, 0x60, 0x82
+        };
+        using (BinaryWriter writer = new BinaryWriter(File.Create(path)))
+        {
+            writer.Write(System.Text.Encoding.ASCII.GetBytes("SPAK"));
+            writer.Write((uint)1);
+            writer.Write((uint)1);
+            writer.Write(System.Text.Encoding.ASCII.GetBytes("feedfacecafebeef"));
+            writer.Write((uint)0);
+            writer.Write((uint)png.Length);
+            writer.Write((uint)0);
+            writer.Write(png);
         }
     }
 
