@@ -323,7 +323,8 @@ namespace RpgmvpConverterWinForms
                 || engine == GameEngine.Godot
                 || engine == GameEngine.Kirikiri
                 || engine == GameEngine.Unreal
-                || engine == GameEngine.GameMaker;
+                || engine == GameEngine.GameMaker
+                || engine == GameEngine.SpakDat;
         }
 
         private void BeginUi(Action action)

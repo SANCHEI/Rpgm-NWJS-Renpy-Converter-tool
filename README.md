@@ -29,7 +29,7 @@ Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **RP
 - Extracts Unreal PAK archives with Zlib, Gzip, LZ4, Zstd and local Oodle decoding in an experimental offline mode.
 - Collects static HTML games, QSP databases and loose resources.
 - Preserves RAGS `.rag` databases and recovers confidently detected embedded media experimentally.
-- Splits SPAK `.dat` containers into individual entries, collects adjacent DAT files and preserves protected blocks with a manifest.
+- Splits SPAK `.dat` containers and decodes recoverable SPITE ChaCha20 media paths from embedded Tauri frontend bundles.
 - Provides **Collect Loose Files** and unknown-format signature recovery fallback actions.
 - Preserves relative paths and renames collisions with suffixes such as `image (2).png`.
 - Opens a searchable results gallery with background indexing, lazy thumbnail batches, enlarged image previews and SVG, audio and video filters.
@@ -162,7 +162,7 @@ GameMaker recovery accepts a folder containing `data.win` or the file itself. It
 
 ## SPAK DAT Experimental
 
-SPAK recovery accepts a folder containing `.dat` containers or an individual SPAK `.dat` file. It streams container entries into `extracted/spak-dat/archives/`, collects adjacent DAT files into `extracted/spak-dat/external/`, infers common open-media extensions and writes `SPAK-DAT-manifest.txt`. Protected SPITE payloads remain `.dat` blocks because their ChaCha20 context depends on the original runtime resource path.
+SPAK recovery accepts a folder containing `.dat` containers or an individual SPAK `.dat` file. For SPITE games it reads the embedded Tauri frontend bundle, recovers available runtime media paths and decodes matching ChaCha20 payloads into `extracted/spak-dat/decoded/`. Blocks without a recoverable path remain `.dat` files under `extracted/spak-dat/protected/`. Every result is listed in `SPAK-DAT-manifest.txt`.
 
 ## Loose Files And Diagnostics
 

@@ -756,8 +756,8 @@ namespace RpgmvpConverterWinForms
                     break;
                 case GameEngine.SpakDat:
                     extractionHintLabel.Text = T(
-                        "Experimental SPAK DAT extraction splits container entries and collects external DAT files. Protected entries remain .dat files and are listed in the manifest.",
-                        "Экспериментальное извлечение SPAK DAT разделяет записи контейнера и собирает внешние DAT-файлы. Защищённые записи сохраняются как .dat и перечисляются в manifest.");
+                        "Experimental SPAK DAT / SPITE extraction decodes resources whose runtime paths can be recovered. Remaining protected blocks stay as .dat files in protected/.",
+                        "Экспериментальное извлечение SPAK DAT / SPITE декодирует ресурсы с восстановленными runtime-путями. Остальные защищённые блоки остаются .dat-файлами в protected/.");
                     break;
                 default:
                     extractionHintLabel.Text = T(

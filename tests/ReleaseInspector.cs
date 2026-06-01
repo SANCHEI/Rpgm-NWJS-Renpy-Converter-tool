@@ -34,6 +34,7 @@ internal static class ReleaseInspector
             bool hasXp3Script = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.scripts.extract_xp3.py");
             bool hasUnrealScript = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.scripts.extract_unreal.py");
             bool hasGameMakerScript = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.scripts.extract_gamemaker.py");
+            bool hasSpiteScript = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.scripts.extract_spite.py");
             bool hasPortableRuntime = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.runtime.runtime-win-x64.zip");
             bool hasWolfCli = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.tools.UberWolfCli.exe");
             bool hasResvg = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.tools.resvg.exe");
@@ -276,6 +277,7 @@ internal static class ReleaseInspector
             Console.WriteLine("EmbeddedXp3Script=" + hasXp3Script);
             Console.WriteLine("EmbeddedUnrealScript=" + hasUnrealScript);
             Console.WriteLine("EmbeddedGameMakerScript=" + hasGameMakerScript);
+            Console.WriteLine("EmbeddedSpiteScript=" + hasSpiteScript);
             Console.WriteLine("EmbeddedPortableRuntime=" + hasPortableRuntime);
             Console.WriteLine("EmbeddedWolfCli=" + hasWolfCli);
             Console.WriteLine("EmbeddedResvg=" + hasResvg);
@@ -330,6 +332,7 @@ internal static class ReleaseInspector
                 && hasXp3Script
                 && hasUnrealScript
                 && hasGameMakerScript
+                && hasSpiteScript
                 && hasPortableRuntime
                 && hasWolfCli
                 && hasResvg

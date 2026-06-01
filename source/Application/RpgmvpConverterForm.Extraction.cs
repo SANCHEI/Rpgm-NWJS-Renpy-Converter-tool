@@ -601,12 +601,11 @@ namespace RpgmvpConverterWinForms
 
         private async Task StartSpakDatExtractionAsync()
         {
-            await StartLocalExtractionAsync("SPAK DAT experimental", "spak-dat", delegate(string inputPath, string outputDir)
-            {
-                DateTime start = DateTime.UtcNow;
-                CollectorResult extracted = AssetExtractorRegistry.Find("spak-dat").Extract(inputPath, outputDir);
-                return new OperationResult("SPAK DAT experimental", outputDir, extracted.Extracted, extracted.Bytes, 0, extracted.Renamed, extracted.Skipped, DateTime.UtcNow - start);
-            });
+            await StartPortableScriptExtractionAsync(
+                "SPAK DAT / SPITE experimental",
+                "spak-dat",
+                "extract_spite.py",
+                "RpgmvpConverterWinForms.scripts.extract_spite.py");
         }
 
         private async Task StartLooseResourceCollectionAsync()

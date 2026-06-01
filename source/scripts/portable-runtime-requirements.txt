@@ -10,6 +10,7 @@ fsspec==2026.4.0
 lz4==4.4.5
 Pillow==12.2.0
 pyfmodex==0.7.2
+pycryptodome==3.23.0
 texture2ddecoder==1.0.6
 pyuepak==0.2.7
 zstandard==0.25.0

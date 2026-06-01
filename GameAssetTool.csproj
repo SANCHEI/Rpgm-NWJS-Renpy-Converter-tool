@@ -70,6 +70,9 @@
     <EmbeddedResource Include="source\scripts\extract_gamemaker.py">
       <LogicalName>RpgmvpConverterWinForms.scripts.extract_gamemaker.py</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="source\scripts\extract_spite.py">
+      <LogicalName>RpgmvpConverterWinForms.scripts.extract_spite.py</LogicalName>
+    </EmbeddedResource>
     <EmbeddedResource Include="payload\runtime-win-x64.zip">
       <LogicalName>RpgmvpConverterWinForms.runtime.runtime-win-x64.zip</LogicalName>
     </EmbeddedResource>

@@ -99,7 +99,7 @@ Accepts a folder containing `data.win` or the file itself. The original containe
 
 ## SPAK DAT Experimental
 
-SPAK `.dat` containers can be split into individual entries without loading the full archive into memory. Adjacent DAT files are collected as well. Open media receives a useful extension automatically, while protected blocks remain `.dat` files and are listed in `SPAK-DAT-manifest.txt`.
+SPAK `.dat` containers can be split without loading the full archive into memory. For SPITE games the tool reads embedded Tauri frontend routes and decodes matching ChaCha20 media into `decoded/`. Unresolved protected blocks remain `.dat` files under `protected/`, with every result listed in `SPAK-DAT-manifest.txt`.
 
 ## Loose Files And Unknown Formats
 

@@ -1,6 +1,8 @@
 import bz2
+import brotli
 import gzip
 import hashlib
+import importlib.util
 import os
 import pathlib
 import shutil
@@ -160,6 +162,82 @@ def build_gamemaker(path, _):
     path.write_bytes(fioq + bz2qoi)
 
 
+def load_script(script_name):
+    path = ROOT / "source" / "scripts" / script_name
+    spec = importlib.util.spec_from_file_location(path.stem, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def build_spite(game):
+    module = load_script("extract_spite.py")
+    key_material = bytes(range(48))
+    external_route = "hscenes/sample.mp4"
+    external_plain = b"\0\0\0\x20ftypisom\0\0\x02\0isomiso2avc1mp41"
+    archive_route = "images/sample.png"
+    archive_plain = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDRsynthetic-spite"
+    javascript = 'const video="{}";const image="{}";'.format(external_route, archive_route).encode("utf-8")
+    compressed = brotli.compress(javascript)
+
+    executable = bytearray(0x2000)
+    pe_offset = 0x80
+    optional_offset = pe_offset + 24
+    section_offset = optional_offset + 0xF0
+    image_base = 0x140000000
+    section_va = 0x1000
+    section_raw = 0x400
+
+    def virtual_address(raw_offset):
+        return image_base + section_va + raw_offset - section_raw
+
+    executable[:2] = b"MZ"
+    struct.pack_into("<I", executable, 0x3C, pe_offset)
+    executable[pe_offset:pe_offset + 4] = b"PE\0\0"
+    struct.pack_into("<H", executable, pe_offset + 4, 0x8664)
+    struct.pack_into("<H", executable, pe_offset + 6, 1)
+    struct.pack_into("<H", executable, pe_offset + 20, 0xF0)
+    struct.pack_into("<H", executable, optional_offset, 0x20B)
+    struct.pack_into("<Q", executable, optional_offset + 24, image_base)
+    executable[section_offset:section_offset + 8] = b".rdata\0\0"
+    struct.pack_into("<IIII", executable, section_offset + 8, 0x1C00, section_va, 0x1C00, section_raw)
+
+    key_offset = 0x500
+    value_offset = 0x600
+    marker_offset = 0x900
+    key = b"/assets/index-test.js"
+    executable[key_offset:key_offset + len(key)] = key
+    executable[value_offset:value_offset + len(compressed)] = compressed
+    executable[marker_offset - len(key_material):marker_offset] = key_material
+    executable[marker_offset:marker_offset + len(module.SPITE_MARKER)] = module.SPITE_MARKER
+    struct.pack_into(
+        "<QQQQ",
+        executable,
+        0x480,
+        virtual_address(key_offset),
+        len(key),
+        virtual_address(value_offset),
+        len(compressed),
+    )
+    (game / "spite.exe").write_bytes(executable)
+
+    data = game / "data"
+    data.mkdir()
+    external_identifier = module.route_identifier(external_route)
+    external_encrypted = module.derive_cipher(key_material, external_route).encrypt(external_plain)
+    (data / (external_identifier + ".dat")).write_bytes(external_encrypted)
+
+    archive_identifier = module.route_identifier(archive_route)
+    archive_encrypted = module.derive_cipher(key_material, archive_route).encrypt(archive_plain)
+    with (data / "_archive.dat").open("wb") as stream:
+        stream.write(b"SPAK")
+        stream.write(struct.pack("<II", 1, 1))
+        stream.write(archive_identifier.encode("ascii"))
+        stream.write(struct.pack("<III", 0, len(archive_encrypted), 0))
+        stream.write(archive_encrypted)
+    return external_route, external_plain, archive_route, archive_plain
+
+
 def assert_unreal_compressions():
     from lz4.block import compress as lz4_compress
     from pyuepak.entry import Entry
@@ -239,6 +317,15 @@ def main():
             with Image.open(preview) as image:
                 assert image.convert("RGBA").getpixel((0, 0)) == (10, 20, 30, 255)
         print("gamemaker-qoi=ok")
+
+        spite_game = temp / "spite" / "game"
+        spite_output = temp / "spite" / "output"
+        spite_game.mkdir(parents=True)
+        external_route, external_plain, archive_route, archive_plain = build_spite(spite_game)
+        assert "RESULT:2:" in run_script("extract_spite.py", spite_game, spite_output)
+        assert (spite_output / "decoded" / external_route).read_bytes() == external_plain
+        assert (spite_output / "decoded" / archive_route).read_bytes() == archive_plain
+        print("spite-dat=ok")
 
         assert_unreal_compressions()
         print("unreal-compressions=ok")

@@ -1,12 +1,14 @@
 # Third-Party Components
 
-Game Asset Tool embeds a private portable runtime for optional Ren'Py, Unity and Unreal extraction:
+Game Asset Tool embeds a private portable runtime for optional Ren'Py, Unity, Unreal and SPITE extraction:
 
 - CPython `3.12.10` embeddable distribution: https://www.python.org/
 - `unrpa==2.3.0` for Ren'Py `.rpa` extraction: https://github.com/Lattyware/unrpa
 - `UnityPy==1.25.0` for Unity asset extraction: https://github.com/K0lb3/UnityPy
 - `pyuepak==0.2.7` for experimental Unreal `.pak` extraction: https://github.com/stas96111/pyUEpak
 - `zstandard==0.25.0` for Unreal Zstd decompression: https://github.com/indygreg/python-zstandard
+- `brotli==1.2.0` for embedded Tauri frontend decompression: https://github.com/google/brotli
+- `pycryptodome==3.23.0` for SPITE ChaCha20 stream decoding: https://github.com/Legrandin/pycryptodome
 
 The upstream `pyuepak` package can acquire an Oodle DLL at runtime and normally uses the `cryptography` package for AES. Game Asset Tool replaces those integrations with offline local-DLL discovery and the built-in Windows `bcrypt.dll` API. It does not download or redistribute the Oodle DLL. For Oodle-compressed Unreal archives, it searches for `oo2core*_win64.dll` inside the selected game and installed Unreal Engine folders; if no local decoder is available, the archive is reported and skipped.
 

@@ -21,7 +21,7 @@
 | Unreal | Experimental | Offline `.pak` extraction; Zlib, Gzip, LZ4, Zstd, AES-key lists and local Oodle DLL workflows |
 | RAGS | Experimental | Preserves `.rag` databases and carves confidently detected JPEG, PNG, GIF and OGG media |
 | GameMaker | Experimental | Preserves `data.win`, collects open images and converts embedded PNG, QOI and BZ2QOI texture pages |
-| SPAK DAT | Experimental | Splits SPAK `.dat` containers, collects adjacent DAT files, identifies open media and preserves protected entries with a manifest |
+| SPAK DAT / SPITE | Experimental | Splits SPAK `.dat`, recovers Tauri frontend media paths, decodes matching SPITE ChaCha20 payloads and preserves unresolved blocks |
 | Unknown formats | Recovery | Carves embedded PNG, JPEG, GIF, OGG, WAV and WebP assets and writes diagnostics |
 
 ## Known Limits
@@ -34,7 +34,7 @@
 - Unreal IoStore `.utoc/.ucas` containers are detected and reported, but not extracted.
 - RAGS recovery is not a complete database parser. It preserves the original `.rag` and extracts only confidently detected embedded media.
 - GameMaker recovery does not yet decode every external-texture layout.
-- SPAK recovery preserves protected SPITE ChaCha20 payloads as `.dat` entries. Their key context depends on the original runtime resource path, so generic protected-media decoding is not yet available.
+- SPITE ChaCha20 decoding depends on runtime resource paths recovered from the embedded Tauri frontend. Unreferenced or dynamically generated paths remain `.dat` files under `protected/`.
 
 ## Next Priorities
 

@@ -138,7 +138,7 @@ internal static class RealGameSmoke
         if (engine == "GameMaker")
             return FromOperation(Invoke(formType, form, "RunPortableScriptExtraction", game, Path.Combine(gameOutput, "gamemaker"), "GameMaker experimental", "extract_gamemaker.py", "RpgmvpConverterWinForms.scripts.extract_gamemaker.py", ""));
         if (engine == "SpakDat")
-            return FromCollector(InvokeAssetExtractor(formType.Assembly, "SpakDatExtractor", game, Path.Combine(gameOutput, "spak-dat")), Path.Combine(gameOutput, "spak-dat"));
+            return FromOperation(Invoke(formType, form, "RunPortableScriptExtraction", game, Path.Combine(gameOutput, "spak-dat"), "SPAK DAT / SPITE experimental", "extract_spite.py", "RpgmvpConverterWinForms.scripts.extract_spite.py", ""));
         if (engine == "Unknown")
             return FromCollector(InvokeExtractorStatic(formType.Assembly, "SignatureAssetExtractor", "Extract", game, Path.Combine(gameOutput, "signature-recovery")), Path.Combine(gameOutput, "signature-recovery"));
         return SmokeResult.CreateSkipped(gameOutput, "unsupported");
