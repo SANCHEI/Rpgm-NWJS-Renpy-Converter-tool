@@ -322,7 +322,8 @@ namespace RpgmvpConverterWinForms
                 || engine == GameEngine.Unity
                 || engine == GameEngine.Godot
                 || engine == GameEngine.Kirikiri
-                || engine == GameEngine.Unreal;
+                || engine == GameEngine.Unreal
+                || engine == GameEngine.GameMaker;
         }
 
         private void BeginUi(Action action)
@@ -681,7 +682,7 @@ namespace RpgmvpConverterWinForms
             {
                 return string.Join(Environment.NewLine, new[]
                 {
-                    "Game Asset Tool v2.0.0 report",
+                    "Game Asset Tool v2.1.0 report",
                     "Engine: " + Engine,
                     "Extracted files: " + Extracted,
                     "Extracted size: " + FormatBytes(Bytes),

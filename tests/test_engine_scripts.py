@@ -1,3 +1,5 @@
+import bz2
+import gzip
 import hashlib
 import os
 import pathlib
@@ -8,7 +10,9 @@ import sys
 import tempfile
 import zlib
 
+from PIL import Image
 from pyuepak import PakFile
+from pyuepak.aes_windows import aes_cfb_encrypt
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -16,10 +20,11 @@ MAGIC_GODOT = b"GDPC"
 MAGIC_XP3 = b"XP3\r\n \n\x1a\x8bg\x01"
 
 
-def run_script(script_name, game_path, output_path):
+def run_script(script_name, game_path, output_path, optional_key=""):
     environment = os.environ.copy()
     environment["GAME_PATH"] = str(game_path)
     environment["OUTPUT_PATH"] = str(output_path)
+    environment["OPTIONAL_KEY"] = optional_key
     process = subprocess.run(
         [sys.executable, str(ROOT / "source" / "scripts" / script_name)],
         env=environment,
@@ -86,6 +91,37 @@ def build_godot_v3(path, data):
         stream.write(data)
 
 
+def godot_encrypted_block(data, key):
+    iv = bytes(range(16))
+    padded = data + b"\0" * ((-len(data)) & 15)
+    return hashlib.md5(data).digest() + struct.pack("<Q", len(data)) + iv + aes_cfb_encrypt(key, iv, padded)
+
+
+def build_godot_encrypted_v2(path, data):
+    key = bytes.fromhex("00112233445566778899aabbccddeeff" * 2)
+    filename = b"res://sample/encrypted.txt"
+    directory_size = 4 + len(filename) + 8 + 8 + 16 + 4
+    prefix_size = 4 + 4 * 4 + 4 + 8 + 16 * 4 + 4
+    encrypted_directory_size = 16 + 8 + 16 + ((directory_size + 15) & ~15)
+    file_offset = prefix_size + encrypted_directory_size
+    directory = (
+        struct.pack("<I", len(filename))
+        + filename
+        + struct.pack("<QQ", file_offset, len(data))
+        + hashlib.md5(data).digest()
+        + struct.pack("<I", 1)
+    )
+    with path.open("wb") as stream:
+        stream.write(MAGIC_GODOT)
+        stream.write(struct.pack("<IIII", 2, 4, 0, 0))
+        stream.write(struct.pack("<IQ", 1, 0))
+        stream.write(b"\0" * (16 * 4))
+        stream.write(struct.pack("<I", 1))
+        stream.write(godot_encrypted_block(directory, key))
+        stream.write(godot_encrypted_block(data, key))
+    (path.parent / "keys.txt").write_text(key.hex(), encoding="ascii")
+
+
 def xp3_chunk(name, value):
     return name + struct.pack("<Q", len(value)) + value
 
@@ -107,6 +143,53 @@ def build_xp3(path, data):
         stream.write(compressed_index)
 
 
+def build_tlg5(color):
+    red, green, blue, alpha = color
+    planes = (blue - green & 0xFF, green, red - green & 0xFF, alpha)
+    return TLG5 + bytes((4,)) + struct.pack("<III", 1, 1, 1) + struct.pack("<I", 0) + b"".join(
+        b"\x01" + struct.pack("<I", 1) + bytes((value,)) for value in planes
+    )
+
+
+TLG5 = b"TLG5.0\0raw\x1a"
+
+
+def build_gamemaker(path, _):
+    fioq = b"fioq" + struct.pack("<HHI", 1, 1, 5) + bytes((0xFF, 10, 20, 30, 255))
+    bz2qoi = b"2zoq" + b"\0" * 4 + bz2.compress(fioq)
+    path.write_bytes(fioq + bz2qoi)
+
+
+def assert_unreal_compressions():
+    from lz4.block import compress as lz4_compress
+    from pyuepak.entry import Entry
+    from pyuepak.file_io import Reader
+    from pyuepak.utils import COMPRESSION
+    from pyuepak.version import PakVersion
+    from zstandard import ZstdCompressor
+
+    raw = b"unreal-compression-ok-" * 64
+    cases = (
+        (COMPRESSION.Gzip, gzip.compress(raw)),
+        (COMPRESSION.LZ4, lz4_compress(raw, store_size=False)),
+        (COMPRESSION.Zstd, ZstdCompressor().compress(raw)),
+    )
+    for compression, compressed in cases:
+        header = (
+            struct.pack("<QQQI", 0, len(compressed), len(raw), compression.value - 1)
+            + hashlib.sha1(raw).digest()
+            + struct.pack("<I", 0)
+            + b"\0"
+            + struct.pack("<I", len(raw))
+        )
+        entry = Entry()
+        entry.offset = 0
+        entry.size = len(raw)
+        entry.compressed_size = len(compressed)
+        entry.compression = compression
+        assert entry.read_file(Reader(header + compressed), PakVersion.V3, bytes(32)) == raw
+
+
 def build_unreal(path, data):
     pak = PakFile()
     pak.add_file("sample/hello.txt", data)
@@ -120,6 +203,7 @@ def main():
             ("godot-v1", "extract_godot.py", build_godot_v1, ".pck", b"godot-v1-ok"),
             ("godot-v2", "extract_godot.py", build_godot_v2, ".pck", b"godot-v2-ok"),
             ("godot-v3", "extract_godot.py", build_godot_v3, ".pck", b"godot-v3-ok"),
+            ("godot-encrypted-v2", "extract_godot.py", build_godot_encrypted_v2, ".pck", b"godot-encrypted-ok"),
             ("xp3", "extract_xp3.py", build_xp3, ".xp3", b"xp3-ok"),
             ("unreal", "extract_unreal.py", build_unreal, ".pak", b"unreal-ok"),
         ]
@@ -132,6 +216,32 @@ def main():
             assert "RESULT:1:" in log
             assert_extracted(output, content)
             print("{}=ok".format(label))
+
+        tlg_game = temp / "xp3-tlg5" / "game"
+        tlg_output = temp / "xp3-tlg5" / "output"
+        tlg_game.mkdir(parents=True)
+        tlg = build_tlg5((120, 80, 40, 255))
+        build_xp3(tlg_game / "sample.xp3", tlg)
+        assert "RESULT:2:" in run_script("extract_xp3.py", tlg_game, tlg_output)
+        preview = next(tlg_output.rglob("hello.png"))
+        with Image.open(preview) as image:
+            assert image.convert("RGBA").getpixel((0, 0)) == (120, 80, 40, 255)
+        print("xp3-tlg5=ok")
+
+        gamemaker_game = temp / "gamemaker" / "game"
+        gamemaker_output = temp / "gamemaker" / "output"
+        gamemaker_game.mkdir(parents=True)
+        build_gamemaker(gamemaker_game / "data.win", b"")
+        assert "RESULT:5:" in run_script("extract_gamemaker.py", gamemaker_game, gamemaker_output)
+        previews = sorted(gamemaker_output.rglob("*.png"))
+        assert len(previews) == 2
+        for preview in previews:
+            with Image.open(preview) as image:
+                assert image.convert("RGBA").getpixel((0, 0)) == (10, 20, 30, 255)
+        print("gamemaker-qoi=ok")
+
+        assert_unreal_compressions()
+        print("unreal-compressions=ok")
 
         fallback_environment = os.environ.copy()
         fallback_environment["GAME_PATH"] = str(temp / "no-local-oodle")
@@ -157,10 +267,15 @@ def main():
             raise AssertionError("Oodle fallback failed:\n{}\n{}".format(fallback.stdout, fallback.stderr))
         print(fallback.stdout.strip())
 
-        from pyuepak.aes_windows import aes_ecb_decrypt
+        from pyuepak.aes_windows import aes_cfb_decrypt, aes_ecb_decrypt
         key = bytes.fromhex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
         encrypted = bytes.fromhex("8ea2b7ca516745bfeafc49904b496089")
         assert aes_ecb_decrypt(key, encrypted).hex() == "00112233445566778899aabbccddeeff"
+        cfb_key = bytes.fromhex("603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914dff4")
+        cfb_iv = bytes.fromhex("000102030405060708090a0b0c0d0e0f")
+        cfb_plain = bytes.fromhex("6bc1bee22e409f96e93d7e117393172a")
+        cfb_encrypted = bytes.fromhex("dc7e84bfda79164b7ecd8486985d3860")
+        assert aes_cfb_decrypt(cfb_key, cfb_iv, cfb_encrypted) == cfb_plain
         print("windows_aes=ok")
     finally:
         shutil.rmtree(temp, ignore_errors=True)

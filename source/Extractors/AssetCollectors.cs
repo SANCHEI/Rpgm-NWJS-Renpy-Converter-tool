@@ -17,11 +17,6 @@ namespace RpgmvpConverterWinForms
             ".ttf", ".otf", ".woff", ".woff2",
             ".qsp", ".qproj", ".rpy", ".rpyc", ".rpym", ".rpymc", ".ks"
         };
-        private static readonly HashSet<string> gameMakerImageExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".ico", ".tif", ".tiff"
-        };
-        private static readonly byte[] pngSignature = { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
 
         public static bool IsHtmlGame(string inputPath)
         {
@@ -158,54 +153,6 @@ namespace RpgmvpConverterWinForms
             return new CollectorResult(extracted, bytes, renamed, skipped);
         }
 
-        public static CollectorResult ExtractGameMaker(string inputPath, string outputDir)
-        {
-            List<string> files = FindGameMakerFiles(inputPath);
-            int extracted = 0;
-            long bytes = 0;
-            int renamed = 0;
-            int skipped = 0;
-            Directory.CreateDirectory(outputDir);
-
-            foreach (string source in files)
-            {
-                try
-                {
-                    string original = SafeOutputPath(outputDir, Path.Combine("originals", Path.GetFileName(source)));
-                    original = UniqueFilePath(original, ref renamed);
-                    Directory.CreateDirectory(Path.GetDirectoryName(original));
-                    File.Copy(source, original);
-                    extracted++;
-                    bytes += new FileInfo(original).Length;
-
-                    CollectorResult pages = ExtractPngPages(source, outputDir, Path.Combine("embedded", Path.GetFileNameWithoutExtension(source)));
-                    extracted += pages.Extracted;
-                    bytes += pages.Bytes;
-                    renamed += pages.Renamed;
-                    skipped += pages.Skipped;
-                }
-                catch
-                {
-                    skipped++;
-                }
-            }
-
-            string root = InputDirectory(inputPath);
-            List<string> external = GetLooseResourceFiles(root, outputDir)
-                .Where(delegate(string path)
-                {
-                    return gameMakerImageExtensions.Contains(Path.GetExtension(path))
-                        && !Path.GetFileName(path).Equals("data.win", StringComparison.OrdinalIgnoreCase);
-                })
-                .ToList();
-            CollectorResult copied = CopyFiles(root, external, outputDir, "external");
-            return new CollectorResult(
-                extracted + copied.Extracted,
-                bytes + copied.Bytes,
-                renamed + copied.Renamed,
-                skipped + copied.Skipped);
-        }
-
         public static string WriteDiagnostics(string inputPath, string outputDir)
         {
             string root = InputDirectory(inputPath);
@@ -312,120 +259,6 @@ namespace RpgmvpConverterWinForms
                 offset = end;
             }
             return new CollectorResult(extracted, bytes, renamed, skipped);
-        }
-
-        private static CollectorResult ExtractPngPages(string source, string outputDir, string folder)
-        {
-            int extracted = 0;
-            long bytes = 0;
-            int renamed = 0;
-            int skipped = 0;
-            using (FileStream input = File.OpenRead(source))
-            {
-                long searchOffset = 0;
-                long start;
-                while ((start = FindSignature(input, pngSignature, searchOffset)) >= 0)
-                {
-                    string part = Path.Combine(outputDir, ".png-page-" + Guid.NewGuid().ToString("N") + ".part");
-                    try
-                    {
-                        input.Position = start + pngSignature.Length;
-                        using (FileStream output = File.Create(part))
-                        {
-                            output.Write(pngSignature, 0, pngSignature.Length);
-                            if (!CopyPngChunks(input, output))
-                                throw new InvalidDataException("Invalid embedded PNG texture page.");
-                        }
-
-                        string destination = SafeOutputPath(outputDir, Path.Combine(folder, "texture-page-" + (extracted + 1).ToString("0000") + ".png"));
-                        destination = UniqueFilePath(destination, ref renamed);
-                        Directory.CreateDirectory(Path.GetDirectoryName(destination));
-                        File.Move(part, destination);
-                        extracted++;
-                        bytes += new FileInfo(destination).Length;
-                        searchOffset = input.Position;
-                    }
-                    catch
-                    {
-                        skipped++;
-                        TryDelete(part);
-                        searchOffset = start + 1;
-                    }
-                }
-            }
-            return new CollectorResult(extracted, bytes, renamed, skipped);
-        }
-
-        private static long FindSignature(Stream stream, byte[] signature, long offset)
-        {
-            stream.Position = Math.Max(offset, 0);
-            int matched = 0;
-            int value;
-            while ((value = stream.ReadByte()) >= 0)
-            {
-                if (value == signature[matched])
-                {
-                    matched++;
-                    if (matched == signature.Length)
-                        return stream.Position - signature.Length;
-                }
-                else
-                {
-                    matched = value == signature[0] ? 1 : 0;
-                }
-            }
-            return -1;
-        }
-
-        private static bool CopyPngChunks(Stream input, Stream output)
-        {
-            byte[] header = new byte[8];
-            for (int chunk = 0; chunk < 100000; chunk++)
-            {
-                if (!ReadExactly(input, header, 0, header.Length)) return false;
-                int length = ReadBigEndianInt32(header, 0);
-                if (length < 0 || length > 256 * 1024 * 1024 || input.Length - input.Position < length + 4L)
-                    return false;
-                string type = Encoding.ASCII.GetString(header, 4, 4);
-                if (chunk == 0 && type != "IHDR") return false;
-                output.Write(header, 0, header.Length);
-                if (!CopyExactly(input, output, length + 4L)) return false;
-                if (type == "IEND") return length == 0;
-            }
-            return false;
-        }
-
-        private static int ReadBigEndianInt32(byte[] bytes, int offset)
-        {
-            return (bytes[offset] << 24)
-                | (bytes[offset + 1] << 16)
-                | (bytes[offset + 2] << 8)
-                | bytes[offset + 3];
-        }
-
-        private static bool ReadExactly(Stream input, byte[] buffer, int offset, int count)
-        {
-            while (count > 0)
-            {
-                int read = input.Read(buffer, offset, count);
-                if (read <= 0) return false;
-                offset += read;
-                count -= read;
-            }
-            return true;
-        }
-
-        private static bool CopyExactly(Stream input, Stream output, long count)
-        {
-            byte[] buffer = new byte[64 * 1024];
-            while (count > 0)
-            {
-                int read = input.Read(buffer, 0, (int)Math.Min(buffer.Length, count));
-                if (read <= 0) return false;
-                output.Write(buffer, 0, read);
-                count -= read;
-            }
-            return true;
         }
 
         private static int ReadOggEnd(byte[] data, int offset)

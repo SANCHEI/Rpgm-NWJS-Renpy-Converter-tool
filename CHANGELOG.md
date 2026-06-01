@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.1.0 - 2026-06-01
+
+- Added unknown-format signature recovery for embedded PNG, JPEG, GIF, OGG, WAV and WebP assets while retaining a diagnostic report.
+- Added GameMaker QOI and BZ2QOI texture-page conversion to PNG through an embedded script.
+- Added Godot encrypted PCK directory and file extraction with a manual key field plus `keys.txt` and textual EXE-key discovery.
+- Added adjacent PNG previews for supported KiriKiri TLG5 images extracted from XP3 archives.
+- Added Unreal AES-key lists from the input field, `keys.txt` and textual EXE candidates, plus SHA-1 validation for extracted files.
+- Added Unreal Gzip, LZ4 and Zstd decompression alongside existing Zlib and local Oodle workflows.
+- Extended synthetic coverage for encrypted Godot PCK, TLG5 previews, GameMaker QOI/BZ2QOI, Windows AES-CFB128 and Unreal compression methods.
+
 ## 2.0.0 - 2026-06-01
 
 - Split Java SVG preview rendering and Flash SWF image recovery out of the main WinForms class into dedicated modules.

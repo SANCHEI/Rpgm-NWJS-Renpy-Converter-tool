@@ -45,6 +45,7 @@
     <Compile Include="source\Extractors\IAssetExtractor.cs" />
     <Compile Include="source\Extractors\JavaSvgPreviewRenderer.cs" />
     <Compile Include="source\Extractors\LegacyRpgMakerExtractor.cs" />
+    <Compile Include="source\Extractors\SignatureAssetExtractor.cs" />
     <Compile Include="source\Features\UnlockerResources.cs" />
     <Compile Include="source\Runtime\EmbeddedScripts.cs" />
     <Compile Include="source\Runtime\ApplicationIcon.cs" />
@@ -64,6 +65,9 @@
     </EmbeddedResource>
     <EmbeddedResource Include="source\scripts\extract_unreal.py">
       <LogicalName>RpgmvpConverterWinForms.scripts.extract_unreal.py</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="source\scripts\extract_gamemaker.py">
+      <LogicalName>RpgmvpConverterWinForms.scripts.extract_gamemaker.py</LogicalName>
     </EmbeddedResource>
     <EmbeddedResource Include="payload\runtime-win-x64.zip">
       <LogicalName>RpgmvpConverterWinForms.runtime.runtime-win-x64.zip</LogicalName>

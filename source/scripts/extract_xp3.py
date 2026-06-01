@@ -3,11 +3,17 @@ import struct
 import sys
 import zlib
 
+from PIL import Image
+
 
 MAGIC = b"XP3\r\n \n\x1a\x8bg\x01"
 INDEX_CONTINUES = 0x80
 INDEX_COMPRESSED = 0x01
 SEGMENT_COMPRESSED = 0x01
+TLG0 = b"TLG0.0\0sds\x1a"
+TLG5 = b"TLG5.0\0raw\x1a"
+TLG6 = b"TLG6.0\0raw\x1a"
+MAX_TLG_PIXELS = 4096 * 4096
 
 
 def read_exact(stream, size):
@@ -120,6 +126,122 @@ def unique_path(path):
         suffix += 1
 
 
+def lzss_decompress(context, input_data, output_size):
+    output = bytearray()
+    position = 0
+    flags = 0
+    while position < len(input_data) and len(output) < output_size:
+        flags >>= 1
+        if flags & 0x100 != 0x100:
+            flags = input_data[position] | 0xFF00
+            position += 1
+        if flags & 1:
+            if position + 2 > len(input_data):
+                raise ValueError("TLG5 LZSS block is truncated.")
+            first, second = input_data[position:position + 2]
+            position += 2
+            dictionary_position = first | (second & 0x0F) << 8
+            length = 3 + (second >> 4)
+            if length == 18:
+                if position >= len(input_data):
+                    raise ValueError("TLG5 LZSS run is truncated.")
+                length += input_data[position]
+                position += 1
+            for _ in range(length):
+                value = context[0][dictionary_position]
+                dictionary_position = (dictionary_position + 1) & 0xFFF
+                context[0][context[1]] = value
+                context[1] = (context[1] + 1) & 0xFFF
+                output.append(value)
+                if len(output) == output_size:
+                    break
+        else:
+            if position >= len(input_data):
+                raise ValueError("TLG5 LZSS literal is truncated.")
+            value = input_data[position]
+            position += 1
+            context[0][context[1]] = value
+            context[1] = (context[1] + 1) & 0xFFF
+            output.append(value)
+    if len(output) != output_size:
+        raise ValueError("TLG5 LZSS output size mismatch.")
+    return output
+
+
+def decode_tlg5(content):
+    if content.startswith(TLG0):
+        if len(content) < 15:
+            raise ValueError("TLG0 wrapper is truncated.")
+        content = content[15:]
+    if not content.startswith(TLG5) or len(content) < 24:
+        raise ValueError("TLG5 header was not found.")
+
+    channels = content[11]
+    width, height, block_height = struct.unpack_from("<III", content, 12)
+    if channels not in (3, 4) or not width or not height or not block_height or width * height > MAX_TLG_PIXELS:
+        raise ValueError("Unsupported TLG5 dimensions or channel count.")
+    position = 24 + ((height - 1) // block_height + 1) * 4
+    context = [bytearray(4096), 0]
+    pixels = bytearray(width * height * 4)
+    previous = bytearray(width * 4)
+
+    for block_y in range(0, height, block_height):
+        rows = min(block_height, height - block_y)
+        plane_size = width * rows
+        planes = []
+        for _ in range(channels):
+            if position + 5 > len(content):
+                raise ValueError("TLG5 block header is truncated.")
+            marker = content[position]
+            size = struct.unpack_from("<I", content, position + 1)[0]
+            position += 5
+            if position + size > len(content):
+                raise ValueError("TLG5 block is truncated.")
+            block = content[position:position + size]
+            position += size
+            planes.append(lzss_decompress(context, block, plane_size) if marker == 0 else bytearray(block))
+            if len(planes[-1]) != plane_size:
+                raise ValueError("TLG5 raw plane size mismatch.")
+
+        for row in range(rows):
+            current = bytearray(width * 4)
+            previous_r = previous_g = previous_b = previous_a = 0
+            row_offset = row * width
+            for x in range(width):
+                index = row_offset + x
+                blue = (planes[0][index] + planes[1][index]) & 0xFF
+                green = planes[1][index]
+                red = (planes[2][index] + green) & 0xFF
+                alpha = planes[3][index] if channels == 4 else 0xFF
+                previous_r = (previous_r + red + previous[x * 4]) & 0xFF
+                previous_g = (previous_g + green + previous[x * 4 + 1]) & 0xFF
+                previous_b = (previous_b + blue + previous[x * 4 + 2]) & 0xFF
+                previous_a = (previous_a + alpha + previous[x * 4 + 3]) & 0xFF if channels == 4 else 0xFF
+                current[x * 4:x * 4 + 4] = bytes((previous_r, previous_g, previous_b, previous_a))
+            target = (block_y + row) * width * 4
+            pixels[target:target + width * 4] = current
+            previous = current
+    return Image.frombytes("RGBA", (width, height), bytes(pixels))
+
+
+def save_tlg_preview(content, destination):
+    raw = bytes(content)
+    wrapped = raw[15:] if raw.startswith(TLG0) and len(raw) >= 15 else raw
+    if wrapped.startswith(TLG6):
+        print("WARN:{}: TLG6 preview conversion is not supported yet.".format(os.path.basename(destination)))
+        return 0, 0
+    if not wrapped.startswith(TLG5):
+        return 0, 0
+    preview = os.path.splitext(destination)[0] + ".png"
+    preview, renamed = unique_path(preview)
+    image = decode_tlg5(raw)
+    try:
+        image.save(preview, "PNG")
+    finally:
+        image.close()
+    return os.path.getsize(preview), int(renamed)
+
+
 def find_archives(game_path, output_path):
     output_path = os.path.abspath(output_path)
     archives = []
@@ -162,6 +284,11 @@ def extract_archive(archive, output_path):
                 output.write(content)
             extracted += 1
             byte_count += len(content)
+            preview_bytes, preview_renamed = save_tlg_preview(content, destination)
+            if preview_bytes:
+                extracted += 1
+                byte_count += preview_bytes
+                renamed += preview_renamed
     return extracted, byte_count, renamed
 
 

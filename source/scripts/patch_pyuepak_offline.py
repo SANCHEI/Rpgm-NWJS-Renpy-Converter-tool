@@ -59,6 +59,57 @@ def main():
     ):
         replace_once(package / "pak.py", line, "")
 
+    replace_once(
+        package / "utils.py",
+        "    Glib = auto()\n"
+        "    Oodle = auto()\n",
+        "    Gzip = auto()\n"
+        "    Oodle = auto()\n"
+        "    LZ4 = auto()\n"
+        "    Zstd = auto()\n",
+    )
+    replace_once(
+        package / "entry.py",
+        "import logging\n"
+        "import zlib\n"
+        "import io\n",
+        "import logging\n"
+        "import gzip\n"
+        "import zlib\n"
+        "import io\n"
+        "from lz4.block import decompress as lz4_decompress\n"
+        "from zstandard import ZstdDecompressor\n",
+    )
+    replace_once(
+        package / "entry.py",
+        "        elif self.compression == COMPRESSION.Oodle:\n",
+        "        elif self.compression == COMPRESSION.Gzip:\n"
+        "            for r in ranges:\n"
+        "                decompressed_data.write(gzip.decompress(data[r.start : r.stop]))\n"
+        "            return decompressed_data.getvalue()\n"
+        "\n"
+        "        elif self.compression == COMPRESSION.LZ4:\n"
+        "            total_uncompressed = self.size\n"
+        "            offset = 0\n"
+        "            for r in ranges:\n"
+        "                expected = min(chunk_size, total_uncompressed - offset)\n"
+        "                decompressed_data.write(lz4_decompress(data[r.start : r.stop], uncompressed_size=expected))\n"
+        "                offset += expected\n"
+        "            return decompressed_data.getvalue()\n"
+        "\n"
+        "        elif self.compression == COMPRESSION.Zstd:\n"
+        "            total_uncompressed = self.size\n"
+        "            offset = 0\n"
+        "            decompressor = ZstdDecompressor()\n"
+        "            for r in ranges:\n"
+        "                expected = min(chunk_size, total_uncompressed - offset)\n"
+        "                decompressed_data.write(decompressor.decompress(data[r.start : r.stop], max_output_size=expected))\n"
+        "                offset += expected\n"
+        "            return decompressed_data.getvalue()\n"
+        "\n"
+        "        elif self.compression == COMPRESSION.Oodle:\n",
+    )
+
 
 if __name__ == "__main__":
     main()

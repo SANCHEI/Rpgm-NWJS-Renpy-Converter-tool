@@ -14,7 +14,7 @@ Drop a game folder or supported file into the window, review the detected engine
 - `EN` / `RU` interface switch
 - Dry Run / Scan preview with archive count, candidate file count and input size
 - Contextual extraction options: the window shows only settings relevant to the detected engine
-- **Extract Assets**, **Collect Loose Files** and unknown-format **Export Diagnostics** actions
+- **Extract Assets**, **Collect Loose Files** and unknown-format **Recover Embedded Assets** actions
 - Collapsible technical log
 - Action tooltips, drag-and-drop highlighting and DPI-aware scaling
 - Visible runtime status while the built-in extraction tools are prepared silently
@@ -55,15 +55,15 @@ Unity service objects and unavailable resources are reported as skipped items ra
 
 ### Godot 3 / 4
 
-Extracts standard unencrypted PCK archives, including supported PCK data embedded into an executable.
+Extracts standard and supported encrypted PCK archives, including PCK data embedded into an executable. Paste a key manually or leave the field empty to search `keys.txt` and textual key candidates inside game executables.
 
 ### KiriKiri
 
-Extracts standard unencrypted `.xp3` archives, including compressed indexes and compressed file segments.
+Extracts standard unencrypted `.xp3` archives, including compressed indexes and compressed file segments. Supported TLG5 images receive adjacent PNG previews.
 
 ### Unreal Engine
 
-Provides experimental offline extraction for ordinary and Zlib-compressed `.pak` archives. An optional AES key can be entered in the shared key field. For Oodle-compressed archives the application automatically checks for a local `oo2core*_win64.dll` inside the game or an installed Unreal Engine.
+Provides experimental offline extraction for ordinary, Zlib, Gzip, LZ4 and Zstd-compressed `.pak` archives. Enter one or more AES keys or leave the field empty to search `keys.txt` and textual key candidates inside game executables. For Oodle-compressed archives the application automatically checks for a local `oo2core*_win64.dll` inside the game or an installed Unreal Engine.
 
 ### WOLF RPG
 
@@ -95,11 +95,11 @@ Accepts a standalone `.rag` file or a folder containing one. The original databa
 
 ### GameMaker Experimental
 
-Accepts a folder containing `data.win` or the file itself. The original container is preserved, open images are collected and embedded PNG texture pages are streamed into the output folder.
+Accepts a folder containing `data.win` or the file itself. The original container is preserved, open images are collected and embedded PNG, QOI and BZ2QOI texture pages are recovered. QOI and BZ2QOI pages receive PNG previews.
 
 ## Loose Files And Unknown Formats
 
-Use **Collect Loose Files** when a game stores useful media outside its archives. For an unknown engine, **Export Diagnostics** creates a text report with extensions, sizes, top-level entries and file signatures for further analysis.
+Use **Collect Loose Files** when a game stores useful media outside its archives. For an unknown engine, **Recover Embedded Assets** extracts confidently detected PNG, JPEG, GIF, OGG, WAV and WebP files by signature and creates a diagnostic text report for further analysis.
 
 ## Gallery Unlocker
 
@@ -133,7 +133,7 @@ Use **Hard** mode only when the soft mode is insufficient.
 - RAGS: `game_folder/extracted/rags/`
 - GameMaker: `game_folder/extracted/gamemaker/`
 - Loose files: `game_folder/extracted/loose/`
-- Diagnostics: `game_folder/extracted/diagnostics/`
+- Unknown-format recovery: `game_folder/extracted/signature-recovery/`
 - Unlocker files: `game_folder/game/_mods/`
 
 Each extractor writes `GameAssetTool-report.txt` into its output folder.
@@ -149,13 +149,13 @@ The built-in extraction runtime is prepared silently under `%LocalAppData%\GameA
 
 ## Known Limits
 
-- Encrypted Godot PCK directories and encrypted Godot PCK files are not extracted.
-- Protected game-specific XP3 variants are not extracted.
+- Encrypted Godot PCK extraction requires a discoverable or manually supplied key.
+- TLG6 preview conversion and protected game-specific XP3 variants are not extracted.
 - Unreal Oodle compression requires a local `oo2core*_win64.dll` inside the game or an installed Unreal Engine. The application does not download or redistribute the decoder.
 - Unreal IoStore `.utoc/.ucas` containers are detected but not extracted.
 - Flash LZMA-compressed `ZWS` files are detected but not inspected.
 - RAGS recovery preserves the original database but is not a complete RAGS database parser.
-- GameMaker recovery does not yet decode newer QOI/BZ2 texture blocks or every external-texture layout.
+- GameMaker recovery does not yet decode every external-texture layout.
 
 Source code: [GitHub repository](https://github.com/SANCHEI/Rpgm-NWJS-Renpy-Converter-tool)
 

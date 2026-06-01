@@ -1,4 +1,4 @@
-# Game Asset Tool v2.0.0 UI Preview
+# Game Asset Tool v2.1.0 UI Preview
 
 ## Main Window
 
@@ -47,7 +47,8 @@ The **Show Log** button expands the same fixed-width window vertically.
 - Unity: Textures, Videos, Audio, Meshes or All filter.
 - Unreal: optional Unreal AES key field and experimental-mode notice.
 - Ren'Py: RPA extraction or explicit loose-resource collection without unnecessary inputs.
-- Godot and KiriKiri: extractor description without unnecessary inputs.
+- Godot: optional PCK key field with automatic `keys.txt` and textual EXE-key discovery.
+- KiriKiri: XP3 extraction with TLG5-to-PNG preview notice.
 - NWJS: copies loose files and safely unpacks ZIP-compatible `.nw` archives without a gallery unlocker.
 
 ## Warning Panel Example
@@ -63,8 +64,8 @@ The same panel can later be used for encrypted archives, a missing Unreal Oodle 
 - HTML and QSP: copies open project resources while preserving paths.
 - RAGS: accepts a standalone `.rag` file and exposes experimental media recovery.
 - Java: Images only, Images + SVG previews or All resources mode.
-- GameMaker: accepts `data.win` and exposes experimental PNG texture-page recovery.
-- Unknown formats: **Export Diagnostics** writes a report for further analysis.
+- GameMaker: accepts `data.win` and exposes experimental PNG, QOI and BZ2QOI texture-page recovery.
+- Unknown formats: **Recover Embedded Assets** carves confidently detected media and writes a report for further analysis.
 
 The Ren'Py gallery unlocker section is shown only for relevant Ren'Py folders or when previously installed files can be removed.
 

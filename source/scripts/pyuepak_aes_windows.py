@@ -58,6 +58,8 @@ _bcrypt.BCryptDecrypt.argtypes = [
     wintypes.DWORD,
 ]
 _bcrypt.BCryptDecrypt.restype = _status
+_bcrypt.BCryptEncrypt.argtypes = _bcrypt.BCryptDecrypt.argtypes
+_bcrypt.BCryptEncrypt.restype = _status
 
 
 def _check(status, operation):
@@ -86,19 +88,21 @@ def _get_dword_property(handle, name):
     return value.value
 
 
-def aes_ecb_decrypt(key, data):
+def _aes_transform(operation, operation_name, key, data, chaining_mode, iv=None):
     if len(key) not in (16, 24, 32):
         raise ValueError("AES key must contain 16, 24 or 32 bytes.")
     if len(data) % 16:
-        raise ValueError("AES ECB data length must be a multiple of 16 bytes.")
+        raise ValueError("AES data length must be a multiple of 16 bytes.")
     if not data:
         return b""
+    if iv is not None and len(iv) != 16:
+        raise ValueError("AES IV must contain 16 bytes.")
 
     algorithm = _handle()
     key_handle = _handle()
     _check(_bcrypt.BCryptOpenAlgorithmProvider(ctypes.byref(algorithm), "AES", None, 0), "BCryptOpenAlgorithmProvider")
     try:
-        mode = "ChainingModeECB\0".encode("utf-16le")
+        mode = (chaining_mode + "\0").encode("utf-16le")
         mode_buffer = _buffer(mode)
         _check(
             _bcrypt.BCryptSetProperty(
@@ -124,27 +128,52 @@ def aes_ecb_decrypt(key, data):
             ),
             "BCryptGenerateSymmetricKey",
         )
+        if chaining_mode == "ChainingModeCFB":
+            message_block_length = wintypes.DWORD(16)
+            _check(
+                _bcrypt.BCryptSetProperty(
+                    key_handle,
+                    "MessageBlockLength",
+                    ctypes.cast(ctypes.byref(message_block_length), _byte_pointer),
+                    ctypes.sizeof(message_block_length),
+                    0,
+                ),
+                "BCryptSetProperty",
+            )
         try:
             input_buffer = _buffer(data)
             output_buffer = (ctypes.c_ubyte * len(data))()
+            iv_buffer = _buffer(iv) if iv is not None else None
             written = wintypes.DWORD()
             _check(
-                _bcrypt.BCryptDecrypt(
+                operation(
                     key_handle,
                     input_buffer,
                     len(data),
                     None,
-                    None,
-                    0,
+                    iv_buffer,
+                    len(iv) if iv is not None else 0,
                     output_buffer,
                     len(output_buffer),
                     ctypes.byref(written),
                     0,
                 ),
-                "BCryptDecrypt",
+                operation_name,
             )
             return bytes(output_buffer[:written.value])
         finally:
             _bcrypt.BCryptDestroyKey(key_handle)
     finally:
         _bcrypt.BCryptCloseAlgorithmProvider(algorithm, 0)
+
+
+def aes_ecb_decrypt(key, data):
+    return _aes_transform(_bcrypt.BCryptDecrypt, "BCryptDecrypt", key, data, "ChainingModeECB")
+
+
+def aes_cfb_decrypt(key, iv, data):
+    return _aes_transform(_bcrypt.BCryptDecrypt, "BCryptDecrypt", key, data, "ChainingModeCFB", iv)
+
+
+def aes_cfb_encrypt(key, iv, data):
+    return _aes_transform(_bcrypt.BCryptEncrypt, "BCryptEncrypt", key, data, "ChainingModeCFB", iv)

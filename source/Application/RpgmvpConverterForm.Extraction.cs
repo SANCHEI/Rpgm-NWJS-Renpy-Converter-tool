@@ -109,7 +109,7 @@ namespace RpgmvpConverterWinForms
             }
             if (engine != GameEngine.RpgMaker)
             {
-                await StartDiagnosticExportAsync();
+                await StartSignatureRecoveryAsync();
                 return;
             }
 
@@ -587,12 +587,11 @@ namespace RpgmvpConverterWinForms
 
         private async Task StartGameMakerExtractionAsync()
         {
-            await StartLocalExtractionAsync("GameMaker experimental", "gamemaker", delegate(string inputPath, string outputDir)
-            {
-                DateTime start = DateTime.UtcNow;
-                CollectorResult extracted = AssetCollectors.ExtractGameMaker(inputPath, outputDir);
-                return new OperationResult("GameMaker experimental PNG texture recovery", outputDir, extracted.Extracted, extracted.Bytes, 0, extracted.Renamed, extracted.Skipped, DateTime.UtcNow - start);
-            });
+            await StartPortableScriptExtractionAsync(
+                "GameMaker experimental",
+                "gamemaker",
+                "extract_gamemaker.py",
+                "RpgmvpConverterWinForms.scripts.extract_gamemaker.py");
         }
 
         private async Task StartLooseResourceCollectionAsync()
@@ -604,14 +603,15 @@ namespace RpgmvpConverterWinForms
             });
         }
 
-        private async Task StartDiagnosticExportAsync()
+        private async Task StartSignatureRecoveryAsync()
         {
-            await StartLocalExtractionAsync("Diagnostics", "diagnostics", delegate(string inputPath, string outputDir)
+            await StartLocalExtractionAsync("Signature recovery", "signature-recovery", delegate(string inputPath, string outputDir)
             {
                 DateTime start = DateTime.UtcNow;
+                CollectorResult extracted = SignatureAssetExtractor.Extract(inputPath, outputDir);
                 string report = AssetCollectors.WriteDiagnostics(inputPath, outputDir);
                 SafeLog("Unknown-engine diagnostics: " + report);
-                return new OperationResult("Unknown engine diagnostics", outputDir, 1, SafeFileLength(report), 0, 0, DateTime.UtcNow - start);
+                return new OperationResult("Unknown format signature recovery", outputDir, extracted.Extracted, extracted.Bytes, 0, extracted.Renamed, extracted.Skipped, DateTime.UtcNow - start);
             });
         }
 

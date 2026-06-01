@@ -23,7 +23,7 @@ namespace RpgmvpConverterWinForms
             Font titleFont = new Font("Segoe UI Semibold", 14f, FontStyle.Regular);
             Font logFont = new Font("Consolas", 9.5f, FontStyle.Regular);
 
-            Text = "Game Asset Tool v2.0.0";
+            Text = "Game Asset Tool v2.1.0";
             StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
@@ -652,7 +652,7 @@ namespace RpgmvpConverterWinForms
         {
             selectedEngine = engine;
             bool busy = currentRun != null || externalRunning;
-            bool showKey = engine == GameEngine.RpgMaker || engine == GameEngine.Unreal;
+            bool showKey = engine == GameEngine.RpgMaker || engine == GameEngine.Godot || engine == GameEngine.Unreal;
             bool showUnityMode = engine == GameEngine.Unity;
             bool showJavaMode = engine == GameEngine.JavaJar;
 
@@ -664,7 +664,7 @@ namespace RpgmvpConverterWinForms
             javaExtractModeBox.Visible = showJavaMode;
             startButton.Enabled = !busy && (CanExtractAssets(engine) || IsExistingInput(pathBox.Text.Trim()));
             startButton.Text = engine == GameEngine.Unknown
-                ? T("Export Diagnostics", "Экспорт диагностики")
+                ? T("Recover Embedded Assets", "Извлечь найденные ресурсы")
                 : T("Extract Assets", "Извлечь ресурсы");
             collectLooseButton.Enabled = !busy && IsExistingInput(pathBox.Text.Trim());
             UpdateUnlockerControls(busy);
@@ -686,16 +686,17 @@ namespace RpgmvpConverterWinForms
                         : T("No RPA archives found. Open Ren'Py resources will be collected.", "Архивы RPA не найдены. Будут собраны открытые ресурсы Ren'Py.");
                     break;
                 case GameEngine.Godot:
-                    extractionHintLabel.Text = T("Standard unencrypted PCK archives will be extracted.", "Будут извлечены стандартные незашифрованные архивы PCK.");
+                    keyLabel.Text = T("Godot PCK key", "Ключ Godot PCK");
+                    extractionHintLabel.Text = T("PCK extraction. For encrypted archives, enter the key or keep the field empty for automatic discovery.", "Извлечение PCK. Для зашифрованных архивов укажите ключ или оставьте поле пустым для автопоиска.");
                     break;
                 case GameEngine.Kirikiri:
-                    extractionHintLabel.Text = T("Standard unencrypted XP3 archives will be extracted.", "Будут извлечены стандартные незашифрованные архивы XP3.");
+                    extractionHintLabel.Text = T("Standard XP3 extraction. Supported TLG5 images also receive PNG previews.", "Извлечение стандартных XP3. Для поддерживаемых изображений TLG5 также создаются PNG-превью.");
                     break;
                 case GameEngine.Unreal:
                     keyLabel.Text = T("Unreal AES key", "AES-ключ Unreal");
                     extractionHintLabel.Text = T(
-                        "Experimental PAK extraction. AES key is optional; Oodle and IoStore are reported.",
-                        "Экспериментальное извлечение PAK. AES-ключ необязателен; Oodle и IoStore отмечаются в отчёте.");
+                        "Experimental PAK extraction with AES key discovery and Zlib, Gzip, LZ4, Zstd or local Oodle decoding. IoStore is reported.",
+                        "Экспериментальное извлечение PAK с поиском AES-ключа и распаковкой Zlib, Gzip, LZ4, Zstd или локального Oodle. IoStore отмечается в отчёте.");
                     break;
                 case GameEngine.Nwjs:
                     extractionHintLabel.Text = T(
@@ -750,13 +751,13 @@ namespace RpgmvpConverterWinForms
                     break;
                 case GameEngine.GameMaker:
                     extractionHintLabel.Text = T(
-                        "Experimental data.win recovery preserves the original and extracts embedded PNG texture pages.",
-                        "Экспериментальное восстановление data.win сохраняет оригинал и извлекает встроенные PNG-страницы текстур.");
+                        "Experimental data.win recovery preserves the original and extracts PNG, QOI and BZ2QOI texture pages.",
+                        "Экспериментальное восстановление data.win сохраняет оригинал и извлекает страницы текстур PNG, QOI и BZ2QOI.");
                     break;
                 default:
                     extractionHintLabel.Text = T(
-                        "Unknown format. Export diagnostics or collect loose resources for further analysis.",
-                        "Неизвестный формат. Экспортируйте диагностику или соберите открытые ресурсы для анализа.");
+                        "Unknown format. Recover embedded media by signatures or collect loose resources.",
+                        "Неизвестный формат. Извлеките встроенные медиа по сигнатурам или соберите открытые ресурсы.");
                     break;
             }
 
@@ -854,7 +855,7 @@ namespace RpgmvpConverterWinForms
                 ? T("Wait for the current operation to finish.", "Дождитесь завершения текущей операции.")
                 : CanExtractAssets(selectedEngine)
                     ? T("Extract supported assets for the detected engine.", "Извлечь поддерживаемые ресурсы определённого движка.")
-                    : T("Export a diagnostic report for this unknown format.", "Экспортировать диагностический отчёт для неизвестного формата."));
+                    : T("Recover embedded media by signatures and write diagnostics for this unknown format.", "Извлечь встроенные медиа по сигнатурам и записать диагностику неизвестного формата."));
             SetActionTooltip(collectLooseButton, T("Collect open media, scripts and project files without unpacking archives.", "Собрать открытые медиа, скрипты и файлы проекта без распаковки архивов."));
             SetActionTooltip(unlockerButton, selectedEngine == GameEngine.Renpy
                 ? T("Install the Ren'Py gallery unlocker. Try Soft mode first.", "Установить анлокер галереи Ren'Py. Сначала попробуйте мягкий режим.")
@@ -869,7 +870,9 @@ namespace RpgmvpConverterWinForms
                 : T("Run an extraction first to create an output folder.", "Сначала выполните извлечение, чтобы создать папку результата."));
             SetActionTooltip(keyBox, selectedEngine == GameEngine.RpgMaker
                 ? T("The RPG Maker HEX key is filled automatically when possible. You can paste it manually if detection fails.", "HEX-ключ RPG Maker заполняется автоматически, когда это возможно. Если определение не сработало, вставьте ключ вручную.")
-                : T("Optional Unreal AES key. Leave it empty for unencrypted PAK archives.", "Необязательный AES-ключ Unreal. Для незашифрованных PAK оставьте поле пустым."));
+                : selectedEngine == GameEngine.Godot
+                    ? T("Optional Godot PCK key. Leave it empty to search keys.txt and textual key candidates inside game executables.", "Необязательный ключ Godot PCK. Оставьте поле пустым для поиска в keys.txt и текстовых кандидатах внутри EXE игры.")
+                    : T("Optional Unreal AES key. Leave it empty to search keys.txt and textual key candidates inside game executables.", "Необязательный AES-ключ Unreal. Оставьте поле пустым для поиска в keys.txt и текстовых кандидатах внутри EXE игры."));
         }
 
         private void SetActionTooltip(Control control, string text)

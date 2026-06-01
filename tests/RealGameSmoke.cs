@@ -104,6 +104,10 @@ internal static class RealGameSmoke
         }
         if (engine == "Unity")
             return FromOperation(Invoke(formType, form, "RunUnityExtraction", game, Path.Combine(gameOutput, "unity"), "all", true));
+        if (engine == "Godot")
+            return FromOperation(Invoke(formType, form, "RunPortableScriptExtraction", game, Path.Combine(gameOutput, "godot"), "Godot", "extract_godot.py", "RpgmvpConverterWinForms.scripts.extract_godot.py", ""));
+        if (engine == "Kirikiri")
+            return FromOperation(Invoke(formType, form, "RunPortableScriptExtraction", game, Path.Combine(gameOutput, "kirikiri"), "KiriKiri XP3", "extract_xp3.py", "RpgmvpConverterWinForms.scripts.extract_xp3.py", ""));
         if (engine == "Unreal")
             return FromOperation(Invoke(formType, form, "RunPortableScriptExtraction", game, Path.Combine(gameOutput, "unreal"), "Unreal experimental", "extract_unreal.py", "RpgmvpConverterWinForms.scripts.extract_unreal.py", ""));
         if (engine == "Nwjs")
@@ -132,8 +136,10 @@ internal static class RealGameSmoke
         if (engine == "LegacyRpgMaker")
             return FromOperation(Invoke(formType, form, "RunLegacyRpgMakerExtraction", game, Path.Combine(gameOutput, "rgss")));
         if (engine == "GameMaker")
-            return FromCollector(InvokeCollectorStatic(formType.Assembly, "ExtractGameMaker", game, Path.Combine(gameOutput, "gamemaker")), Path.Combine(gameOutput, "gamemaker"));
-        return SmokeResult.CreateSkipped(gameOutput, "unsupported or undetected");
+            return FromOperation(Invoke(formType, form, "RunPortableScriptExtraction", game, Path.Combine(gameOutput, "gamemaker"), "GameMaker experimental", "extract_gamemaker.py", "RpgmvpConverterWinForms.scripts.extract_gamemaker.py", ""));
+        if (engine == "Unknown")
+            return FromCollector(InvokeExtractorStatic(formType.Assembly, "SignatureAssetExtractor", "Extract", game, Path.Combine(gameOutput, "signature-recovery")), Path.Combine(gameOutput, "signature-recovery"));
+        return SmokeResult.CreateSkipped(gameOutput, "unsupported");
     }
 
     private static IEnumerable<string> EnumerateInputs(string gamesRoot)
@@ -217,6 +223,19 @@ internal static class RealGameSmoke
         {
             Type collectors = assembly.GetType("RpgmvpConverterWinForms.AssetCollectors", true);
             return RequireMethod(collectors, name, BindingFlags.Public | BindingFlags.Static).Invoke(null, args);
+        }
+        catch (TargetInvocationException ex)
+        {
+            throw Unwrap(ex);
+        }
+    }
+
+    private static object InvokeExtractorStatic(Assembly assembly, string typeName, string name, params object[] args)
+    {
+        try
+        {
+            Type extractor = assembly.GetType("RpgmvpConverterWinForms." + typeName, true);
+            return RequireMethod(extractor, name, BindingFlags.Public | BindingFlags.Static).Invoke(null, args);
         }
         catch (TargetInvocationException ex)
         {

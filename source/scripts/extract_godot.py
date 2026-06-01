@@ -1,7 +1,12 @@
+import base64
 import hashlib
+import io
 import os
+import re
 import struct
 import sys
+
+from pyuepak.aes_windows import aes_cfb_decrypt
 
 
 MAGIC = b"GDPC"
@@ -9,6 +14,12 @@ PACK_DIR_ENCRYPTED = 1
 PACK_REL_FILEBASE = 2
 PACK_FILE_ENCRYPTED = 1
 PACK_FILE_REMOVAL = 2
+MAX_ENTRY_BYTES = 4 * 1024 * 1024 * 1024
+MAX_ENTRY_COUNT = 200000
+MAX_KEY_FILE_BYTES = 4 * 1024 * 1024
+MAX_SCANNED_EXE_BYTES = 256 * 1024 * 1024
+HEX_KEY = re.compile(rb"(?<![0-9a-fA-F])[0-9a-fA-F]{64}(?![0-9a-fA-F])")
+BASE64_KEY = re.compile(rb"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{43}=(?![A-Za-z0-9+/=])")
 
 
 class UnsupportedArchive(Exception):
@@ -101,7 +112,110 @@ def choose_offset(raw_offset, size, archive_size, pck_start):
     raise ValueError("PCK entry points outside the archive.")
 
 
-def read_entries(stream, pck_start):
+def parse_key(value):
+    value = value.strip().strip("\"'")
+    if not value:
+        return None
+    try:
+        if len(value) == 64:
+            decoded = bytes.fromhex(value)
+        else:
+            decoded = base64.b64decode(value, validate=True)
+        return decoded if len(decoded) == 32 else None
+    except (ValueError, TypeError):
+        return None
+
+
+def append_key(keys, key):
+    if key is not None and key not in keys:
+        keys.append(key)
+
+
+def discover_keys(game_path, output_path):
+    keys = []
+    optional = os.environ.get("OPTIONAL_KEY", "")
+    for value in re.split(r"[\s,;]+", optional):
+        append_key(keys, parse_key(value))
+
+    output_path = os.path.abspath(output_path)
+    for root, directories, files in os.walk(game_path):
+        directories[:] = [
+            name for name in directories
+            if name.lower() != "extracted"
+            and not os.path.abspath(os.path.join(root, name)).startswith(output_path + os.sep)
+        ]
+        for name in files:
+            path = os.path.join(root, name)
+            lowered = name.lower()
+            try:
+                size = os.path.getsize(path)
+                if lowered in ("keys.txt", "godot.keys", "godot-key.txt") and size <= MAX_KEY_FILE_BYTES:
+                    with open(path, "r", encoding="utf-8", errors="ignore") as stream:
+                        for line in stream:
+                            append_key(keys, parse_key(line.split("#", 1)[0]))
+                elif lowered.endswith(".exe") and size <= MAX_SCANNED_EXE_BYTES:
+                    with open(path, "rb") as stream:
+                        content = stream.read()
+                    for match in HEX_KEY.findall(content):
+                        append_key(keys, parse_key(match.decode("ascii")))
+                    for match in BASE64_KEY.findall(content):
+                        append_key(keys, parse_key(match.decode("ascii")))
+            except OSError:
+                continue
+    return keys
+
+
+def decrypt_block(stream, key):
+    expected_digest = read_exact(stream, 16)
+    size = read_u64(stream)
+    if size > MAX_ENTRY_BYTES:
+        raise ValueError("Encrypted Godot block is too large.")
+    iv = read_exact(stream, 16)
+    encrypted = read_exact(stream, (size + 15) & ~15)
+    data = aes_cfb_decrypt(key, iv, encrypted)[:size]
+    if hashlib.md5(data).digest() != expected_digest:
+        raise ValueError("Godot encrypted block MD5 mismatch.")
+    return data
+
+
+def decrypt_with_candidates(stream, keys):
+    if not keys:
+        raise UnsupportedArchive("Encrypted Godot PCK: enter the 64-character HEX key or place it in keys.txt.")
+    start = stream.tell()
+    for key in keys:
+        try:
+            stream.seek(start)
+            return decrypt_block(stream, key), key
+        except (OSError, ValueError):
+            continue
+    raise UnsupportedArchive("Encrypted Godot PCK: none of the discovered keys could decrypt the archive.")
+
+
+def read_directory(stream, file_count, file_base, archive_size):
+    if file_count > MAX_ENTRY_COUNT:
+        raise ValueError("Godot PCK contains too many entries.")
+    entries = []
+    for _ in range(file_count):
+        path_length = read_u32(stream)
+        if path_length > 1024 * 1024:
+            raise ValueError("Godot PCK entry path is too long.")
+        path = read_exact(stream, path_length).rstrip(b"\0").decode("utf-8", "replace")
+        raw_offset = read_u64(stream)
+        size = read_u64(stream)
+        if size > MAX_ENTRY_BYTES:
+            raise ValueError("Godot PCK entry is too large: {}".format(path))
+        digest = read_exact(stream, 16)
+        flags = read_u32(stream)
+        if flags & PACK_FILE_REMOVAL:
+            continue
+        offset = file_base + raw_offset
+        if offset < 0 or offset > archive_size or not flags & PACK_FILE_ENCRYPTED and offset + size > archive_size:
+            raise ValueError("PCK entry points outside the archive: {}".format(path))
+        entries.append((path, offset, size, digest, bool(flags & PACK_FILE_ENCRYPTED)))
+    return entries
+
+
+def read_entries(stream, pck_start, keys):
     stream.seek(0, os.SEEK_END)
     archive_size = stream.tell()
     stream.seek(pck_start + 4)
@@ -120,41 +234,30 @@ def read_entries(stream, pck_start):
             raw_offset = read_u64(stream)
             size = read_u64(stream)
             digest = read_exact(stream, 16)
-            entries.append((path, choose_offset(raw_offset, size, archive_size, pck_start), size, digest))
-        return entries
+            entries.append((path, choose_offset(raw_offset, size, archive_size, pck_start), size, digest, False))
+        return entries, None
 
-    if pack_version not in (2, 3):
+    if pack_version not in (2, 3, 4):
         raise UnsupportedArchive("Unsupported Godot PCK format version: {}".format(pack_version))
 
     pack_flags = read_u32(stream)
-    if pack_flags & PACK_DIR_ENCRYPTED:
-        raise UnsupportedArchive("Encrypted Godot PCK directories are not supported yet.")
-
     file_base = read_u64(stream)
-    if pack_version == 3 or pack_flags & PACK_REL_FILEBASE:
+    if pack_version in (3, 4) or pack_flags & PACK_REL_FILEBASE:
         file_base += pck_start
 
-    if pack_version == 3:
+    if pack_version in (3, 4):
         directory_offset = read_u64(stream) + pck_start
         stream.seek(directory_offset)
     else:
         read_exact(stream, 16 * 4)
 
     file_count = read_u32(stream)
-    entries = []
-    for _ in range(file_count):
-        path_length = read_u32(stream)
-        path = read_exact(stream, path_length).rstrip(b"\0").decode("utf-8", "replace")
-        raw_offset = read_u64(stream)
-        size = read_u64(stream)
-        digest = read_exact(stream, 16)
-        flags = read_u32(stream)
-        if flags & PACK_FILE_REMOVAL:
-            continue
-        if flags & PACK_FILE_ENCRYPTED:
-            raise UnsupportedArchive("Encrypted Godot PCK files are not supported yet.")
-        entries.append((path, file_base + raw_offset, size, digest))
-    return entries
+    selected_key = None
+    directory_stream = stream
+    if pack_flags & PACK_DIR_ENCRYPTED:
+        directory_data, selected_key = decrypt_with_candidates(stream, keys)
+        directory_stream = io.BytesIO(directory_data)
+    return read_directory(directory_stream, file_count, file_base, archive_size), selected_key
 
 
 def is_embedded_pck(path):
@@ -182,7 +285,7 @@ def find_archives(game_path, output_path):
     return sorted(set(archives))
 
 
-def extract_archive(archive, output_path):
+def extract_archive(archive, output_path, keys):
     extracted = 0
     byte_count = 0
     renamed = 0
@@ -191,10 +294,15 @@ def extract_archive(archive, output_path):
         pck_start = locate_pck(stream)
         if pck_start is None:
             raise ValueError("PCK header was not found.")
-        entries = read_entries(stream, pck_start)
-        for name, offset, size, expected_digest in entries:
+        entries, selected_key = read_entries(stream, pck_start, keys)
+        for name, offset, size, expected_digest, encrypted in entries:
             stream.seek(offset)
-            data = read_exact(stream, size)
+            if encrypted:
+                data, selected_key = decrypt_with_candidates(stream, ([selected_key] if selected_key else []) + keys)
+                if len(data) != size:
+                    raise ValueError("Encrypted Godot entry size mismatch for {}".format(name))
+            else:
+                data = read_exact(stream, size)
             if expected_digest != b"\0" * 16 and hashlib.md5(data).digest() != expected_digest:
                 print("WARN:MD5 mismatch for {}".format(name))
             destination = safe_output_path(archive_output, name)
@@ -212,6 +320,9 @@ def main():
     game_path = os.environ["GAME_PATH"]
     output_path = os.environ["OUTPUT_PATH"]
     os.makedirs(output_path, exist_ok=True)
+    keys = discover_keys(game_path, output_path)
+    if keys:
+        print("Discovered Godot key candidate(s): {}".format(len(keys)))
     archives = find_archives(game_path, output_path)
     print("TOTAL:{}".format(len(archives)))
 
@@ -222,7 +333,7 @@ def main():
     for index, archive in enumerate(archives, 1):
         try:
             print("Processing PCK: {}".format(os.path.relpath(archive, game_path)))
-            current_extracted, current_bytes, current_renamed = extract_archive(archive, output_path)
+            current_extracted, current_bytes, current_renamed = extract_archive(archive, output_path, keys)
             extracted += current_extracted
             byte_count += current_bytes
             renamed += current_renamed

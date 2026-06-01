@@ -4,7 +4,7 @@
 
 Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **RPG Maker XP/VX/VX Ace**, **Ren'Py**, **NWJS**, **Electron**, **Unity**, **Godot**, **KiriKiri**, **WOLF RPG**, **TyranoScript**, **Java**, **HTML** and **QSP** games. Experimental Unreal `.pak`, Flash `.swf`, RAGS `.rag` and GameMaker `data.win` recovery is included.
 
-![Version](https://img.shields.io/badge/version-2.0.0-blue)
+![Version](https://img.shields.io/badge/version-2.1.0-blue)
 ![.NET](https://img.shields.io/badge/.NET_Framework-4.7.2-blue)
 ![Runtime](https://img.shields.io/badge/runtime-built--in-green)
 
@@ -24,12 +24,12 @@ Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **RP
 - Extracts Ren'Py RPA archives through verified `unrpa==2.3.0`.
 - Collects open Ren'Py resources when a game does not use RPA archives.
 - Extracts Unity textures, videos, audio, meshes and direct media through one built-in workflow.
-- Extracts unencrypted Godot PCK archives for Godot 3 and 4.
-- Extracts standard unencrypted KiriKiri XP3 archives.
-- Extracts Unreal PAK archives in an experimental offline mode.
+- Extracts Godot PCK archives for Godot 3 and 4, including supported AES-CFB encrypted archives.
+- Extracts standard KiriKiri XP3 archives and renders supported TLG5 images to PNG.
+- Extracts Unreal PAK archives with Zlib, Gzip, LZ4, Zstd and local Oodle decoding in an experimental offline mode.
 - Collects static HTML games, QSP databases and loose resources.
 - Preserves RAGS `.rag` databases and recovers confidently detected embedded media experimentally.
-- Provides **Collect Loose Files** and **Export Diagnostics** fallback actions.
+- Provides **Collect Loose Files** and unknown-format signature recovery fallback actions.
 - Preserves relative paths and renames collisions with suffixes such as `image (2).png`.
 - Opens a searchable results gallery with background indexing, lazy thumbnail batches, enlarged image previews and SVG, audio and video filters.
 - Shows the Ren'Py gallery unlocker only for relevant folders or when installed files can be removed.
@@ -65,7 +65,7 @@ extracted/
   rags/
   gamemaker/
   loose/
-  diagnostics/
+  signature-recovery/
 ```
 
 Each extractor writes `GameAssetTool-report.txt` into its own output folder.
@@ -110,15 +110,15 @@ Unity service objects and unavailable resources are reported as skipped items ra
 
 ## Godot
 
-Godot extraction supports standard unencrypted PCK format versions `1`, `2` and `3`, including PCK data embedded into an executable. Encrypted PCK directories and encrypted PCK files are reported as unsupported.
+Godot extraction supports PCK format versions `1`, `2`, `3` and compatible `4` archives, including PCK data embedded into an executable. For encrypted PCK directories and files, paste a 64-character HEX key or leave the field empty to search `keys.txt` and textual HEX/Base64 candidates inside game executables.
 
 ## KiriKiri
 
-KiriKiri extraction supports standard unencrypted `.xp3` archives, compressed indexes and compressed file segments. Protected game-specific XP3 variants are reported as unsupported.
+KiriKiri extraction supports standard unencrypted `.xp3` archives, compressed indexes and compressed file segments. Extracted TLG5 images receive adjacent PNG previews for gallery viewing. TLG6 previews and protected game-specific XP3 variants are reported as unsupported.
 
 ## Unreal Experimental
 
-Unreal extraction uses [`pyuepak==0.2.7`](https://github.com/stas96111/pyUEpak) inside the built-in runtime. It supports ordinary and Zlib-compressed `.pak` archives and accepts an optional AES key in the shared key field.
+Unreal extraction uses [`pyuepak==0.2.7`](https://github.com/stas96111/pyUEpak) inside the built-in runtime. It supports ordinary, Zlib, Gzip, LZ4 and Zstd-compressed `.pak` archives. Paste one or more AES keys into the shared key field, or leave it empty to search `keys.txt` and textual HEX/Base64 candidates inside game executables.
 
 The application does not download or redistribute an Oodle DLL. For Oodle-compressed archives it automatically searches for `oo2core*_win64.dll` inside the selected game and installed Unreal Engine folders. If no local decoder is available, the archive is reported and skipped. IoStore `.utoc/.ucas` containers are reported as unsupported.
 
@@ -156,11 +156,11 @@ RAGS recovery accepts a standalone `.rag` file or a folder containing one. It pr
 
 ## GameMaker Experimental
 
-GameMaker recovery accepts a folder containing `data.win` or the file itself. It preserves the original container, collects open image files and streams embedded PNG texture pages into `extracted/gamemaker/`. Newer QOI/BZ2 texture blocks and external texture layouts are reported as a current limit rather than guessed at.
+GameMaker recovery accepts a folder containing `data.win` or the file itself. It preserves the original container, collects open image files and extracts embedded PNG, QOI and BZ2QOI texture pages into `extracted/gamemaker/`. QOI and BZ2QOI pages receive PNG previews while their original blocks are preserved.
 
 ## Loose Files And Diagnostics
 
-Use **Collect Loose Files** to copy open resources independently of archive extraction. When an engine is unknown, **Export Diagnostics** writes `GameAssetTool-diagnostics.txt` with file extensions, sizes, top-level entries and signatures for further analysis.
+Use **Collect Loose Files** to copy open resources independently of archive extraction. For an unknown engine, **Recover Embedded Assets** extracts confidently detected PNG, JPEG, GIF, OGG, WAV and WebP files by signature and writes `GameAssetTool-diagnostics.txt` for further analysis.
 
 ## Gallery Unlocker
 
@@ -196,7 +196,7 @@ powershell -ExecutionPolicy Bypass -File .\build_release.ps1
 Release output:
 
 ```text
-release/GameAssetTool-v2.0.0.exe
+release/GameAssetTool-v2.1.0.exe
 ```
 
 The release contains one supported executable. Users do not need any neighboring files.

@@ -32,6 +32,7 @@ internal static class ReleaseInspector
             bool hasGodotScript = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.scripts.extract_godot.py");
             bool hasXp3Script = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.scripts.extract_xp3.py");
             bool hasUnrealScript = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.scripts.extract_unreal.py");
+            bool hasGameMakerScript = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.scripts.extract_gamemaker.py");
             bool hasPortableRuntime = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.runtime.runtime-win-x64.zip");
             bool hasWolfCli = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.tools.UberWolfCli.exe");
             bool hasResvg = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.tools.resvg.exe");
@@ -226,7 +227,7 @@ internal static class ReleaseInspector
                 pythonPath = (string)ensureRuntime.Invoke(null, null);
                 runtimeDirectory = Path.GetDirectoryName(pythonPath);
                 ProcessStartInfo psi = (ProcessStartInfo)createPythonProcessInfo.Invoke(null, null);
-                psi.Arguments = "-c \"import unrpa, UnityPy, pyuepak; print('portable-runtime-ok')\"";
+                psi.Arguments = "-c \"import unrpa, UnityPy, pyuepak, zstandard; from pyuepak.aes_windows import aes_cfb_decrypt; print('portable-runtime-ok')\"";
                 using (Process process = Process.Start(psi))
                 {
                     string output = process.StandardOutput.ReadToEnd();
@@ -266,6 +267,7 @@ internal static class ReleaseInspector
             Console.WriteLine("EmbeddedGodotScript=" + hasGodotScript);
             Console.WriteLine("EmbeddedXp3Script=" + hasXp3Script);
             Console.WriteLine("EmbeddedUnrealScript=" + hasUnrealScript);
+            Console.WriteLine("EmbeddedGameMakerScript=" + hasGameMakerScript);
             Console.WriteLine("EmbeddedPortableRuntime=" + hasPortableRuntime);
             Console.WriteLine("EmbeddedWolfCli=" + hasWolfCli);
             Console.WriteLine("EmbeddedResvg=" + hasResvg);
@@ -318,6 +320,7 @@ internal static class ReleaseInspector
                 && hasGodotScript
                 && hasXp3Script
                 && hasUnrealScript
+                && hasGameMakerScript
                 && hasPortableRuntime
                 && hasWolfCli
                 && hasResvg
@@ -450,6 +453,11 @@ internal static class ReleaseInspector
                 && !GetLocalVisible(unityMode)
                 && GetString(keyLabel, "Text") == "RPGM HEX key";
 
+            updateContext.Invoke(form, new[] { Enum.Parse(engineType, "Godot") });
+            bool godot = GetBool(startButton, "Enabled")
+                && GetLocalVisible(keyBox)
+                && GetString(keyLabel, "Text") == "Godot PCK key";
+
             updateContext.Invoke(form, new[] { Enum.Parse(engineType, "Unreal") });
             bool unreal = GetBool(startButton, "Enabled")
                 && GetLocalVisible(keyBox)
@@ -497,7 +505,7 @@ internal static class ReleaseInspector
                 && GetString(extractionHint, "Text").IndexOf("data.win", StringComparison.OrdinalIgnoreCase) >= 0;
             updateContext.Invoke(form, new[] { Enum.Parse(engineType, "Unknown") });
             bool unknown = !GetBool(startButton, "Enabled")
-                && GetString(startButton, "Text") == "Export Diagnostics";
+                && GetString(startButton, "Text") == "Recover Embedded Assets";
             bool readableDisabledButtons = HasReadableDisabledContrast(startButton)
                 && HasReadableDisabledContrast(collectLooseButton)
                 && HasReadableDisabledContrast(unlockerButton)
@@ -529,7 +537,7 @@ internal static class ReleaseInspector
             bool collapsed = GetString(toggleLogButton, "Text") == "Show Log"
                 && GetSizeHeight(form, "ClientSize") == compactHeight;
 
-            return initial && unity && renpy && rpgm && unreal && nwjs && wolf && tyrano && java && flash && electron
+            return initial && unity && renpy && rpgm && godot && unreal && nwjs && wolf && tyrano && java && flash && electron
                 && html && qsp && rags && legacyRpgMaker && gameMaker && unknown && russian
                 && readableDisabledButtons && tooltips && dpi && dragHighlight && expanded && collapsed;
         }
@@ -722,8 +730,9 @@ internal static class ReleaseInspector
         MethodInfo getQspFiles = collectors.GetMethod("GetQspFiles", BindingFlags.Public | BindingFlags.Static);
         MethodInfo copyFiles = collectors.GetMethod("CopyFiles", BindingFlags.Public | BindingFlags.Static);
         MethodInfo extractRags = collectors.GetMethod("ExtractRags", BindingFlags.Public | BindingFlags.Static);
-        MethodInfo extractGameMaker = collectors.GetMethod("ExtractGameMaker", BindingFlags.Public | BindingFlags.Static);
         MethodInfo writeDiagnostics = collectors.GetMethod("WriteDiagnostics", BindingFlags.Public | BindingFlags.Static);
+        Type signatureExtractor = assembly.GetType("RpgmvpConverterWinForms.SignatureAssetExtractor", true);
+        MethodInfo extractSignatures = signatureExtractor.GetMethod("Extract", BindingFlags.Public | BindingFlags.Static);
 
         string root = Path.Combine(temp, "collector-extraction");
         string html = Path.Combine(root, "html");
@@ -749,11 +758,9 @@ internal static class ReleaseInspector
         string ragsOutput = Path.Combine(root, "rags-output");
         object ragsResult = extractRags.Invoke(null, new object[] { rags, ragsOutput });
 
-        string gameMaker = Path.Combine(root, "gamemaker");
-        Directory.CreateDirectory(gameMaker);
-        WriteMinimalDataWin(Path.Combine(gameMaker, "data.win"));
-        string gameMakerOutput = Path.Combine(gameMaker, "extracted", "gamemaker");
-        object gameMakerResult = extractGameMaker.Invoke(null, new object[] { gameMaker, gameMakerOutput });
+        string gameMakerOutput = Path.Combine(root, "gamemaker-gallery");
+        Directory.CreateDirectory(gameMakerOutput);
+        File.WriteAllText(Path.Combine(gameMakerOutput, "texture-page-0001.png"), "png");
         Type gallery = assembly.GetType("RpgmvpConverterWinForms.ResultsGalleryForm", true);
         MethodInfo getMatchingFiles = gallery.GetMethod("GetMatchingFiles", BindingFlags.NonPublic | BindingFlags.Static);
         IEnumerable galleryImages = (IEnumerable)getMatchingFiles.Invoke(null, new object[] { gameMakerOutput, 1, "texture-page" });
@@ -766,9 +773,11 @@ internal static class ReleaseInspector
 
         string unknown = Path.Combine(root, "unknown");
         Directory.CreateDirectory(unknown);
-        File.WriteAllBytes(Path.Combine(unknown, "archive.bin"), new byte[] { 1, 2, 3 });
+        WriteMinimalDataWin(Path.Combine(unknown, "archive.bin"));
         string diagnosticsOutput = Path.Combine(root, "diagnostics");
         string report = (string)writeDiagnostics.Invoke(null, new object[] { unknown, diagnosticsOutput });
+        string signaturesOutput = Path.Combine(root, "signature-output");
+        object signatureResult = extractSignatures.Invoke(null, new object[] { unknown, signaturesOutput });
 
         return GetInt(htmlResult, "Extracted") == 2
             && File.Exists(Path.Combine(htmlOutput, "index.html"))
@@ -780,13 +789,12 @@ internal static class ReleaseInspector
             && GetInt(ragsResult, "Extracted") == 2
             && File.Exists(Path.Combine(ragsOutput, "originals", "sample.rag"))
             && File.Exists(Path.Combine(ragsOutput, "embedded", "sample", "asset-0001.jpg"))
-            && GetInt(gameMakerResult, "Extracted") == 2
-            && File.Exists(Path.Combine(gameMakerOutput, "originals", "data.win"))
-            && IsPng(Path.Combine(gameMakerOutput, "embedded", "data", "texture-page-0001.png"))
             && galleryFilter
             && galleryNoHardCap
             && File.Exists(report)
-            && File.ReadAllText(report).Contains("archive.bin | 01-02-03");
+            && File.ReadAllText(report).Contains("archive.bin | 46-4F-52-4D")
+            && GetInt(signatureResult, "Extracted") == 1
+            && IsPng(Path.Combine(signaturesOutput, "embedded", "archive", "asset-0001.png"));
     }
 
     private static bool VerifyLegacyRpgMakerExtraction(Assembly assembly, Type formType, string temp)
