@@ -14,6 +14,7 @@
 - Use `itch/itch_form_template.txt` for project fields and tags.
 - Upload `itch/logo-game-asset-tool.png` as the project cover image.
 - Upload `itch/background-game-asset-tool.png` as the page background image.
+- Upload `itch/banner-game-asset-tool.png` as the reusable page banner.
 - Keep the existing demo video.
 
 ## Manual Verification
