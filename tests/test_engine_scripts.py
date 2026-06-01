@@ -268,6 +268,42 @@ def assert_unreal_compressions():
         assert entry.read_file(Reader(header + compressed), PakVersion.V3, bytes(32)) == raw
 
 
+def assert_unreal_partial_extraction(temp):
+    module = load_script("extract_unreal.py")
+    available = b"unreal-partial-ok"
+
+    class FakeEntry:
+        hash = None
+
+    class FakePak:
+        _index = type("Index", (), {"entrys": {
+            "sample/available.txt": FakeEntry(),
+            "sample/protected.uasset": FakeEntry(),
+        }})()
+
+        def list_files(self):
+            return sorted(self._index.entrys)
+
+        def read_file(self, filename):
+            if filename.endswith(".uasset"):
+                raise RuntimeError("no local oo2core decoder")
+            return available
+
+    archive = temp / "unreal-partial" / "sample.pak"
+    output = temp / "unreal-partial" / "output"
+    archive.parent.mkdir(parents=True)
+    archive.write_bytes(b"")
+    original_open_archive = module.open_archive
+    module.open_archive = lambda _archive, _keys: FakePak()
+    try:
+        assert module.extract_archive(str(archive), str(output), []) == (1, len(available), 0, 1)
+    finally:
+        module.open_archive = original_open_archive
+    assert_extracted(output, available)
+    manifest = output / "archives" / "sample" / "Unreal-skipped-files.txt"
+    assert "sample/protected.uasset\tno local oo2core decoder" in manifest.read_text(encoding="utf-8")
+
+
 def build_unreal(path, data):
     pak = PakFile()
     pak.add_file("sample/hello.txt", data)
@@ -329,6 +365,9 @@ def main():
 
         assert_unreal_compressions()
         print("unreal-compressions=ok")
+
+        assert_unreal_partial_extraction(temp)
+        print("unreal-partial=ok")
 
         fallback_environment = os.environ.copy()
         fallback_environment["GAME_PATH"] = str(temp / "no-local-oodle")

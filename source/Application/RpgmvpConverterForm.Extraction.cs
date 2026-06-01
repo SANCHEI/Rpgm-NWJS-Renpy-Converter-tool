@@ -1048,6 +1048,7 @@ namespace RpgmvpConverterWinForms
             long bytes = 0;
             int errors = 0;
             int renamed = 0;
+            int skipped = 0;
 
             ProcessStartInfo psi = CreatePythonProcessInfo();
             psi.Arguments = QuoteArg(scriptPath);
@@ -1086,6 +1087,7 @@ namespace RpgmvpConverterWinForms
                     bytes = ParseLong(line, 2);
                     errors = ParseInt(line, 3);
                     renamed = ParseInt(line, 4);
+                    skipped = ParseInt(line, 5);
                 }
                 else
                 {
@@ -1094,7 +1096,7 @@ namespace RpgmvpConverterWinForms
             });
 
             if (exitCode != 0 && errors == 0) errors = 1;
-            return new OperationResult(engineName, outputDir, extracted, bytes, errors, renamed, DateTime.UtcNow - start);
+            return new OperationResult(engineName, outputDir, extracted, bytes, errors, renamed, skipped, DateTime.UtcNow - start);
         }
 
         private void TogglePause()

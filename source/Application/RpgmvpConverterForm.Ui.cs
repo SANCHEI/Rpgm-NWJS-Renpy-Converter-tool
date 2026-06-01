@@ -695,8 +695,8 @@ namespace RpgmvpConverterWinForms
                 case GameEngine.Unreal:
                     keyLabel.Text = T("Unreal AES key", "AES-ключ Unreal");
                     extractionHintLabel.Text = T(
-                        "Experimental PAK extraction with AES key discovery and Zlib, Gzip, LZ4, Zstd or local Oodle decoding. IoStore is reported.",
-                        "Экспериментальное извлечение PAK с поиском AES-ключа и распаковкой Zlib, Gzip, LZ4, Zstd или локального Oodle. IoStore отмечается в отчёте.");
+                        "Experimental PAK extraction with AES key discovery and Zlib, Gzip, LZ4, Zstd or local Oodle decoding. Without an Oodle DLL, available files are still extracted. IoStore is reported.",
+                        "Экспериментальное извлечение PAK с поиском AES-ключа и распаковкой Zlib, Gzip, LZ4, Zstd или локального Oodle. Без Oodle DLL доступные файлы всё равно извлекаются. IoStore отмечается в отчёте.");
                     break;
                 case GameEngine.Nwjs:
                     extractionHintLabel.Text = T(

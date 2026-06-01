@@ -30,7 +30,7 @@
 - TLG6 preview conversion and protected game-specific XP3 variants are not extracted.
 - Non-ZIP NWJS `.nw` package formats are reported and skipped.
 - Flash LZMA-compressed `ZWS` files are reported and skipped.
-- Unreal Oodle compression requires a local `oo2core*_win64.dll` inside the selected game or an installed Unreal Engine. The application does not download or redistribute the decoder.
+- Unreal Oodle compression requires a local `oo2core*_win64.dll` inside the selected game or an installed Unreal Engine. The application does not download or redistribute the decoder. Without it, uncompressed PAK entries are still extracted and Oodle entries are listed in `Unreal-skipped-files.txt`.
 - Unreal IoStore `.utoc/.ucas` containers are detected and reported, but not extracted.
 - RAGS recovery is not a complete database parser. It preserves the original `.rag` and extracts only confidently detected embedded media.
 - GameMaker recovery does not yet decode every external-texture layout.

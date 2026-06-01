@@ -1,4 +1,5 @@
 import base64
+from collections import Counter
 import hashlib
 import os
 import re
@@ -145,20 +146,42 @@ def extract_archive(archive, output_path, keys):
     extracted = 0
     byte_count = 0
     renamed = 0
+    skipped = 0
+    skipped_files = []
+    skip_reasons = Counter()
     for filename in pak.list_files():
-        data = pak.read_file(filename)
-        entry = pak._index.entrys.get(filename)
-        if entry is not None and entry.hash and hashlib.sha1(data).digest() != entry.hash:
-            raise ValueError("Unreal PAK SHA-1 mismatch for {}".format(filename))
-        destination = safe_output_path(archive_output, filename)
-        destination, was_renamed = unique_path(destination)
-        renamed += int(was_renamed)
-        os.makedirs(os.path.dirname(destination), exist_ok=True)
-        with open(destination, "wb") as output:
-            output.write(data)
-        extracted += 1
-        byte_count += len(data)
-    return extracted, byte_count, renamed
+        try:
+            data = pak.read_file(filename)
+            entry = pak._index.entrys.get(filename)
+            if entry is not None and entry.hash and hashlib.sha1(data).digest() != entry.hash:
+                raise ValueError("SHA-1 mismatch")
+            destination = safe_output_path(archive_output, filename)
+            destination, was_renamed = unique_path(destination)
+            renamed += int(was_renamed)
+            os.makedirs(os.path.dirname(destination), exist_ok=True)
+            with open(destination, "wb") as output:
+                output.write(data)
+            extracted += 1
+            byte_count += len(data)
+        except Exception as error:
+            reason = str(error).strip() or error.__class__.__name__
+            skipped += 1
+            skip_reasons[reason] += 1
+            skipped_files.append("{}\t{}".format(filename, reason))
+
+    if skipped_files:
+        os.makedirs(archive_output, exist_ok=True)
+        manifest = os.path.join(archive_output, "Unreal-skipped-files.txt")
+        with open(manifest, "w", encoding="utf-8") as output:
+            output.write("\n".join(skipped_files) + "\n")
+        for reason, count in skip_reasons.most_common(10):
+            print("WARN:{} file(s) skipped: {}".format(count, reason))
+        if len(skip_reasons) > 10:
+            print("WARN:{} additional skip reason(s) are listed in {}.".format(
+                len(skip_reasons) - 10,
+                os.path.relpath(manifest, output_path),
+            ))
+    return extracted, byte_count, renamed, skipped
 
 
 def main():
@@ -176,14 +199,16 @@ def main():
     byte_count = 0
     errors = 0
     renamed = 0
+    skipped = 0
     processed = 0
     for archive in archives:
         try:
             print("Processing Unreal PAK: {}".format(os.path.relpath(archive, game_path)))
-            current_extracted, current_bytes, current_renamed = extract_archive(archive, output_path, keys)
+            current_extracted, current_bytes, current_renamed, current_skipped = extract_archive(archive, output_path, keys)
             extracted += current_extracted
             byte_count += current_bytes
             renamed += current_renamed
+            skipped += current_skipped
         except Exception as error:
             errors += 1
             print("WARN:{}: {}".format(os.path.basename(archive), error))
@@ -192,11 +217,12 @@ def main():
 
     for archive in utocs:
         errors += 1
+        skipped += 1
         processed += 1
         print("WARN:{}: Unreal IoStore (.utoc/.ucas) is not supported yet.".format(os.path.basename(archive)))
         print("PROGRESS:{}:{}:{}".format(processed, total, byte_count))
 
-    print("RESULT:{}:{}:{}:{}".format(extracted, byte_count, errors, renamed))
+    print("RESULT:{}:{}:{}:{}:{}".format(extracted, byte_count, errors, renamed, skipped))
     return 0 if total else 1
 
 

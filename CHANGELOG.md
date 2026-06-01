@@ -5,6 +5,7 @@
 - Preserve an explicitly selected or dropped directory instead of replacing it with a detected engine folder from one of its parents.
 - Added experimental SPAK `.dat` container detection, streaming entry extraction, adjacent DAT collection, open-media extension inference and a manifest for protected blocks.
 - Added automatic SPITE ChaCha20 decoding for media routes recovered from embedded Brotli-compressed Tauri frontend bundles, while preserving unresolved blocks under `protected/`.
+- Extract uncompressed Unreal PAK entries even when other files require an unavailable Oodle decoder, with skipped entries listed in `Unreal-skipped-files.txt`.
 
 ## 2.1.0 - 2026-06-01
 

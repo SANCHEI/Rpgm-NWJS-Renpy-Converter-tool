@@ -122,7 +122,7 @@ KiriKiri extraction supports standard unencrypted `.xp3` archives, compressed in
 
 Unreal extraction uses [`pyuepak==0.2.7`](https://github.com/stas96111/pyUEpak) inside the built-in runtime. It supports ordinary, Zlib, Gzip, LZ4 and Zstd-compressed `.pak` archives. Paste one or more AES keys into the shared key field, or leave it empty to search `keys.txt` and textual HEX/Base64 candidates inside game executables.
 
-The application does not download or redistribute an Oodle DLL. For Oodle-compressed archives it automatically searches for `oo2core*_win64.dll` inside the selected game and installed Unreal Engine folders. If no local decoder is available, the archive is reported and skipped. IoStore `.utoc/.ucas` containers are reported as unsupported.
+The application does not download or redistribute an Oodle DLL. For Oodle-compressed archives it automatically searches for `oo2core*_win64.dll` inside the selected game and installed Unreal Engine folders. If no local decoder is available, entries that use Oodle are listed in `Unreal-skipped-files.txt` while uncompressed entries are still extracted. IoStore `.utoc/.ucas` containers are reported as unsupported.
 
 ## WOLF RPG
 
