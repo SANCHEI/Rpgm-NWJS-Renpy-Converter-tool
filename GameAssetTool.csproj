@@ -33,6 +33,7 @@
   <ItemGroup>
     <Compile Include="source\Program.cs" />
     <Compile Include="source\Application\ResultsGalleryForm.cs" />
+    <Compile Include="source\Application\UnityDecensorDialog.cs" />
     <Compile Include="source\Application\RpgmvpConverterForm.cs" />
     <Compile Include="source\Application\RpgmvpConverterForm.Ui.cs" />
     <Compile Include="source\Application\RpgmvpConverterForm.Extraction.cs" />
@@ -48,6 +49,7 @@
     <Compile Include="source\Extractors\SignatureAssetExtractor.cs" />
     <Compile Include="source\Extractors\SpakDatExtractor.cs" />
     <Compile Include="source\Features\UnlockerResources.cs" />
+    <Compile Include="source\Features\UnityDecensorInstaller.cs" />
     <Compile Include="source\Runtime\EmbeddedScripts.cs" />
     <Compile Include="source\Runtime\ApplicationIcon.cs" />
     <Compile Include="source\Runtime\PortableRuntime.cs" />

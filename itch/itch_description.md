@@ -53,6 +53,8 @@ Extracts textures, videos, audio, OBJ meshes and direct media files. Unity extra
 
 Unity service objects and unavailable resources are reported as skipped items rather than extraction errors.
 
+The contextual **Unity Decensor...** assistant detects Mono BE5, Mono BE6 and IL2CPP games. It can fetch the latest compatible BepInEx package list from official online sources, install the recommended package on demand and select the matching `BE5`, `BE6` or `IL2CPP` DLL from your local SW_Decensor ZIP. Managed removal touches only files installed by Game Asset Tool.
+
 ### Godot 3 / 4
 
 Extracts standard and supported encrypted PCK archives, including PCK data embedded into an executable. Paste a key manually or leave the field empty to search `keys.txt` and textual key candidates inside game executables.

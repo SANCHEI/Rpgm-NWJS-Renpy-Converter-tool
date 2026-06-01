@@ -20,4 +20,6 @@ WOLF RPG encrypted archive extraction embeds the official `UberWolfCli v0.6.3` r
 
 Java SVG preview conversion embeds the official `resvg v0.47.0` Windows release artifact from https://github.com/linebender/resvg. Resvg is distributed under the MIT License or Apache License 2.0. The bundled license texts are stored in `third_party/resvg/`. The embedded renderer SHA-256 is `433A7C744CFF561ED64FCF73C7C04E239D7A07AE5F0AADBF1BA8471D63707402`.
 
+The optional Unity decensor assistant does not embed or redistribute BepInEx or SW_Decensor. After user confirmation it downloads a compatible BepInEx ZIP from the official https://github.com/BepInEx/BepInEx releases or https://builds.bepinex.dev/projects/bepinex_be build page. SW_Decensor must be supplied as a local user-selected ZIP.
+
 Pinned transitive dependencies are listed in `source/scripts/portable-runtime-requirements.txt`. The runtime and package licenses apply to their respective components.

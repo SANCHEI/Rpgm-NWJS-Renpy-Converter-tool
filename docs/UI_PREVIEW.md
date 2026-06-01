@@ -18,7 +18,7 @@ The default window is compact. Only settings relevant to the detected engine are
 | Extract Assets                                                           |
 | Choose the Unity asset types to export.                                  |
 | Asset type [ All v ]                                  [ Extract Assets ] |
-|                                              [ Collect Loose Files ]     |
+| [ Unity Decensor... ]                       [ Collect Loose Files ]     |
 |                                                                          |
 | [ Pause ] [ Cancel ] [ Open Output Folder ] [ Show Log ]                |
 | [========================= 61% =====================]                     |
@@ -44,7 +44,7 @@ The **Show Log** button expands the same fixed-width window vertically.
 
 - RPG Maker MV/MZ: RPGM HEX key field.
 - RPG Maker XP/VX/VX Ace: built-in RGSS archive extraction notice.
-- Unity: Textures, Videos, Audio, Meshes or All filter.
+- Unity: Textures, Videos, Audio, Meshes or All filter plus the optional **Unity Decensor...** assistant for Mono BE5, Mono BE6 and IL2CPP games.
 - Unreal: optional Unreal AES key field and experimental-mode notice.
 - Ren'Py: RPA extraction or explicit loose-resource collection without unnecessary inputs.
 - Godot: optional PCK key field with automatic `keys.txt` and textual EXE-key discovery.

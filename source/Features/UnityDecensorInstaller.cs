@@ -1,0 +1,445 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
+using System.Linq;
+using System.Net;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Web.Script.Serialization;
+
+namespace RpgmvpConverterWinForms
+{
+    internal enum UnityRuntimeKind
+    {
+        MonoBe5,
+        MonoBe6,
+        Il2Cpp
+    }
+
+    internal sealed class UnityDecensorEnvironment
+    {
+        public string GameRoot { get; set; }
+        public string GameExecutable { get; set; }
+        public string Architecture { get; set; }
+        public UnityRuntimeKind Runtime { get; set; }
+        public string ExistingBepInEx { get; set; }
+
+        public string SwDecensorVariant
+        {
+            get
+            {
+                if (Runtime == UnityRuntimeKind.Il2Cpp) return "IL2CPP";
+                return Runtime == UnityRuntimeKind.MonoBe6 ? "BE6" : "BE5";
+            }
+        }
+
+        public string DisplayName
+        {
+            get
+            {
+                string runtime = Runtime == UnityRuntimeKind.Il2Cpp
+                    ? "IL2CPP / BE6"
+                    : Runtime == UnityRuntimeKind.MonoBe6 ? "Mono / BE6" : "Mono / BE5";
+                return runtime + " / " + Architecture
+                    + (string.IsNullOrWhiteSpace(ExistingBepInEx) ? "" : " / installed: " + ExistingBepInEx);
+            }
+        }
+    }
+
+    internal sealed class BepInExPackage
+    {
+        public string Channel { get; set; }
+        public string Runtime { get; set; }
+        public string Architecture { get; set; }
+        public string Version { get; set; }
+        public string Url { get; set; }
+
+        public string DisplayName
+        {
+            get { return Channel + " " + Runtime + " " + Architecture + " - " + Version; }
+        }
+    }
+
+    internal sealed class UnityDecensorManifest
+    {
+        public string BepInExPackage { get; set; }
+        public string SwDecensorVariant { get; set; }
+        public List<string> InstalledFiles { get; set; }
+
+        public UnityDecensorManifest()
+        {
+            InstalledFiles = new List<string>();
+        }
+    }
+
+    internal static class UnityDecensorInstaller
+    {
+        private const string ManifestName = ".gameassettool-unity-decensor.json";
+        private const string GitHubLatestRelease = "https://api.github.com/repos/BepInEx/BepInEx/releases/latest";
+        private const string Be6BuildsPage = "https://builds.bepinex.dev/projects/bepinex_be";
+        private const long MaxDownloadBytes = 128L * 1024 * 1024;
+        private const long MaxArchiveEntryBytes = 128L * 1024 * 1024;
+        private const long MaxArchiveExpandedBytes = 512L * 1024 * 1024;
+        private const int MaxArchiveEntries = 10000;
+        private static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
+
+        public static UnityDecensorEnvironment DetectEnvironment(string rootPath)
+        {
+            rootPath = Path.GetFullPath(rootPath);
+            if (!Directory.Exists(rootPath))
+                throw new DirectoryNotFoundException("Unity game folder was not found.");
+
+            string dataPath = Directory.EnumerateDirectories(rootPath, "*_Data", SearchOption.TopDirectoryOnly).FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(dataPath))
+                throw new InvalidDataException("Unity *_Data folder was not found.");
+
+            string executable = FindGameExecutable(rootPath, dataPath);
+            bool il2cpp = File.Exists(Path.Combine(rootPath, "GameAssembly.dll"))
+                || Directory.Exists(Path.Combine(dataPath, "il2cpp_data"));
+            bool be6 = IsBepInEx6Installed(rootPath);
+            return new UnityDecensorEnvironment
+            {
+                GameRoot = rootPath,
+                GameExecutable = executable,
+                Architecture = DetectPeArchitecture(executable),
+                Runtime = il2cpp ? UnityRuntimeKind.Il2Cpp : be6 ? UnityRuntimeKind.MonoBe6 : UnityRuntimeKind.MonoBe5,
+                ExistingBepInEx = DetectExistingBepInEx(rootPath)
+            };
+        }
+
+        public static List<BepInExPackage> FetchLatestPackages()
+        {
+            List<BepInExPackage> packages = new List<BepInExPackage>();
+            using (WebClient client = CreateWebClient())
+            {
+                AddBe5Packages(packages, client.DownloadString(GitHubLatestRelease));
+                AddBe6Packages(packages, client.DownloadString(Be6BuildsPage));
+            }
+            return packages;
+        }
+
+        public static BepInExPackage FindRecommendedPackage(IEnumerable<BepInExPackage> packages, UnityDecensorEnvironment environment)
+        {
+            string channel = environment.Runtime == UnityRuntimeKind.MonoBe5 ? "BE5 stable" : "BE6 latest";
+            string runtime = environment.Runtime == UnityRuntimeKind.Il2Cpp ? "IL2CPP" : "Mono";
+            return packages.FirstOrDefault(delegate(BepInExPackage package)
+            {
+                return package.Channel == channel
+                    && package.Runtime == runtime
+                    && package.Architecture == environment.Architecture;
+            });
+        }
+
+        public static void InstallBepInExPackage(string rootPath, BepInExPackage package)
+        {
+            if (package == null || string.IsNullOrWhiteSpace(package.Url))
+                throw new InvalidOperationException("BepInEx package URL is missing.");
+
+            string tempFile = Path.Combine(Path.GetTempPath(), "GameAssetTool-BepInEx-" + Guid.NewGuid().ToString("N") + ".zip");
+            try
+            {
+                using (WebClient client = CreateWebClient())
+                    client.DownloadFile(package.Url, tempFile);
+                if (new FileInfo(tempFile).Length > MaxDownloadBytes)
+                    throw new InvalidDataException("Downloaded BepInEx ZIP is unexpectedly large.");
+                InstallZip(rootPath, tempFile, package.DisplayName);
+            }
+            finally
+            {
+                TryDeleteFile(tempFile);
+            }
+        }
+
+        public static string InstallSwDecensorZip(string rootPath, string zipPath)
+        {
+            UnityDecensorEnvironment environment = DetectEnvironment(rootPath);
+            string selectedEntry;
+            using (FileStream input = File.OpenRead(zipPath))
+            using (ZipArchive archive = new ZipArchive(input, ZipArchiveMode.Read))
+            {
+                selectedEntry = SelectSwDecensorEntry(archive, environment.SwDecensorVariant);
+                ZipArchiveEntry entry = archive.GetEntry(selectedEntry);
+                EnsureEntrySize(entry);
+                string pluginRelative = NormalizeRelativePath(Path.Combine(
+                    "BepInEx",
+                    "plugins",
+                    "SW_Decensor",
+                    Path.GetFileName(entry.Name)));
+                UnityDecensorManifest existingManifest = ReadManifest(rootPath);
+                string destination = SafeDestination(rootPath, pluginRelative);
+                if (File.Exists(destination) && !existingManifest.InstalledFiles.Contains(pluginRelative, StringComparer.OrdinalIgnoreCase))
+                    throw new IOException("Refusing to overwrite an existing plugin file: " + pluginRelative);
+                WriteManagedFile(rootPath, pluginRelative, entry);
+            }
+            UnityDecensorManifest manifest = ReadManifest(rootPath);
+            manifest.SwDecensorVariant = environment.SwDecensorVariant;
+            WriteManifest(rootPath, manifest);
+            return selectedEntry;
+        }
+
+        public static bool IsManagedInstallPresent(string rootPath)
+        {
+            return File.Exists(GetManifestPath(rootPath));
+        }
+
+        public static void RemoveManagedInstall(string rootPath)
+        {
+            rootPath = Path.GetFullPath(rootPath);
+            UnityDecensorManifest manifest = ReadManifest(rootPath);
+            foreach (string relative in manifest.InstalledFiles.OrderByDescending(delegate(string item) { return item.Length; }))
+            {
+                string path = SafeDestination(rootPath, relative);
+                TryDeleteFile(path);
+                TryDeleteEmptyParents(Path.GetDirectoryName(path), rootPath);
+            }
+            TryDeleteFile(GetManifestPath(rootPath));
+        }
+
+        private static void InstallZip(string rootPath, string zipPath, string packageName)
+        {
+            rootPath = Path.GetFullPath(rootPath);
+            UnityDecensorManifest manifest = ReadManifest(rootPath);
+            using (FileStream input = File.OpenRead(zipPath))
+            using (ZipArchive archive = new ZipArchive(input, ZipArchiveMode.Read))
+            {
+                EnsureArchiveLimits(archive);
+                foreach (ZipArchiveEntry entry in archive.Entries)
+                {
+                    if (string.IsNullOrWhiteSpace(entry.Name)) continue;
+                    string relative = NormalizeRelativePath(entry.FullName);
+                    string destination = SafeDestination(rootPath, relative);
+                    if (File.Exists(destination) && !manifest.InstalledFiles.Contains(relative, StringComparer.OrdinalIgnoreCase))
+                        throw new IOException("Refusing to overwrite an existing game file: " + relative);
+                }
+                foreach (ZipArchiveEntry entry in archive.Entries)
+                {
+                    if (string.IsNullOrWhiteSpace(entry.Name)) continue;
+                    WriteManagedFile(rootPath, NormalizeRelativePath(entry.FullName), entry);
+                }
+            }
+            manifest = ReadManifest(rootPath);
+            manifest.BepInExPackage = packageName;
+            WriteManifest(rootPath, manifest);
+        }
+
+        private static void WriteManagedFile(string rootPath, string relative, ZipArchiveEntry entry)
+        {
+            EnsureEntrySize(entry);
+            rootPath = Path.GetFullPath(rootPath);
+            UnityDecensorManifest manifest = ReadManifest(rootPath);
+            string destination = SafeDestination(rootPath, relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(destination));
+            using (Stream input = entry.Open())
+            using (FileStream output = File.Create(destination))
+                input.CopyTo(output);
+            if (!manifest.InstalledFiles.Contains(relative, StringComparer.OrdinalIgnoreCase))
+                manifest.InstalledFiles.Add(relative);
+            WriteManifest(rootPath, manifest);
+        }
+
+        private static void EnsureArchiveLimits(ZipArchive archive)
+        {
+            if (archive.Entries.Count > MaxArchiveEntries)
+                throw new InvalidDataException("Archive contains too many files.");
+            long expandedBytes = 0;
+            foreach (ZipArchiveEntry entry in archive.Entries)
+            {
+                EnsureEntrySize(entry);
+                expandedBytes += entry.Length;
+                if (expandedBytes > MaxArchiveExpandedBytes)
+                    throw new InvalidDataException("Archive expands beyond the supported size limit.");
+            }
+        }
+
+        private static void EnsureEntrySize(ZipArchiveEntry entry)
+        {
+            if (entry == null)
+                throw new InvalidDataException("Archive entry is missing.");
+            if (entry.Length > MaxArchiveEntryBytes)
+                throw new InvalidDataException("Archive entry is unexpectedly large: " + entry.FullName);
+        }
+
+        private static string SelectSwDecensorEntry(ZipArchive archive, string variant)
+        {
+            List<string> dlls = archive.Entries
+                .Where(delegate(ZipArchiveEntry entry)
+                {
+                    return entry.Name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)
+                        && entry.Name.IndexOf("SW_Decensor", StringComparison.OrdinalIgnoreCase) >= 0;
+                })
+                .Select(delegate(ZipArchiveEntry entry) { return entry.FullName; })
+                .ToList();
+            string match = dlls.FirstOrDefault(delegate(string path)
+            {
+                return GetSwDecensorMarkers(variant).Any(delegate(string marker)
+                {
+                    return path.IndexOf(marker, StringComparison.OrdinalIgnoreCase) >= 0;
+                });
+            });
+            if (string.IsNullOrWhiteSpace(match) && dlls.Count == 1)
+                match = dlls[0];
+            if (string.IsNullOrWhiteSpace(match))
+                throw new InvalidDataException("SW_Decensor " + variant + " DLL was not found in the selected ZIP.");
+            return match;
+        }
+
+        private static string[] GetSwDecensorMarkers(string variant)
+        {
+            if (variant == "IL2CPP") return new[] { "il2cpp" };
+            if (variant == "BE6") return new[] { "be6", "bepinex6", "bepinex 6", "bepinex_6", "bepinex-6" };
+            return new[] { "be5", "bepinex5", "bepinex 5", "bepinex_5", "bepinex-5" };
+        }
+
+        private static void AddBe5Packages(List<BepInExPackage> packages, string json)
+        {
+            Dictionary<string, object> release = Json.Deserialize<Dictionary<string, object>>(json);
+            string tag = Convert.ToString(release["tag_name"]);
+            IEnumerable assets = (IEnumerable)release["assets"];
+            foreach (Dictionary<string, object> asset in assets.Cast<Dictionary<string, object>>())
+            {
+                string name = Convert.ToString(asset["name"]);
+                Match match = Regex.Match(name, @"^BepInEx_win_(x86|x64)_[^/]+\.zip$", RegexOptions.IgnoreCase);
+                if (!match.Success) continue;
+                packages.Add(new BepInExPackage
+                {
+                    Channel = "BE5 stable",
+                    Runtime = "Mono",
+                    Architecture = match.Groups[1].Value.ToLowerInvariant(),
+                    Version = tag,
+                    Url = Convert.ToString(asset["browser_download_url"])
+                });
+            }
+        }
+
+        private static void AddBe6Packages(List<BepInExPackage> packages, string html)
+        {
+            Match build = Regex.Match(html, @"href=""(?<url>/projects/bepinex_be/(?<id>\d+)/BepInEx-Unity\.(?<runtime>Mono|IL2CPP)-win-(?<arch>x86|x64)-(?<version>6\.0\.0-be\.[^""]+)\.zip)""", RegexOptions.IgnoreCase);
+            if (!build.Success)
+                throw new InvalidDataException("Latest BepInEx 6 artifact was not found.");
+            string id = build.Groups["id"].Value;
+            MatchCollection artifacts = Regex.Matches(
+                html,
+                @"href=""(?<url>/projects/bepinex_be/" + Regex.Escape(id) + @"/BepInEx-Unity\.(?<runtime>Mono|IL2CPP)-win-(?<arch>x86|x64)-(?<version>6\.0\.0-be\.[^""]+)\.zip)""",
+                RegexOptions.IgnoreCase);
+            foreach (Match match in artifacts)
+            {
+                packages.Add(new BepInExPackage
+                {
+                    Channel = "BE6 latest",
+                    Runtime = match.Groups["runtime"].Value.Equals("IL2CPP", StringComparison.OrdinalIgnoreCase) ? "IL2CPP" : "Mono",
+                    Architecture = match.Groups["arch"].Value.ToLowerInvariant(),
+                    Version = WebUtility.UrlDecode(match.Groups["version"].Value),
+                    Url = "https://builds.bepinex.dev" + match.Groups["url"].Value
+                });
+            }
+        }
+
+        private static string FindGameExecutable(string rootPath, string dataPath)
+        {
+            string expected = Path.Combine(rootPath, Path.GetFileName(dataPath).Substring(0, Path.GetFileName(dataPath).Length - 5) + ".exe");
+            if (File.Exists(expected)) return expected;
+            string executable = Directory.EnumerateFiles(rootPath, "*.exe", SearchOption.TopDirectoryOnly)
+                .FirstOrDefault(delegate(string path) { return !Path.GetFileName(path).Equals("UnityCrashHandler64.exe", StringComparison.OrdinalIgnoreCase); });
+            if (string.IsNullOrWhiteSpace(executable))
+                throw new InvalidDataException("Unity game executable was not found.");
+            return executable;
+        }
+
+        private static string DetectPeArchitecture(string executable)
+        {
+            using (FileStream stream = File.OpenRead(executable))
+            using (BinaryReader reader = new BinaryReader(stream))
+            {
+                if (reader.ReadUInt16() != 0x5A4D) throw new InvalidDataException("Game executable is not a PE file.");
+                stream.Position = 0x3C;
+                int peOffset = reader.ReadInt32();
+                stream.Position = peOffset;
+                if (reader.ReadUInt32() != 0x00004550) throw new InvalidDataException("Game executable PE header is invalid.");
+                ushort machine = reader.ReadUInt16();
+                if (machine == 0x8664) return "x64";
+                if (machine == 0x014C) return "x86";
+                throw new InvalidDataException("Unsupported Unity executable architecture: 0x" + machine.ToString("X4"));
+            }
+        }
+
+        private static bool IsBepInEx6Installed(string rootPath)
+        {
+            return File.Exists(Path.Combine(rootPath, "BepInEx", "core", "BepInEx.Core.dll"));
+        }
+
+        private static string DetectExistingBepInEx(string rootPath)
+        {
+            if (IsBepInEx6Installed(rootPath)) return "BE6";
+            if (File.Exists(Path.Combine(rootPath, "BepInEx", "core", "BepInEx.dll"))) return "BE5";
+            return "";
+        }
+
+        private static UnityDecensorManifest ReadManifest(string rootPath)
+        {
+            string path = GetManifestPath(rootPath);
+            if (!File.Exists(path)) return new UnityDecensorManifest();
+            UnityDecensorManifest manifest = Json.Deserialize<UnityDecensorManifest>(File.ReadAllText(path, Encoding.UTF8));
+            if (manifest == null) return new UnityDecensorManifest();
+            if (manifest.InstalledFiles == null) manifest.InstalledFiles = new List<string>();
+            return manifest;
+        }
+
+        private static void WriteManifest(string rootPath, UnityDecensorManifest manifest)
+        {
+            File.WriteAllText(GetManifestPath(rootPath), Json.Serialize(manifest), new UTF8Encoding(false));
+        }
+
+        private static string GetManifestPath(string rootPath)
+        {
+            return SafeDestination(Path.GetFullPath(rootPath), ManifestName);
+        }
+
+        private static string NormalizeRelativePath(string relative)
+        {
+            string normalized = relative.Replace('/', Path.DirectorySeparatorChar).TrimStart(Path.DirectorySeparatorChar);
+            if (string.IsNullOrWhiteSpace(normalized))
+                throw new InvalidDataException("Archive entry path is empty.");
+            return normalized;
+        }
+
+        private static string SafeDestination(string rootPath, string relative)
+        {
+            string root = Path.GetFullPath(rootPath).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            string path = Path.GetFullPath(Path.Combine(rootPath, relative));
+            if (!path.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Archive entry escapes the game folder: " + relative);
+            return path;
+        }
+
+        private static WebClient CreateWebClient()
+        {
+            WebClient client = new WebClient();
+            client.Headers[HttpRequestHeader.UserAgent] = "GameAssetTool/2.1.0";
+            return client;
+        }
+
+        private static void TryDeleteFile(string path)
+        {
+            try { if (File.Exists(path)) File.Delete(path); }
+            catch { }
+        }
+
+        private static void TryDeleteEmptyParents(string directory, string rootPath)
+        {
+            string root = Path.GetFullPath(rootPath).TrimEnd(Path.DirectorySeparatorChar);
+            while (!string.IsNullOrWhiteSpace(directory)
+                && directory.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    if (Directory.GetFileSystemEntries(directory).Length != 0) break;
+                    Directory.Delete(directory);
+                    directory = Path.GetDirectoryName(directory);
+                }
+                catch { break; }
+            }
+        }
+    }
+}

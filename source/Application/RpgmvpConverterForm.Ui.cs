@@ -243,6 +243,10 @@ namespace RpgmvpConverterWinForms
             collectLooseButton = CreateButton("Collect Loose Files", new Point(704, 39), new Size(180, 26), Color.FromArgb(45, 50, 60), textColor, uiBold);
             collectLooseButton.Click += async delegate { await StartLooseResourceCollectionAsync(); };
             extractionPanel.Controls.Add(collectLooseButton);
+            unityDecensorButton = CreateButton("Unity Decensor...", new Point(306, 36), new Size(180, 26), Color.FromArgb(95, 65, 80), textColor, uiBold);
+            unityDecensorButton.Click += delegate { OpenUnityDecensor(); };
+            unityDecensorButton.Visible = false;
+            extractionPanel.Controls.Add(unityDecensorButton);
             y += 82;
 
             unlockerSectionLabel = CreateSectionLabel("Gallery Unlocker for Ren'Py", y);
@@ -420,6 +424,7 @@ namespace RpgmvpConverterWinForms
             dryRunButton.Text = T("Dry Run / Scan", "Проверить");
             startButton.Text = T("Extract Assets", "Извлечь ресурсы");
             collectLooseButton.Text = T("Collect Loose Files", "Собрать открытые");
+            unityDecensorButton.Text = T("Unity Decensor...", "Unity Decensor...");
             unlockerButton.Text = T("Install Unlocker", "Установить анлокер");
             removeUnlockerButton.Text = T("Remove Unlocker", "Удалить анлокер");
             pauseButton.Text = T("Pause", "Пауза");
@@ -602,6 +607,7 @@ namespace RpgmvpConverterWinForms
             dryRunButton.Enabled = !running;
             startButton.Enabled = !running;
             collectLooseButton.Enabled = !running;
+            unityDecensorButton.Enabled = !running;
             UpdateUnlockerControls(running);
             pauseButton.Enabled = running;
             cancelButton.Enabled = running;
@@ -620,6 +626,7 @@ namespace RpgmvpConverterWinForms
                 dryRunButton.Enabled = !running;
                 startButton.Enabled = !running;
                 collectLooseButton.Enabled = !running;
+                unityDecensorButton.Enabled = !running;
                 UpdateUnlockerControls(running);
                 pauseButton.Enabled = false;
                 cancelButton.Enabled = running;
@@ -660,6 +667,8 @@ namespace RpgmvpConverterWinForms
             keyBox.Visible = showKey;
             unityModeLabel.Visible = showUnityMode;
             unityExtractModeBox.Visible = showUnityMode;
+            unityDecensorButton.Visible = showUnityMode;
+            unityDecensorButton.Enabled = !busy && showUnityMode && Directory.Exists(InputDirectory(pathBox.Text.Trim()));
             javaModeLabel.Visible = showJavaMode;
             javaExtractModeBox.Visible = showJavaMode;
             startButton.Enabled = !busy && (CanExtractAssets(engine) || IsExistingInput(pathBox.Text.Trim()));
@@ -863,6 +872,7 @@ namespace RpgmvpConverterWinForms
                     ? T("Extract supported assets for the detected engine.", "Извлечь поддерживаемые ресурсы определённого движка.")
                     : T("Recover embedded media by signatures and write diagnostics for this unknown format.", "Извлечь встроенные медиа по сигнатурам и записать диагностику неизвестного формата."));
             SetActionTooltip(collectLooseButton, T("Collect open media, scripts and project files without unpacking archives.", "Собрать открытые медиа, скрипты и файлы проекта без распаковки архивов."));
+            SetActionTooltip(unityDecensorButton, T("Detect Mono BE5, Mono BE6 or IL2CPP, install the latest compatible BepInEx online and select an SW_Decensor ZIP.", "Определить Mono BE5, Mono BE6 или IL2CPP, установить актуальный совместимый BepInEx из сети и выбрать ZIP SW_Decensor."));
             SetActionTooltip(unlockerButton, selectedEngine == GameEngine.Renpy
                 ? T("Install the Ren'Py gallery unlocker. Try Soft mode first.", "Установить анлокер галереи Ren'Py. Сначала попробуйте мягкий режим.")
                 : T("The gallery unlocker is available only for detected Ren'Py folders.", "Анлокер галереи доступен только для определённых папок Ren'Py."));

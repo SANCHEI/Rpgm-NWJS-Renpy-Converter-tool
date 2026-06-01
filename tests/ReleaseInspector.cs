@@ -208,6 +208,7 @@ internal static class ReleaseInspector
             bool startupFolderArgument = VerifyStartupFolderArgument(formType, temp);
             bool startupFileArgument = VerifyStartupFileArgument(formType, temp);
             bool droppedFolderArgument = VerifyDroppedFolderArgument(formType, temp);
+            bool unityDecensorInstaller = VerifyUnityDecensorInstaller(assembly, temp);
             bool extractorRegistry = assembly.GetType("RpgmvpConverterWinForms.IAssetExtractor", true).IsInterface
                 && assembly.GetType("RpgmvpConverterWinForms.AssetExtractorRegistry", true) != null;
 
@@ -328,6 +329,7 @@ internal static class ReleaseInspector
             Console.WriteLine("StartupFolderArgument=" + startupFolderArgument);
             Console.WriteLine("StartupFileArgument=" + startupFileArgument);
             Console.WriteLine("DroppedFolderArgument=" + droppedFolderArgument);
+            Console.WriteLine("UnityDecensorInstaller=" + unityDecensorInstaller);
             Console.WriteLine("ExtractorRegistry=" + extractorRegistry);
 
             return hasUnityScript
@@ -384,6 +386,7 @@ internal static class ReleaseInspector
                 && startupFolderArgument
                 && startupFileArgument
                 && droppedFolderArgument
+                && unityDecensorInstaller
                 && extractorRegistry
                 ? 0
                 : 1;
@@ -426,6 +429,7 @@ internal static class ReleaseInspector
             MethodInfo scaleLogicalHeightForDpi = formType.GetMethod("ScaleLogicalHeightForDpi", BindingFlags.NonPublic | BindingFlags.Static);
             object startButton = GetField(formType, form, "startButton");
             object collectLooseButton = GetField(formType, form, "collectLooseButton");
+            object unityDecensorButton = GetField(formType, form, "unityDecensorButton");
             object keyBox = GetField(formType, form, "keyBox");
             object keyLabel = GetField(formType, form, "keyLabel");
             object unityMode = GetField(formType, form, "unityExtractModeBox");
@@ -456,6 +460,7 @@ internal static class ReleaseInspector
             updateContext.Invoke(form, new[] { Enum.Parse(engineType, "Unity") });
             bool unity = GetBool(startButton, "Enabled")
                 && GetLocalVisible(unityMode)
+                && GetLocalVisible(unityDecensorButton)
                 && !GetLocalVisible(keyBox)
                 && !GetLocalVisible(unlockerSection);
 
@@ -526,6 +531,7 @@ internal static class ReleaseInspector
                 && GetString(startButton, "Text") == "Recover Embedded Assets";
             bool readableDisabledButtons = HasReadableDisabledContrast(startButton)
                 && HasReadableDisabledContrast(collectLooseButton)
+                && HasReadableDisabledContrast(unityDecensorButton)
                 && HasReadableDisabledContrast(unlockerButton)
                 && HasReadableDisabledContrast(removeUnlockerButton)
                 && HasReadableDisabledContrast(pauseButton)
@@ -533,6 +539,7 @@ internal static class ReleaseInspector
                 && HasReadableDisabledContrast(openOutputButton);
             bool tooltips = !string.IsNullOrWhiteSpace((string)toolTip.GetType().GetMethod("GetToolTip").Invoke(toolTip, new[] { startButton }))
                 && !string.IsNullOrWhiteSpace((string)toolTip.GetType().GetMethod("GetToolTip").Invoke(toolTip, new[] { openOutputButton }))
+                && !string.IsNullOrWhiteSpace((string)toolTip.GetType().GetMethod("GetToolTip").Invoke(toolTip, new[] { unityDecensorButton }))
                 && !string.IsNullOrWhiteSpace((string)toolTip.GetType().GetMethod("GetToolTip").Invoke(toolTip, new[] { javaMode }));
             bool dpi = form.GetType().GetProperty("AutoScaleMode").GetValue(form, null).ToString() == "Dpi"
                 && (int)scaleLogicalHeightForDpi.Invoke(null, new object[] { 570, 120f }) == 712
@@ -768,6 +775,104 @@ internal static class ReleaseInspector
         }
     }
 
+    private static bool VerifyUnityDecensorInstaller(Assembly assembly, string temp)
+    {
+        Type installer = assembly.GetType("RpgmvpConverterWinForms.UnityDecensorInstaller", true);
+        Type packageType = assembly.GetType("RpgmvpConverterWinForms.BepInExPackage", true);
+        MethodInfo detect = installer.GetMethod("DetectEnvironment", BindingFlags.Public | BindingFlags.Static);
+        MethodInfo installSw = installer.GetMethod("InstallSwDecensorZip", BindingFlags.Public | BindingFlags.Static);
+        MethodInfo remove = installer.GetMethod("RemoveManagedInstall", BindingFlags.Public | BindingFlags.Static);
+        MethodInfo isManaged = installer.GetMethod("IsManagedInstallPresent", BindingFlags.Public | BindingFlags.Static);
+        MethodInfo addBe5 = installer.GetMethod("AddBe5Packages", BindingFlags.NonPublic | BindingFlags.Static);
+        MethodInfo addBe6 = installer.GetMethod("AddBe6Packages", BindingFlags.NonPublic | BindingFlags.Static);
+        MethodInfo recommended = installer.GetMethod("FindRecommendedPackage", BindingFlags.Public | BindingFlags.Static);
+
+        string root = Path.Combine(temp, "unity-decensor");
+        CreateMinimalUnityGame(root, true, false);
+        string sentinel = Path.Combine(root, "BepInEx", "plugins", "sentinel.txt");
+        Directory.CreateDirectory(Path.GetDirectoryName(sentinel));
+        File.WriteAllText(sentinel, "keep");
+        object monoBe5 = detect.Invoke(null, new object[] { root });
+        bool monoBe5Detected = GetString(monoBe5, "Architecture") == "x64"
+            && GetString(monoBe5, "SwDecensorVariant") == "BE5";
+
+        string zip = Path.Combine(temp, "SW_Decensor-test.zip");
+        using (FileStream stream = File.Create(zip))
+        using (ZipArchive archive = new ZipArchive(stream, ZipArchiveMode.Create))
+        {
+            WriteZipText(archive, "BepInEx5/SW_Decensor.dll", "be5");
+            WriteZipText(archive, "BepInEx6/SW_Decensor.dll", "be6");
+            WriteZipText(archive, "IL2CPP/SW_Decensor.dll", "il2cpp");
+        }
+
+        string selectedBe5 = (string)installSw.Invoke(null, new object[] { root, zip });
+        string be5Plugin = Path.Combine(root, "BepInEx", "plugins", "SW_Decensor", "SW_Decensor.dll");
+        bool be5Install = selectedBe5.IndexOf("BepInEx5", StringComparison.OrdinalIgnoreCase) >= 0
+            && File.Exists(be5Plugin)
+            && (bool)isManaged.Invoke(null, new object[] { root });
+        remove.Invoke(null, new object[] { root });
+        bool safeRemoval = !File.Exists(be5Plugin)
+            && !(bool)isManaged.Invoke(null, new object[] { root })
+            && File.ReadAllText(sentinel) == "keep";
+
+        string unmanagedPlugin = Path.Combine(root, "BepInEx", "plugins", "SW_Decensor", "SW_Decensor.dll");
+        Directory.CreateDirectory(Path.GetDirectoryName(unmanagedPlugin));
+        File.WriteAllText(unmanagedPlugin, "unmanaged");
+        bool unmanagedProtected = false;
+        try
+        {
+            installSw.Invoke(null, new object[] { root, zip });
+        }
+        catch (TargetInvocationException ex)
+        {
+            unmanagedProtected = ex.InnerException is IOException
+                && File.ReadAllText(unmanagedPlugin) == "unmanaged";
+        }
+        File.Delete(unmanagedPlugin);
+
+        string be6Core = Path.Combine(root, "BepInEx", "core", "BepInEx.Core.dll");
+        Directory.CreateDirectory(Path.GetDirectoryName(be6Core));
+        File.WriteAllText(be6Core, "existing-be6");
+        object monoBe6 = detect.Invoke(null, new object[] { root });
+        string selectedBe6 = (string)installSw.Invoke(null, new object[] { root, zip });
+        remove.Invoke(null, new object[] { root });
+        bool monoBe6Detected = GetString(monoBe6, "SwDecensorVariant") == "BE6"
+            && selectedBe6.IndexOf("BepInEx6", StringComparison.OrdinalIgnoreCase) >= 0
+            && File.ReadAllText(be6Core) == "existing-be6";
+
+        string il2cppRoot = Path.Combine(temp, "unity-decensor-il2cpp");
+        CreateMinimalUnityGame(il2cppRoot, false, true);
+        object il2cpp = detect.Invoke(null, new object[] { il2cppRoot });
+        string selectedIl2Cpp = (string)installSw.Invoke(null, new object[] { il2cppRoot, zip });
+        remove.Invoke(null, new object[] { il2cppRoot });
+        bool il2cppDetected = GetString(il2cpp, "Architecture") == "x86"
+            && GetString(il2cpp, "SwDecensorVariant") == "IL2CPP"
+            && selectedIl2Cpp.IndexOf("IL2CPP", StringComparison.OrdinalIgnoreCase) >= 0;
+
+        IList parsed = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(packageType));
+        string be5Json = "{\"tag_name\":\"v5.4.23.5\",\"assets\":["
+            + "{\"name\":\"BepInEx_win_x64_5.4.23.5.zip\",\"browser_download_url\":\"https://example.test/be5-x64.zip\"},"
+            + "{\"name\":\"BepInEx_win_x86_5.4.23.5.zip\",\"browser_download_url\":\"https://example.test/be5-x86.zip\"}]}";
+        string be6Html = "<a href=\"/projects/bepinex_be/755/BepInEx-Unity.Mono-win-x64-6.0.0-be.755%2Babc.zip\">mono</a>"
+            + "<a href=\"/projects/bepinex_be/755/BepInEx-Unity.IL2CPP-win-x86-6.0.0-be.755%2Babc.zip\">il2cpp</a>";
+        addBe5.Invoke(null, new object[] { parsed, be5Json });
+        addBe6.Invoke(null, new object[] { parsed, be6Html });
+        object recommendedBe5 = recommended.Invoke(null, new object[] { parsed, monoBe5 });
+        object recommendedBe6 = recommended.Invoke(null, new object[] { parsed, monoBe6 });
+        object recommendedIl2Cpp = recommended.Invoke(null, new object[] { parsed, il2cpp });
+        bool packageParsing = parsed.Count == 4
+            && GetString(recommendedBe5, "Channel") == "BE5 stable"
+            && GetString(recommendedBe6, "Channel") == "BE6 latest"
+            && GetString(recommendedIl2Cpp, "Runtime") == "IL2CPP"
+            && parsed.Cast<object>().Any(delegate(object package)
+            {
+                return GetString(package, "Version") == "6.0.0-be.755+abc";
+            });
+
+        return monoBe5Detected && be5Install && safeRemoval && unmanagedProtected
+            && monoBe6Detected && il2cppDetected && packageParsing;
+    }
+
     private static bool VerifyCollectorExtraction(Assembly assembly, string temp)
     {
         Type collectors = assembly.GetType("RpgmvpConverterWinForms.AssetCollectors", true);
@@ -910,6 +1015,36 @@ internal static class ReleaseInspector
     private static int GetInt(object instance, string property)
     {
         return (int)instance.GetType().GetProperty(property).GetValue(instance, null);
+    }
+
+    private static void CreateMinimalUnityGame(string root, bool x64, bool il2cpp)
+    {
+        Directory.CreateDirectory(Path.Combine(root, "Sample_Data"));
+        WriteMinimalPe(Path.Combine(root, "Sample.exe"), x64);
+        if (il2cpp)
+        {
+            Directory.CreateDirectory(Path.Combine(root, "Sample_Data", "il2cpp_data"));
+            File.WriteAllText(Path.Combine(root, "GameAssembly.dll"), "il2cpp");
+        }
+    }
+
+    private static void WriteMinimalPe(string path, bool x64)
+    {
+        byte[] bytes = new byte[256];
+        bytes[0] = (byte)'M';
+        bytes[1] = (byte)'Z';
+        WriteUInt32(bytes, 0x3c, 0x80);
+        WriteUInt32(bytes, 0x80, 0x00004550);
+        ushort machine = x64 ? (ushort)0x8664 : (ushort)0x014c;
+        bytes[0x84] = (byte)(machine & 0xff);
+        bytes[0x85] = (byte)(machine >> 8);
+        File.WriteAllBytes(path, bytes);
+    }
+
+    private static void WriteZipText(ZipArchive archive, string path, string content)
+    {
+        using (StreamWriter writer = new StreamWriter(archive.CreateEntry(path).Open()))
+            writer.Write(content);
     }
 
     private static void WriteMinimalSwf(string path)

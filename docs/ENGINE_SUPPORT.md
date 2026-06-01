@@ -9,7 +9,7 @@
 | Ren'Py | Supported | RPA 2.0, 3.0, 3.2 and 4.0 through `unrpa==2.3.0`; loose resources without RPA archives |
 | NWJS | Supported | Copies loose `www`, `package.nw` and `app.nw` files; safely unpacks ZIP-compatible `.nw` archives |
 | Electron | Supported | Safely unpacks standard `resources/app.asar` archives |
-| Unity | Supported | Textures, videos, audio, OBJ meshes and direct media |
+| Unity | Supported | Textures, videos, audio, OBJ meshes and direct media; optional Mono BE5, Mono BE6 and IL2CPP decensor assistant |
 | Godot 3/4 | Supported | PCK versions 1, 2, 3 and compatible 4 archives, including encrypted directory/file blocks and embedded PCK |
 | KiriKiri | Supported | Standard XP3 archives plus adjacent PNG previews for supported TLG5 images |
 | WOLF RPG | Supported | Loose `Data` files and encrypted archives through embedded `UberWolfCli v0.6.3` |
@@ -35,6 +35,7 @@
 - RAGS recovery is not a complete database parser. It preserves the original `.rag` and extracts only confidently detected embedded media.
 - GameMaker recovery does not yet decode every external-texture layout.
 - SPITE ChaCha20 decoding depends on runtime resource paths recovered from the embedded Tauri frontend. Unreferenced or dynamically generated paths remain `.dat` files under `protected/`.
+- The Unity decensor assistant downloads BepInEx only after user confirmation. SW_Decensor is not redistributed and must be selected as a local ZIP. Existing user-managed BepInEx files are not overwritten or removed.
 
 ## Next Priorities
 

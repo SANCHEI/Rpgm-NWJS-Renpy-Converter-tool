@@ -56,6 +56,7 @@ namespace RpgmvpConverterWinForms
         private Button dryRunButton;
         private Button startButton;
         private Button collectLooseButton;
+        private Button unityDecensorButton;
         private Button unlockerButton;
         private Button removeUnlockerButton;
         private Button pauseButton;
@@ -143,6 +144,22 @@ namespace RpgmvpConverterWinForms
                 WriteLog("Unlocker installation failed: " + ex.Message);
                 MessageBox.Show("Unlocker installation failed:\n" + ex.Message, "Unlocker", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private void OpenUnityDecensor()
+        {
+            string rootPath = InputDirectory(pathBox.Text.Trim());
+            try
+            {
+                using (UnityDecensorDialog dialog = new UnityDecensorDialog(rootPath))
+                    dialog.ShowDialog(this);
+            }
+            catch (Exception ex)
+            {
+                WriteLog("Unity decensor failed: " + ex.Message);
+                MessageBox.Show("Could not open Unity decensor tools:\n" + ex.Message, "Unity Decensor", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            UpdateEngineContext(selectedEngine);
         }
 
         private void RemoveUnlocker()
