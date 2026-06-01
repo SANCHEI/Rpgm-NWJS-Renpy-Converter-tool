@@ -26,7 +26,7 @@ Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **RP
 - Extracts Unity textures, videos, audio, meshes and direct media through one built-in workflow.
 - Extracts Godot PCK archives for Godot 3 and 4, including supported AES-CFB encrypted archives.
 - Extracts standard KiriKiri XP3 archives and renders supported TLG5 images to PNG.
-- Extracts Unreal PAK archives with Zlib, Gzip, LZ4, Zstd and local Oodle decoding in an experimental offline mode.
+- Extracts Unreal PAK archives with Zlib, Gzip, LZ4, Zstd, a built-in open-source Oodle fallback and optional local official Oodle DLL decoding in an experimental offline mode.
 - Collects static HTML games, QSP databases and loose resources.
 - Preserves RAGS `.rag` databases and recovers confidently detected embedded media experimentally.
 - Splits SPAK `.dat` containers and decodes recoverable SPITE ChaCha20 media paths from embedded Tauri frontend bundles.
@@ -122,7 +122,7 @@ KiriKiri extraction supports standard unencrypted `.xp3` archives, compressed in
 
 Unreal extraction uses [`pyuepak==0.2.7`](https://github.com/stas96111/pyUEpak) inside the built-in runtime. It supports ordinary, Zlib, Gzip, LZ4 and Zstd-compressed `.pak` archives. Paste one or more AES keys into the shared key field, or leave it empty to search `keys.txt` and textual HEX/Base64 candidates inside game executables.
 
-The application does not download or redistribute an Oodle DLL. For Oodle-compressed archives it automatically searches for `oo2core*_win64.dll` inside the selected game and installed Unreal Engine folders. If no local decoder is available, entries that use Oodle are listed in `Unreal-skipped-files.txt` while uncompressed entries are still extracted. IoStore `.utoc/.ucas` containers are reported as unsupported.
+The application does not download or redistribute an official Oodle DLL. For Oodle-compressed archives it first searches for `oo2core*_win64.dll` inside the selected game and installed Unreal Engine folders, then falls back to the embedded MIT-licensed [`oozextract==0.5.4`](https://github.com/lvlvllvlvllvlvl/oozextract) decoder. Entries that neither decoder can process are listed in `Unreal-skipped-files.txt`. IoStore `.utoc/.ucas` containers are reported as unsupported.
 
 ## WOLF RPG
 
@@ -193,6 +193,12 @@ Build the main executable. The build machine needs Python 3.12 x64 and internet 
 build_winforms.bat
 ```
 
+Rebuild the embedded open-source Oodle helper only after changing its wrapper or pinned crate version. This requires Rust on the build machine; end users do not need it:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\source\tools\oozextract_ffi\build.ps1
+```
+
 Build the single-file release:
 
 ```powershell
@@ -213,6 +219,8 @@ The release contains one supported executable. Users do not need any neighboring
 - `source/Extractors/`: engine extractors and shared archive safety helpers.
 - `source/Runtime/`: embedded runtime lifecycle helpers.
 - `source/scripts/`: Python sources and the portable-runtime build script.
+- `source/tools/`: source code for embedded native helpers.
+- `third_party/`: pinned helper binaries and their license notices.
 - `tools/`: experimental utilities excluded from the release.
 - `payload/`: generated embedded Python runtime archive, excluded from Git.
 

@@ -63,7 +63,7 @@ Extracts standard unencrypted `.xp3` archives, including compressed indexes and 
 
 ### Unreal Engine
 
-Provides experimental offline extraction for ordinary, Zlib, Gzip, LZ4 and Zstd-compressed `.pak` archives. Enter one or more AES keys or leave the field empty to search `keys.txt` and textual key candidates inside game executables. For Oodle-compressed archives the application automatically checks for a local `oo2core*_win64.dll` inside the game or an installed Unreal Engine. Without it, uncompressed entries are still extracted and protected entries are listed in `Unreal-skipped-files.txt`.
+Provides experimental offline extraction for ordinary, Zlib, Gzip, LZ4, Zstd and Oodle-compressed `.pak` archives. Enter one or more AES keys or leave the field empty to search `keys.txt` and textual key candidates inside game executables. For Oodle-compressed archives the application prefers a local official `oo2core*_win64.dll` inside the game or an installed Unreal Engine, then falls back to its built-in MIT-licensed open-source decoder.
 
 ### WOLF RPG
 
@@ -155,7 +155,7 @@ The built-in extraction runtime is prepared silently under `%LocalAppData%\GameA
 
 - Encrypted Godot PCK extraction requires a discoverable or manually supplied key.
 - TLG6 preview conversion and protected game-specific XP3 variants are not extracted.
-- Unreal Oodle compression requires a local `oo2core*_win64.dll` inside the game or an installed Unreal Engine. Without it, uncompressed entries are still extracted and protected entries are listed in `Unreal-skipped-files.txt`. The application does not download or redistribute the decoder.
+- Unreal Oodle compression uses a built-in open-source fallback. A local official `oo2core*_win64.dll` is preferred when available. The application does not download or redistribute the official decoder.
 - Unreal IoStore `.utoc/.ucas` containers are detected but not extracted.
 - Flash LZMA-compressed `ZWS` files are detected but not inspected.
 - RAGS recovery preserves the original database but is not a complete RAGS database parser.

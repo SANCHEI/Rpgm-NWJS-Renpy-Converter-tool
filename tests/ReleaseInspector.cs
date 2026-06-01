@@ -218,6 +218,7 @@ internal static class ReleaseInspector
             string pythonPath = null;
             string runtimeDirectory = null;
             bool portableImports = false;
+            bool openSourceOodleFallback = false;
             bool runtimeRemoved = false;
             bool wolfCliExtracted = false;
             bool wolfCliRemoved = false;
@@ -236,12 +237,14 @@ internal static class ReleaseInspector
                 pythonPath = (string)ensureRuntime.Invoke(null, null);
                 runtimeDirectory = Path.GetDirectoryName(pythonPath);
                 ProcessStartInfo psi = (ProcessStartInfo)createPythonProcessInfo.Invoke(null, null);
-                psi.Arguments = "-c \"import unrpa, UnityPy, pyuepak, zstandard; from pyuepak.aes_windows import aes_cfb_decrypt; print('portable-runtime-ok')\"";
+                psi.Arguments = "-c \"import unrpa, UnityPy, pyuepak, zstandard; from pyuepak.aes_windows import aes_cfb_decrypt; from pyuepak.oodle import oodle; print('portable-runtime-ok'); print(oodle().name)\"";
                 using (Process process = Process.Start(psi))
                 {
                     string output = process.StandardOutput.ReadToEnd();
                     process.WaitForExit();
                     portableImports = process.ExitCode == 0 && output.Contains("portable-runtime-ok");
+                    openSourceOodleFallback = output.Contains("built-in open-source oozextract")
+                        && File.Exists(Path.Combine(runtimeDirectory, "Lib", "site-packages", "pyuepak", "GameAssetTool.OozExtract.dll"));
                 }
             }
             finally
@@ -282,6 +285,7 @@ internal static class ReleaseInspector
             Console.WriteLine("EmbeddedWolfCli=" + hasWolfCli);
             Console.WriteLine("EmbeddedResvg=" + hasResvg);
             Console.WriteLine("PortableRuntimeImports=" + portableImports);
+            Console.WriteLine("OpenSourceOodleFallback=" + openSourceOodleFallback);
             Console.WriteLine("PortableRuntimeRemoved=" + runtimeRemoved);
             Console.WriteLine("WolfCliExtracted=" + wolfCliExtracted);
             Console.WriteLine("WolfCliRemoved=" + wolfCliRemoved);
@@ -337,6 +341,7 @@ internal static class ReleaseInspector
                 && hasWolfCli
                 && hasResvg
                 && portableImports
+                && openSourceOodleFallback
                 && runtimeRemoved
                 && wolfCliExtracted
                 && wolfCliRemoved

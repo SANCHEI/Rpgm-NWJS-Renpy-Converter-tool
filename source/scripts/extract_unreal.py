@@ -6,6 +6,7 @@ import re
 import sys
 
 from pyuepak import PakFile
+from pyuepak.oodle import oodle
 
 
 MAX_KEY_FILE_BYTES = 4 * 1024 * 1024
@@ -194,6 +195,7 @@ def main():
     archives, utocs = find_files(game_path, output_path)
     total = len(archives) + len(utocs)
     print("TOTAL:{}".format(total))
+    print("Oodle decoder: {}".format(getattr(oodle(), "name", "unavailable")))
 
     extracted = 0
     byte_count = 0

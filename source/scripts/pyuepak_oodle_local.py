@@ -3,6 +3,9 @@ import glob
 import os
 
 
+OPEN_SOURCE_DLL = os.path.join(os.path.dirname(__file__), "GameAssetTool.OozExtract.dll")
+
+
 class OodleUnavailable(RuntimeError):
     pass
 
@@ -21,6 +24,7 @@ class OfflineOodle:
 class LocalOodle:
     def __init__(self, path):
         self.path = path
+        self.name = "local official Oodle DLL: {}".format(os.path.basename(path))
         self.library = ctypes.WinDLL(path)
         self.decompress_function = self.library.OodleLZ_Decompress
         self.decompress_function.restype = ctypes.c_longlong
@@ -50,6 +54,37 @@ class LocalOodle:
         if result != expected_size:
             raise OodleUnavailable(
                 "Local Oodle decoder returned {} bytes instead of {}.".format(result, expected_size)
+            )
+        return destination.raw
+
+
+class OpenSourceOodle:
+    def __init__(self, path):
+        self.path = path
+        self.name = "built-in open-source oozextract"
+        self.library = ctypes.WinDLL(path)
+        self.decompress_function = self.library.gat_oodle_decompress
+        self.decompress_function.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_size_t,
+            ctypes.c_void_p,
+            ctypes.c_size_t,
+        ]
+        self.decompress_function.restype = ctypes.c_ssize_t
+
+    def compress(self, *_args, **_kwargs):
+        raise OodleUnavailable("Oodle compression is not used by Game Asset Tool.")
+
+    def decompress(self, source, expected_size):
+        source_buffer = ctypes.create_string_buffer(source)
+        destination = ctypes.create_string_buffer(expected_size)
+        result = self.decompress_function(source_buffer, len(source), destination, expected_size)
+        if result != expected_size:
+            raise OodleUnavailable(
+                "Built-in open-source Oodle decoder returned {} bytes instead of {}.".format(
+                    result,
+                    expected_size,
+                )
             )
         return destination.raw
 
@@ -88,10 +123,15 @@ def _load():
             return LocalOodle(candidate)
         except (OSError, AttributeError):
             continue
+
+    try:
+        return OpenSourceOodle(OPEN_SOURCE_DLL)
+    except (OSError, AttributeError):
+        pass
+
     return OfflineOodle(
-        "Oodle-compressed Unreal PAK detected, but no local oo2core*_win64.dll was found "
-        "inside the game or an installed Unreal Engine. Game Asset Tool does not redistribute "
-        "or silently download Epic's proprietary Oodle decoder."
+        "Oodle-compressed Unreal PAK detected, but no compatible decoder is available. "
+        "No local oo2core*_win64.dll was found and the built-in open-source decoder could not load."
     )
 
 

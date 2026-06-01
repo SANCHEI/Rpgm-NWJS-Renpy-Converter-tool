@@ -377,20 +377,16 @@ def main():
             [
                 sys.executable,
                 "-c",
-                "from pyuepak.oodle import OodleUnavailable, oodle\n"
-                "try:\n"
-                "    oodle().decompress(b'data', 1)\n"
-                "    raise AssertionError('Oodle fallback unexpectedly decompressed data.')\n"
-                "except OodleUnavailable as error:\n"
-                "    assert 'no local oo2core' in str(error)\n"
-                "    print('local_oodle_fallback=ok')\n",
+                "from pyuepak.oodle import oodle\n"
+                "assert oodle().name == 'built-in open-source oozextract'\n"
+                "print('open_source_oodle_fallback=ok')\n",
             ],
             env=fallback_environment,
             capture_output=True,
             text=True,
         )
         if fallback.returncode != 0:
-            raise AssertionError("Oodle fallback failed:\n{}\n{}".format(fallback.stdout, fallback.stderr))
+            raise AssertionError("Open-source Oodle fallback failed:\n{}\n{}".format(fallback.stdout, fallback.stderr))
         print(fallback.stdout.strip())
 
         from pyuepak.aes_windows import aes_cfb_decrypt, aes_ecb_decrypt

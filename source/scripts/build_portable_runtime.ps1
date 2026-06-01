@@ -16,8 +16,9 @@ $requirements = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "portable-runtim
 $localOodle = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "pyuepak_oodle_local.py"))
 $windowsAes = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "pyuepak_aes_windows.py"))
 $patchPyuepak = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "patch_pyuepak_offline.py"))
+$oozextractDll = [IO.Path]::GetFullPath((Join-Path $root "third_party\oozextract\GameAssetTool.OozExtract.dll"))
 
-$runtimeVersion = "python-3.12.10-unrpa-2.3.0-unitypy-1.25.0-pyuepak-0.2.7-zstandard-0.25.0-pycryptodome-3.23.0-win-x64-v9"
+$runtimeVersion = "python-3.12.10-unrpa-2.3.0-unitypy-1.25.0-pyuepak-0.2.7-zstandard-0.25.0-pycryptodome-3.23.0-oozextract-0.5.4-win-x64-v10"
 $pythonUrl = "https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip"
 $pythonSha256 = "4ACBED6DD1C744B0376E3B1CF57CE906F9DC9E95E68824584C8099A63025A3C3"
 
@@ -39,10 +40,14 @@ function Get-Sha256 {
     }
 }
 
-foreach ($path in @($payloadDir, $payloadZip, $payloadVersionFile, $work, $runtime, $sitePackages)) {
+foreach ($path in @($payloadDir, $payloadZip, $payloadVersionFile, $work, $runtime, $sitePackages, $oozextractDll)) {
     if (-not $path.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) {
         throw "Refusing to use path outside workspace: $path"
     }
+}
+
+if (-not (Test-Path -LiteralPath $oozextractDll)) {
+    throw "Embedded oozextract helper was not found. Run source\tools\oozextract_ffi\build.ps1 first."
 }
 
 if (-not $Force -and (Test-Path -LiteralPath $payloadZip) -and (Test-Path -LiteralPath $payloadVersionFile) -and ((Get-Content -LiteralPath $payloadVersionFile -Raw).Trim() -eq $runtimeVersion)) {
@@ -97,6 +102,7 @@ if ($LASTEXITCODE -ne 0) {
 
 Copy-Item -LiteralPath $localOodle -Destination (Join-Path $sitePackages "pyuepak\oodle.py") -Force
 Copy-Item -LiteralPath $windowsAes -Destination (Join-Path $sitePackages "pyuepak\aes_windows.py") -Force
+Copy-Item -LiteralPath $oozextractDll -Destination (Join-Path $sitePackages "pyuepak\GameAssetTool.OozExtract.dll") -Force
 & $bootstrap.Source $patchPyuepak $sitePackages
 if ($LASTEXITCODE -ne 0) {
     throw "pyuepak offline patch failed with exit code $LASTEXITCODE"
@@ -152,7 +158,7 @@ Get-ChildItem -LiteralPath $runtime -File -Recurse -Force -Filter "*.pyc" |
 Set-Content -LiteralPath (Join-Path $runtime "GameAssetTool-runtime.txt") -Encoding Ascii -Value $runtimeVersion
 
 Write-Host "Verifying portable runtime imports..."
-& (Join-Path $runtime "python.exe") -c "import brotli, hashlib, os, tempfile, unrpa, UnityPy, pyuepak, zstandard; from Crypto.Cipher import ChaCha20; from PIL import Image; from pyuepak.aes_windows import aes_cfb_decrypt, aes_cfb_encrypt, aes_ecb_decrypt; from pyuepak.oodle import oodle; assert hashlib.md5(b'x').hexdigest() == '9dd4e461268c8034f5c8564e155c67a6'; assert hashlib.sha1(b'x').hexdigest() == '11f6ad8ec52a2984abaafd7c3b516503785c2072'; assert aes_ecb_decrypt(bytes.fromhex('000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f'), bytes.fromhex('8ea2b7ca516745bfeafc49904b496089')).hex() == '00112233445566778899aabbccddeeff'; assert ChaCha20.new(key=bytes(32), nonce=bytes(12)).decrypt(bytes(4)) == bytes.fromhex('76b8e0ad'); key=bytes.fromhex('603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914dff4'); iv=bytes.fromhex('000102030405060708090a0b0c0d0e0f'); encrypted=bytes.fromhex('dc7e84bfda79164b7ecd8486985d3860'); plain=bytes.fromhex('6bc1bee22e409f96e93d7e117393172a'); assert aes_cfb_decrypt(key, iv, encrypted) == plain; assert aes_cfb_encrypt(key, iv, plain) == encrypted; path=os.path.join(tempfile.gettempdir(), 'GameAssetTool-pillow-test.png'); Image.new('RGBA', (1, 1)).save(path); os.remove(path); print('portable-runtime-ok')"
+& (Join-Path $runtime "python.exe") -c "import brotli, hashlib, os, tempfile, unrpa, UnityPy, pyuepak, zstandard; from Crypto.Cipher import ChaCha20; from PIL import Image; from pyuepak.aes_windows import aes_cfb_decrypt, aes_cfb_encrypt, aes_ecb_decrypt; from pyuepak.oodle import oodle; assert oodle().name == 'built-in open-source oozextract'; assert hashlib.md5(b'x').hexdigest() == '9dd4e461268c8034f5c8564e155c67a6'; assert hashlib.sha1(b'x').hexdigest() == '11f6ad8ec52a2984abaafd7c3b516503785c2072'; assert aes_ecb_decrypt(bytes.fromhex('000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f'), bytes.fromhex('8ea2b7ca516745bfeafc49904b496089')).hex() == '00112233445566778899aabbccddeeff'; assert ChaCha20.new(key=bytes(32), nonce=bytes(12)).decrypt(bytes(4)) == bytes.fromhex('76b8e0ad'); key=bytes.fromhex('603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914dff4'); iv=bytes.fromhex('000102030405060708090a0b0c0d0e0f'); encrypted=bytes.fromhex('dc7e84bfda79164b7ecd8486985d3860'); plain=bytes.fromhex('6bc1bee22e409f96e93d7e117393172a'); assert aes_cfb_decrypt(key, iv, encrypted) == plain; assert aes_cfb_encrypt(key, iv, plain) == encrypted; path=os.path.join(tempfile.gettempdir(), 'GameAssetTool-pillow-test.png'); Image.new('RGBA', (1, 1)).save(path); os.remove(path); print('portable-runtime-ok')"
 if ($LASTEXITCODE -ne 0) {
     throw "Portable runtime import verification failed with exit code $LASTEXITCODE"
 }

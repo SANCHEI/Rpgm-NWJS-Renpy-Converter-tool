@@ -10,7 +10,7 @@ Game Asset Tool embeds a private portable runtime for optional Ren'Py, Unity, Un
 - `brotli==1.2.0` for embedded Tauri frontend decompression: https://github.com/google/brotli
 - `pycryptodome==3.23.0` for SPITE ChaCha20 stream decoding: https://github.com/Legrandin/pycryptodome
 
-The upstream `pyuepak` package can acquire an Oodle DLL at runtime and normally uses the `cryptography` package for AES. Game Asset Tool replaces those integrations with offline local-DLL discovery and the built-in Windows `bcrypt.dll` API. It does not download or redistribute the Oodle DLL. For Oodle-compressed Unreal archives, it searches for `oo2core*_win64.dll` inside the selected game and installed Unreal Engine folders; if no local decoder is available, the archive is reported and skipped.
+The upstream `pyuepak` package can acquire an Oodle DLL at runtime and normally uses the `cryptography` package for AES. Game Asset Tool replaces those integrations with offline local-DLL discovery and the built-in Windows `bcrypt.dll` API. It does not download or redistribute an official Oodle DLL. For Oodle-compressed Unreal archives, it first searches for `oo2core*_win64.dll` inside the selected game and installed Unreal Engine folders, then falls back to an embedded wrapper around MIT-licensed [`oozextract==0.5.4`](https://github.com/lvlvllvlvllvlvl/oozextract). The pinned wrapper source and Cargo lockfile are stored under `source/tools/oozextract_ffi/`; its notice is stored under `third_party/oozextract/`.
 
 The built-in Godot PCK and standard KiriKiri XP3 extractors are project source files. The Godot implementation follows the public pack format in the official Godot source tree: https://github.com/godotengine/godot
 

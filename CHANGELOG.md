@@ -6,6 +6,7 @@
 - Added experimental SPAK `.dat` container detection, streaming entry extraction, adjacent DAT collection, open-media extension inference and a manifest for protected blocks.
 - Added automatic SPITE ChaCha20 decoding for media routes recovered from embedded Brotli-compressed Tauri frontend bundles, while preserving unresolved blocks under `protected/`.
 - Extract uncompressed Unreal PAK entries even when other files require an unavailable Oodle decoder, with skipped entries listed in `Unreal-skipped-files.txt`.
+- Added an embedded MIT-licensed `oozextract 0.5.4` fallback for offline Unreal Oodle decompression without an additional DLL download or installation.
 
 ## 2.1.0 - 2026-06-01
 

@@ -18,7 +18,7 @@
 | HTML games | Supported | Copies open scripts, styles and media while preserving folder structure |
 | QSP | Supported | Copies `.qsp` databases and loose media without duplicating the bundled player |
 | Flash SWF | Experimental | Copies original SWF files and extracts embedded JPEG, PNG, GIF and FLV video from `FWS` / `CWS` |
-| Unreal | Experimental | Offline `.pak` extraction; Zlib, Gzip, LZ4, Zstd, AES-key lists and local Oodle DLL workflows |
+| Unreal | Experimental | Offline `.pak` extraction; Zlib, Gzip, LZ4, Zstd, AES-key lists, built-in open-source Oodle fallback and optional local official Oodle DLL workflows |
 | RAGS | Experimental | Preserves `.rag` databases and carves confidently detected JPEG, PNG, GIF and OGG media |
 | GameMaker | Experimental | Preserves `data.win`, collects open images and converts embedded PNG, QOI and BZ2QOI texture pages |
 | SPAK DAT / SPITE | Experimental | Splits SPAK `.dat`, recovers Tauri frontend media paths, decodes matching SPITE ChaCha20 payloads and preserves unresolved blocks |
@@ -30,7 +30,7 @@
 - TLG6 preview conversion and protected game-specific XP3 variants are not extracted.
 - Non-ZIP NWJS `.nw` package formats are reported and skipped.
 - Flash LZMA-compressed `ZWS` files are reported and skipped.
-- Unreal Oodle compression requires a local `oo2core*_win64.dll` inside the selected game or an installed Unreal Engine. The application does not download or redistribute the decoder. Without it, uncompressed PAK entries are still extracted and Oodle entries are listed in `Unreal-skipped-files.txt`.
+- Unreal Oodle compression uses a built-in MIT-licensed `oozextract` fallback. A local official `oo2core*_win64.dll` inside the selected game or an installed Unreal Engine is preferred when available. The application does not download or redistribute the official decoder.
 - Unreal IoStore `.utoc/.ucas` containers are detected and reported, but not extracted.
 - RAGS recovery is not a complete database parser. It preserves the original `.rag` and extracts only confidently detected embedded media.
 - GameMaker recovery does not yet decode every external-texture layout.
