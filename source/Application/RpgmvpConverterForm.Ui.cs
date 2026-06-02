@@ -23,7 +23,7 @@ namespace RpgmvpConverterWinForms
             Font titleFont = new Font("Segoe UI Semibold", 14f, FontStyle.Regular);
             Font logFont = new Font("Consolas", 9.5f, FontStyle.Regular);
 
-            Text = "Game Asset Tool v2.1.0";
+            Text = "Game Asset Tool v2.2.0";
             StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
@@ -872,7 +872,7 @@ namespace RpgmvpConverterWinForms
                     ? T("Extract supported assets for the detected engine.", "Извлечь поддерживаемые ресурсы определённого движка.")
                     : T("Recover embedded media by signatures and write diagnostics for this unknown format.", "Извлечь встроенные медиа по сигнатурам и записать диагностику неизвестного формата."));
             SetActionTooltip(collectLooseButton, T("Collect open media, scripts and project files without unpacking archives.", "Собрать открытые медиа, скрипты и файлы проекта без распаковки архивов."));
-            SetActionTooltip(unityDecensorButton, T("Detect Mono BE5, Mono BE6 or IL2CPP, install the latest compatible BepInEx online and select an SW_Decensor ZIP.", "Определить Mono BE5, Mono BE6 или IL2CPP, установить актуальный совместимый BepInEx из сети и выбрать ZIP SW_Decensor."));
+            SetActionTooltip(unityDecensorButton, T("Detect Mono BE5, Mono BE6 or IL2CPP, install the latest compatible BepInEx online and install the built-in SW_Decensor.", "Определить Mono BE5, Mono BE6 или IL2CPP, установить актуальный совместимый BepInEx из сети и встроенный SW_Decensor."));
             SetActionTooltip(unlockerButton, selectedEngine == GameEngine.Renpy
                 ? T("Install the Ren'Py gallery unlocker. Try Soft mode first.", "Установить анлокер галереи Ren'Py. Сначала попробуйте мягкий режим.")
                 : T("The gallery unlocker is available only for detected Ren'Py folders.", "Анлокер галереи доступен только для определённых папок Ren'Py."));

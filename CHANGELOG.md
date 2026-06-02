@@ -2,13 +2,15 @@
 
 ## Unreleased
 
+## 2.2.0 - 2026-06-02
+
 - Preserve an explicitly selected or dropped directory instead of replacing it with a detected engine folder from one of its parents.
 - Added experimental SPAK `.dat` container detection, streaming entry extraction, adjacent DAT collection, open-media extension inference and a manifest for protected blocks.
 - Added automatic SPITE ChaCha20 decoding for media routes recovered from embedded Brotli-compressed Tauri frontend bundles, while preserving unresolved blocks under `protected/`.
 - Extract uncompressed Unreal PAK entries even when other files require an unavailable Oodle decoder, with skipped entries listed in `Unreal-skipped-files.txt`.
 - Added an embedded MIT-licensed `oozextract 0.5.4` fallback for offline Unreal Oodle decompression without an additional DLL download or installation.
-- Added a Unity decensor assistant that detects Mono BE5, Mono BE6 and IL2CPP games, loads the latest compatible BepInEx packages from official online sources and installs the recommended package on demand.
-- Added local SW_Decensor ZIP integration with automatic BE5, BE6 or IL2CPP DLL selection, archive limits and manifest-based removal that preserves unmanaged files.
+- Added a Unity decensor assistant that detects Mono BE5, Mono BE6 and IL2CPP games, loads the latest compatible BepInEx Unity packages from the official Bleeding Edge builds page and installs the recommended package on demand.
+- Embedded `SW_Decensor v0.7.4.2` with automatic BE5, BE6 or IL2CPP DLL selection and manifest-based removal that preserves unmanaged files.
 
 ## 2.1.0 - 2026-06-01
 

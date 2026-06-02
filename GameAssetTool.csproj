@@ -84,6 +84,9 @@
     <EmbeddedResource Include="third_party\resvg\resvg.exe">
       <LogicalName>RpgmvpConverterWinForms.tools.resvg.exe</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="third_party\sw_decensor\SW_Decensor_v0.7.4.2.zip">
+      <LogicalName>RpgmvpConverterWinForms.tools.SW_Decensor_v0.7.4.2.zip</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

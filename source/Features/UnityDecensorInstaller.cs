@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -77,7 +76,7 @@ namespace RpgmvpConverterWinForms
     internal static class UnityDecensorInstaller
     {
         private const string ManifestName = ".gameassettool-unity-decensor.json";
-        private const string GitHubLatestRelease = "https://api.github.com/repos/BepInEx/BepInEx/releases/latest";
+        private const string EmbeddedSwDecensorResource = "RpgmvpConverterWinForms.tools.SW_Decensor_v0.7.4.2.zip";
         private const string Be6BuildsPage = "https://builds.bepinex.dev/projects/bepinex_be";
         private const long MaxDownloadBytes = 128L * 1024 * 1024;
         private const long MaxArchiveEntryBytes = 128L * 1024 * 1024;
@@ -98,14 +97,16 @@ namespace RpgmvpConverterWinForms
             string executable = FindGameExecutable(rootPath, dataPath);
             bool il2cpp = File.Exists(Path.Combine(rootPath, "GameAssembly.dll"))
                 || Directory.Exists(Path.Combine(dataPath, "il2cpp_data"));
-            bool be6 = IsBepInEx6Installed(rootPath);
+            string existingBepInEx = DetectExistingBepInEx(rootPath);
             return new UnityDecensorEnvironment
             {
                 GameRoot = rootPath,
                 GameExecutable = executable,
                 Architecture = DetectPeArchitecture(executable),
-                Runtime = il2cpp ? UnityRuntimeKind.Il2Cpp : be6 ? UnityRuntimeKind.MonoBe6 : UnityRuntimeKind.MonoBe5,
-                ExistingBepInEx = DetectExistingBepInEx(rootPath)
+                Runtime = il2cpp
+                    ? UnityRuntimeKind.Il2Cpp
+                    : existingBepInEx == "BE5" ? UnityRuntimeKind.MonoBe5 : UnityRuntimeKind.MonoBe6,
+                ExistingBepInEx = existingBepInEx
             };
         }
 
@@ -113,16 +114,15 @@ namespace RpgmvpConverterWinForms
         {
             List<BepInExPackage> packages = new List<BepInExPackage>();
             using (WebClient client = CreateWebClient())
-            {
-                AddBe5Packages(packages, client.DownloadString(GitHubLatestRelease));
                 AddBe6Packages(packages, client.DownloadString(Be6BuildsPage));
-            }
             return packages;
         }
 
         public static BepInExPackage FindRecommendedPackage(IEnumerable<BepInExPackage> packages, UnityDecensorEnvironment environment)
         {
-            string channel = environment.Runtime == UnityRuntimeKind.MonoBe5 ? "BE5 stable" : "BE6 latest";
+            if (environment.Runtime == UnityRuntimeKind.MonoBe5)
+                return null;
+            string channel = "BE6 latest";
             string runtime = environment.Runtime == UnityRuntimeKind.Il2Cpp ? "IL2CPP" : "Mono";
             return packages.FirstOrDefault(delegate(BepInExPackage package)
             {
@@ -154,25 +154,38 @@ namespace RpgmvpConverterWinForms
 
         public static string InstallSwDecensorZip(string rootPath, string zipPath)
         {
-            UnityDecensorEnvironment environment = DetectEnvironment(rootPath);
-            string selectedEntry;
             using (FileStream input = File.OpenRead(zipPath))
             using (ZipArchive archive = new ZipArchive(input, ZipArchiveMode.Read))
+                return InstallSwDecensorArchive(rootPath, archive);
+        }
+
+        public static string InstallEmbeddedSwDecensor(string rootPath)
+        {
+            using (Stream input = typeof(UnityDecensorInstaller).Assembly.GetManifestResourceStream(EmbeddedSwDecensorResource))
             {
-                selectedEntry = SelectSwDecensorEntry(archive, environment.SwDecensorVariant);
-                ZipArchiveEntry entry = archive.GetEntry(selectedEntry);
-                EnsureEntrySize(entry);
-                string pluginRelative = NormalizeRelativePath(Path.Combine(
-                    "BepInEx",
-                    "plugins",
-                    "SW_Decensor",
-                    Path.GetFileName(entry.Name)));
-                UnityDecensorManifest existingManifest = ReadManifest(rootPath);
-                string destination = SafeDestination(rootPath, pluginRelative);
-                if (File.Exists(destination) && !existingManifest.InstalledFiles.Contains(pluginRelative, StringComparer.OrdinalIgnoreCase))
-                    throw new IOException("Refusing to overwrite an existing plugin file: " + pluginRelative);
-                WriteManagedFile(rootPath, pluginRelative, entry);
+                if (input == null)
+                    throw new InvalidOperationException("Embedded SW_Decensor package is missing.");
+                using (ZipArchive archive = new ZipArchive(input, ZipArchiveMode.Read))
+                    return InstallSwDecensorArchive(rootPath, archive);
             }
+        }
+
+        private static string InstallSwDecensorArchive(string rootPath, ZipArchive archive)
+        {
+            UnityDecensorEnvironment environment = DetectEnvironment(rootPath);
+            string selectedEntry = SelectSwDecensorEntry(archive, environment.SwDecensorVariant);
+            ZipArchiveEntry entry = archive.GetEntry(selectedEntry);
+            EnsureEntrySize(entry);
+            string pluginRelative = NormalizeRelativePath(Path.Combine(
+                "BepInEx",
+                "plugins",
+                "SW_Decensor",
+                Path.GetFileName(entry.Name)));
+            UnityDecensorManifest existingManifest = ReadManifest(rootPath);
+            string destination = SafeDestination(rootPath, pluginRelative);
+            if (File.Exists(destination) && !existingManifest.InstalledFiles.Contains(pluginRelative, StringComparer.OrdinalIgnoreCase))
+                throw new IOException("Refusing to overwrite an existing plugin file: " + pluginRelative);
+            WriteManagedFile(rootPath, pluginRelative, entry);
             UnityDecensorManifest manifest = ReadManifest(rootPath);
             manifest.SwDecensorVariant = environment.SwDecensorVariant;
             WriteManifest(rootPath, manifest);
@@ -292,27 +305,6 @@ namespace RpgmvpConverterWinForms
             return new[] { "be5", "bepinex5", "bepinex 5", "bepinex_5", "bepinex-5" };
         }
 
-        private static void AddBe5Packages(List<BepInExPackage> packages, string json)
-        {
-            Dictionary<string, object> release = Json.Deserialize<Dictionary<string, object>>(json);
-            string tag = Convert.ToString(release["tag_name"]);
-            IEnumerable assets = (IEnumerable)release["assets"];
-            foreach (Dictionary<string, object> asset in assets.Cast<Dictionary<string, object>>())
-            {
-                string name = Convert.ToString(asset["name"]);
-                Match match = Regex.Match(name, @"^BepInEx_win_(x86|x64)_[^/]+\.zip$", RegexOptions.IgnoreCase);
-                if (!match.Success) continue;
-                packages.Add(new BepInExPackage
-                {
-                    Channel = "BE5 stable",
-                    Runtime = "Mono",
-                    Architecture = match.Groups[1].Value.ToLowerInvariant(),
-                    Version = tag,
-                    Url = Convert.ToString(asset["browser_download_url"])
-                });
-            }
-        }
-
         private static void AddBe6Packages(List<BepInExPackage> packages, string html)
         {
             Match build = Regex.Match(html, @"href=""(?<url>/projects/bepinex_be/(?<id>\d+)/BepInEx-Unity\.(?<runtime>Mono|IL2CPP)-win-(?<arch>x86|x64)-(?<version>6\.0\.0-be\.[^""]+)\.zip)""", RegexOptions.IgnoreCase);
@@ -416,7 +408,7 @@ namespace RpgmvpConverterWinForms
         private static WebClient CreateWebClient()
         {
             WebClient client = new WebClient();
-            client.Headers[HttpRequestHeader.UserAgent] = "GameAssetTool/2.1.0";
+            client.Headers[HttpRequestHeader.UserAgent] = "GameAssetTool/2.2.0";
             return client;
         }
 

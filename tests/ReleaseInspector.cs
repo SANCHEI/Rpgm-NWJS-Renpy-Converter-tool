@@ -38,6 +38,7 @@ internal static class ReleaseInspector
             bool hasPortableRuntime = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.runtime.runtime-win-x64.zip");
             bool hasWolfCli = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.tools.UberWolfCli.exe");
             bool hasResvg = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.tools.resvg.exe");
+            bool hasSwDecensor = assembly.GetManifestResourceNames().Contains("RpgmvpConverterWinForms.tools.SW_Decensor_v0.7.4.2.zip");
 
             Type unlockerType = assembly.GetType("RpgmvpConverterWinForms.UnlockerResources", true);
             MethodInfo extractUnlocker = unlockerType.GetMethod("ExtractUnlocker", BindingFlags.Public | BindingFlags.Static);
@@ -285,6 +286,7 @@ internal static class ReleaseInspector
             Console.WriteLine("EmbeddedPortableRuntime=" + hasPortableRuntime);
             Console.WriteLine("EmbeddedWolfCli=" + hasWolfCli);
             Console.WriteLine("EmbeddedResvg=" + hasResvg);
+            Console.WriteLine("EmbeddedSwDecensor=" + hasSwDecensor);
             Console.WriteLine("PortableRuntimeImports=" + portableImports);
             Console.WriteLine("OpenSourceOodleFallback=" + openSourceOodleFallback);
             Console.WriteLine("PortableRuntimeRemoved=" + runtimeRemoved);
@@ -342,6 +344,7 @@ internal static class ReleaseInspector
                 && hasPortableRuntime
                 && hasWolfCli
                 && hasResvg
+                && hasSwDecensor
                 && portableImports
                 && openSourceOodleFallback
                 && runtimeRemoved
@@ -781,14 +784,17 @@ internal static class ReleaseInspector
         Type packageType = assembly.GetType("RpgmvpConverterWinForms.BepInExPackage", true);
         MethodInfo detect = installer.GetMethod("DetectEnvironment", BindingFlags.Public | BindingFlags.Static);
         MethodInfo installSw = installer.GetMethod("InstallSwDecensorZip", BindingFlags.Public | BindingFlags.Static);
+        MethodInfo installEmbeddedSw = installer.GetMethod("InstallEmbeddedSwDecensor", BindingFlags.Public | BindingFlags.Static);
         MethodInfo remove = installer.GetMethod("RemoveManagedInstall", BindingFlags.Public | BindingFlags.Static);
         MethodInfo isManaged = installer.GetMethod("IsManagedInstallPresent", BindingFlags.Public | BindingFlags.Static);
-        MethodInfo addBe5 = installer.GetMethod("AddBe5Packages", BindingFlags.NonPublic | BindingFlags.Static);
         MethodInfo addBe6 = installer.GetMethod("AddBe6Packages", BindingFlags.NonPublic | BindingFlags.Static);
         MethodInfo recommended = installer.GetMethod("FindRecommendedPackage", BindingFlags.Public | BindingFlags.Static);
 
         string root = Path.Combine(temp, "unity-decensor");
         CreateMinimalUnityGame(root, true, false);
+        string be5Core = Path.Combine(root, "BepInEx", "core", "BepInEx.dll");
+        Directory.CreateDirectory(Path.GetDirectoryName(be5Core));
+        File.WriteAllText(be5Core, "existing-be5");
         string sentinel = Path.Combine(root, "BepInEx", "plugins", "sentinel.txt");
         Directory.CreateDirectory(Path.GetDirectoryName(sentinel));
         File.WriteAllText(sentinel, "keep");
@@ -815,6 +821,12 @@ internal static class ReleaseInspector
             && !(bool)isManaged.Invoke(null, new object[] { root })
             && File.ReadAllText(sentinel) == "keep";
 
+        string selectedEmbeddedBe5 = (string)installEmbeddedSw.Invoke(null, new object[] { root });
+        string embeddedBe5Plugin = Path.Combine(root, "BepInEx", "plugins", "SW_Decensor", "SW_Decensor_BE5.dll");
+        bool embeddedInstall = selectedEmbeddedBe5.EndsWith("SW_Decensor_BE5.dll", StringComparison.OrdinalIgnoreCase)
+            && File.Exists(embeddedBe5Plugin);
+        remove.Invoke(null, new object[] { root });
+
         string unmanagedPlugin = Path.Combine(root, "BepInEx", "plugins", "SW_Decensor", "SW_Decensor.dll");
         Directory.CreateDirectory(Path.GetDirectoryName(unmanagedPlugin));
         File.WriteAllText(unmanagedPlugin, "unmanaged");
@@ -834,43 +846,46 @@ internal static class ReleaseInspector
         Directory.CreateDirectory(Path.GetDirectoryName(be6Core));
         File.WriteAllText(be6Core, "existing-be6");
         object monoBe6 = detect.Invoke(null, new object[] { root });
-        string selectedBe6 = (string)installSw.Invoke(null, new object[] { root, zip });
+        string selectedBe6 = (string)installEmbeddedSw.Invoke(null, new object[] { root });
         remove.Invoke(null, new object[] { root });
         bool monoBe6Detected = GetString(monoBe6, "SwDecensorVariant") == "BE6"
-            && selectedBe6.IndexOf("BepInEx6", StringComparison.OrdinalIgnoreCase) >= 0
+            && selectedBe6.EndsWith("SW_Decensor_BE6.dll", StringComparison.OrdinalIgnoreCase)
             && File.ReadAllText(be6Core) == "existing-be6";
+
+        string freshMonoRoot = Path.Combine(temp, "unity-decensor-fresh-mono");
+        CreateMinimalUnityGame(freshMonoRoot, true, false);
+        object freshMono = detect.Invoke(null, new object[] { freshMonoRoot });
+        bool freshMonoDefaultsToBe6 = GetString(freshMono, "SwDecensorVariant") == "BE6";
 
         string il2cppRoot = Path.Combine(temp, "unity-decensor-il2cpp");
         CreateMinimalUnityGame(il2cppRoot, false, true);
         object il2cpp = detect.Invoke(null, new object[] { il2cppRoot });
-        string selectedIl2Cpp = (string)installSw.Invoke(null, new object[] { il2cppRoot, zip });
+        string selectedIl2Cpp = (string)installEmbeddedSw.Invoke(null, new object[] { il2cppRoot });
         remove.Invoke(null, new object[] { il2cppRoot });
         bool il2cppDetected = GetString(il2cpp, "Architecture") == "x86"
             && GetString(il2cpp, "SwDecensorVariant") == "IL2CPP"
-            && selectedIl2Cpp.IndexOf("IL2CPP", StringComparison.OrdinalIgnoreCase) >= 0;
+            && selectedIl2Cpp.EndsWith("SW_Decensor_il2cpp.dll", StringComparison.OrdinalIgnoreCase);
 
         IList parsed = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(packageType));
-        string be5Json = "{\"tag_name\":\"v5.4.23.5\",\"assets\":["
-            + "{\"name\":\"BepInEx_win_x64_5.4.23.5.zip\",\"browser_download_url\":\"https://example.test/be5-x64.zip\"},"
-            + "{\"name\":\"BepInEx_win_x86_5.4.23.5.zip\",\"browser_download_url\":\"https://example.test/be5-x86.zip\"}]}";
         string be6Html = "<a href=\"/projects/bepinex_be/755/BepInEx-Unity.Mono-win-x64-6.0.0-be.755%2Babc.zip\">mono</a>"
             + "<a href=\"/projects/bepinex_be/755/BepInEx-Unity.IL2CPP-win-x86-6.0.0-be.755%2Babc.zip\">il2cpp</a>";
-        addBe5.Invoke(null, new object[] { parsed, be5Json });
         addBe6.Invoke(null, new object[] { parsed, be6Html });
         object recommendedBe5 = recommended.Invoke(null, new object[] { parsed, monoBe5 });
         object recommendedBe6 = recommended.Invoke(null, new object[] { parsed, monoBe6 });
+        object recommendedFreshMono = recommended.Invoke(null, new object[] { parsed, freshMono });
         object recommendedIl2Cpp = recommended.Invoke(null, new object[] { parsed, il2cpp });
-        bool packageParsing = parsed.Count == 4
-            && GetString(recommendedBe5, "Channel") == "BE5 stable"
+        bool packageParsing = parsed.Count == 2
+            && recommendedBe5 == null
             && GetString(recommendedBe6, "Channel") == "BE6 latest"
+            && GetString(recommendedFreshMono, "Channel") == "BE6 latest"
             && GetString(recommendedIl2Cpp, "Runtime") == "IL2CPP"
             && parsed.Cast<object>().Any(delegate(object package)
             {
                 return GetString(package, "Version") == "6.0.0-be.755+abc";
             });
 
-        return monoBe5Detected && be5Install && safeRemoval && unmanagedProtected
-            && monoBe6Detected && il2cppDetected && packageParsing;
+        return monoBe5Detected && be5Install && safeRemoval && embeddedInstall && unmanagedProtected
+            && monoBe6Detected && freshMonoDefaultsToBe6 && il2cppDetected && packageParsing;
     }
 
     private static bool VerifyCollectorExtraction(Assembly assembly, string temp)

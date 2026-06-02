@@ -4,7 +4,7 @@
 
 Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **RPG Maker XP/VX/VX Ace**, **Ren'Py**, **NWJS**, **Electron**, **Unity**, **Godot**, **KiriKiri**, **WOLF RPG**, **TyranoScript**, **Java**, **HTML** and **QSP** games. Experimental Unreal `.pak`, Flash `.swf`, RAGS `.rag`, GameMaker `data.win` and SPAK `.dat` recovery is included.
 
-![Version](https://img.shields.io/badge/version-2.1.0-blue)
+![Version](https://img.shields.io/badge/version-2.2.0-blue)
 ![.NET](https://img.shields.io/badge/.NET_Framework-4.7.2-blue)
 ![Runtime](https://img.shields.io/badge/runtime-built--in-green)
 
@@ -24,7 +24,7 @@ Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **RP
 - Extracts Ren'Py RPA archives through verified `unrpa==2.3.0`.
 - Collects open Ren'Py resources when a game does not use RPA archives.
 - Extracts Unity textures, videos, audio, meshes and direct media through one built-in workflow.
-- Detects Unity Mono BE5, Mono BE6 and IL2CPP environments, then offers the latest compatible BepInEx package from official online sources and installs the matching SW_Decensor DLL from a user-selected ZIP.
+- Detects Unity Mono BE5, Mono BE6 and IL2CPP environments, then offers the latest compatible BepInEx package from official online sources and installs the matching built-in SW_Decensor DLL.
 - Extracts Godot PCK archives for Godot 3 and 4, including supported AES-CFB encrypted archives.
 - Extracts standard KiriKiri XP3 archives and renders supported TLG5 images to PNG.
 - Extracts Unreal PAK archives with Zlib, Gzip, LZ4, Zstd, a built-in open-source Oodle fallback and optional local official Oodle DLL decoding in an experimental offline mode.
@@ -111,9 +111,9 @@ Bundle extraction is confirmed before processing. Direct media files are copied 
 
 Unity service objects and unavailable resources are reported as skipped items rather than extraction errors.
 
-For Unity games, the contextual **Unity Decensor...** button opens an optional installer. It detects the game executable architecture and selects one of three environments: Mono / BE5, Mono / BE6 or IL2CPP / BE6. The package list is loaded on demand from the official [BepInEx releases](https://github.com/BepInEx/BepInEx/releases) and [BepInEx builds](https://builds.bepinex.dev/projects/bepinex_be) pages, so BepInEx is not embedded into the main executable.
+For Unity games, the contextual **Unity Decensor...** button opens an optional installer. It detects the game executable architecture and selects one of three environments: an existing Mono / BE5 setup, Mono / BE6 or IL2CPP / BE6. The package list is loaded on demand from the official [BepInEx Bleeding Edge builds](https://builds.bepinex.dev/projects/bepinex_be) page, so BepInEx is not embedded into the main executable. Fresh Mono installations use the latest BE6 build.
 
-SW_Decensor is not redistributed. Select a locally downloaded SW_Decensor ZIP and the application installs the matching `BE5`, `BE6` or `IL2CPP` DLL automatically. A manifest tracks files installed by Game Asset Tool. **Remove Managed Files** removes only those tracked files and leaves an existing user-managed BepInEx setup unchanged.
+The release executable embeds `SW_Decensor v0.7.4.2` and installs the matching `BE5`, `BE6` or `IL2CPP` DLL automatically. A manifest tracks files installed by Game Asset Tool. **Remove Managed Files** removes only those tracked files and leaves an existing user-managed BepInEx setup unchanged.
 
 ## Godot
 
@@ -213,7 +213,7 @@ powershell -ExecutionPolicy Bypass -File .\build_release.ps1
 Release output:
 
 ```text
-release/GameAssetTool-v2.1.0.exe
+release/GameAssetTool-v2.2.0.exe
 ```
 
 The release contains one supported executable. Users do not need any neighboring files.

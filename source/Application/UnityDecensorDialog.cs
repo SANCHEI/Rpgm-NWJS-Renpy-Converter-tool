@@ -51,7 +51,7 @@ namespace RpgmvpConverterWinForms
             });
             Controls.Add(new Label
             {
-                Text = "Latest packages from official BepInEx sources:",
+                Text = "Latest Unity packages from the official BepInEx Bleeding Edge builds:",
                 Location = new Point(18, 78),
                 Size = new Size(680, 20)
             });
@@ -68,8 +68,8 @@ namespace RpgmvpConverterWinForms
             installRecommended.Enabled = false;
             installRecommended.Click += async delegate { await InstallRecommendedAsync(); };
             Controls.Add(installRecommended);
-            installSw = CreateButton("Install SW_Decensor ZIP...", 250, 254, 210);
-            installSw.Click += delegate { InstallSwZip(); };
+            installSw = CreateButton("Install Built-in SW_Decensor", 250, 254, 210);
+            installSw.Click += delegate { InstallBuiltInSwDecensor(); };
             Controls.Add(installSw);
             remove = CreateButton("Remove Managed Files", 472, 254, 180);
             remove.Click += delegate { RemoveManagedFiles(); };
@@ -96,7 +96,7 @@ namespace RpgmvpConverterWinForms
                     packages.Items.Add(package.DisplayName);
                 BepInExPackage recommended = UnityDecensorInstaller.FindRecommendedPackage(latestPackages, environment);
                 status.Text = recommended == null
-                    ? "Compatible package was not found. You can still install an SW_Decensor ZIP for an existing BepInEx setup."
+                    ? "Compatible package was not found. You can still install the built-in SW_Decensor for an existing BepInEx setup."
                     : "Recommended: " + recommended.DisplayName;
             }
             catch (Exception ex)
@@ -123,7 +123,7 @@ namespace RpgmvpConverterWinForms
             {
                 SetBusy(true, "Downloading and installing " + package.DisplayName + "...");
                 await Task.Run(delegate { UnityDecensorInstaller.InstallBepInExPackage(gameRoot, package); });
-                status.Text = "BepInEx installed. Select an SW_Decensor ZIP to install the matching " + environment.SwDecensorVariant + " plugin.";
+                status.Text = "BepInEx installed. Install the built-in SW_Decensor " + environment.SwDecensorVariant + " plugin.";
             }
             catch (Exception ex)
             {
@@ -135,24 +135,16 @@ namespace RpgmvpConverterWinForms
             }
         }
 
-        private void InstallSwZip()
+        private void InstallBuiltInSwDecensor()
         {
-            using (OpenFileDialog dialog = new OpenFileDialog
+            try
             {
-                Title = "Select SW_Decensor ZIP",
-                Filter = "ZIP archive (*.zip)|*.zip"
-            })
+                string selected = UnityDecensorInstaller.InstallEmbeddedSwDecensor(gameRoot);
+                status.Text = "Installed built-in SW_Decensor " + environment.SwDecensorVariant + ": " + selected;
+            }
+            catch (Exception ex)
             {
-                if (dialog.ShowDialog(this) != DialogResult.OK) return;
-                try
-                {
-                    string selected = UnityDecensorInstaller.InstallSwDecensorZip(gameRoot, dialog.FileName);
-                    status.Text = "Installed SW_Decensor " + environment.SwDecensorVariant + ": " + selected;
-                }
-                catch (Exception ex)
-                {
-                    status.Text = "SW_Decensor installation failed: " + ex.Message;
-                }
+                status.Text = "SW_Decensor installation failed: " + ex.Message;
             }
             UpdateButtons();
         }

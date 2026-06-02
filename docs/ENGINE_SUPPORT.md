@@ -35,7 +35,7 @@
 - RAGS recovery is not a complete database parser. It preserves the original `.rag` and extracts only confidently detected embedded media.
 - GameMaker recovery does not yet decode every external-texture layout.
 - SPITE ChaCha20 decoding depends on runtime resource paths recovered from the embedded Tauri frontend. Unreferenced or dynamically generated paths remain `.dat` files under `protected/`.
-- The Unity decensor assistant downloads BepInEx only after user confirmation. SW_Decensor is not redistributed and must be selected as a local ZIP. Existing user-managed BepInEx files are not overwritten or removed.
+- The Unity decensor assistant downloads BepInEx only after user confirmation. `SW_Decensor v0.7.4.2` is embedded for offline installation. Existing user-managed BepInEx files are not overwritten or removed.
 
 ## Next Priorities
 
