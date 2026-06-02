@@ -50,6 +50,7 @@ namespace RpgmvpConverterWinForms
     internal sealed class BepInExPackage
     {
         public string Channel { get; set; }
+        public string ArtifactId { get; set; }
         public string Runtime { get; set; }
         public string Architecture { get; set; }
         public string Version { get; set; }
@@ -66,11 +67,23 @@ namespace RpgmvpConverterWinForms
         public string BepInExPackage { get; set; }
         public string SwDecensorVariant { get; set; }
         public List<string> InstalledFiles { get; set; }
+        public List<string> BepInExFiles { get; set; }
 
         public UnityDecensorManifest()
         {
             InstalledFiles = new List<string>();
+            BepInExFiles = new List<string>();
         }
+    }
+
+    internal sealed class UnityDoorstopDiagnostic
+    {
+        public string InstalledPackage { get; set; }
+        public string ProxyName { get; set; }
+        public bool BepInExLogExists { get; set; }
+        public bool LauncherLoadsWinHttp { get; set; }
+        public bool LikelyDoorstopConflict { get; set; }
+        public string Details { get; set; }
     }
 
     internal static class UnityDecensorInstaller
@@ -82,6 +95,7 @@ namespace RpgmvpConverterWinForms
         private const long MaxArchiveEntryBytes = 128L * 1024 * 1024;
         private const long MaxArchiveExpandedBytes = 512L * 1024 * 1024;
         private const int MaxArchiveEntries = 10000;
+        private const int VisibleBuildCount = 3;
         private static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
 
         public static UnityDecensorEnvironment DetectEnvironment(string rootPath)
@@ -122,14 +136,32 @@ namespace RpgmvpConverterWinForms
         {
             if (environment.Runtime == UnityRuntimeKind.MonoBe5)
                 return null;
-            string channel = "BE6 latest";
             string runtime = environment.Runtime == UnityRuntimeKind.Il2Cpp ? "IL2CPP" : "Mono";
             return packages.FirstOrDefault(delegate(BepInExPackage package)
             {
-                return package.Channel == channel
-                    && package.Runtime == runtime
+                return package.Runtime == runtime
                     && package.Architecture == environment.Architecture;
             });
+        }
+
+        public static List<BepInExPackage> GetCompatiblePackages(IEnumerable<BepInExPackage> packages, UnityDecensorEnvironment environment)
+        {
+            if (environment.Runtime == UnityRuntimeKind.MonoBe5)
+                return new List<BepInExPackage>();
+            string runtime = environment.Runtime == UnityRuntimeKind.Il2Cpp ? "IL2CPP" : "Mono";
+            return packages.Where(delegate(BepInExPackage package)
+            {
+                return package.Runtime == runtime && package.Architecture == environment.Architecture;
+            }).ToList();
+        }
+
+        public static string GetInstalledPackageDisplayName(string rootPath)
+        {
+            UnityDecensorManifest manifest = ReadManifest(rootPath);
+            if (!string.IsNullOrWhiteSpace(manifest.BepInExPackage))
+                return manifest.BepInExPackage;
+            string existing = DetectExistingBepInEx(Path.GetFullPath(rootPath));
+            return string.IsNullOrWhiteSpace(existing) ? "not installed" : existing + " unmanaged";
         }
 
         public static void InstallBepInExPackage(string rootPath, BepInExPackage package)
@@ -210,31 +242,146 @@ namespace RpgmvpConverterWinForms
             TryDeleteFile(GetManifestPath(rootPath));
         }
 
+        public static UnityDoorstopDiagnostic DiagnoseDoorstop(string rootPath)
+        {
+            rootPath = Path.GetFullPath(rootPath);
+            string proxy = new[] { "winhttp.dll", "version.dll", "winmm.dll" }
+                .FirstOrDefault(delegate(string name) { return File.Exists(Path.Combine(rootPath, name)); }) ?? "not found";
+            string logPath = Path.Combine(rootPath, "BepInEx", "LogOutput.log");
+            bool logExists = File.Exists(logPath);
+            bool launcherLoadsWinHttp = Directory.EnumerateFiles(rootPath, "*.c", SearchOption.TopDirectoryOnly)
+                .Any(delegate(string path)
+                {
+                    try
+                    {
+                        return File.ReadAllText(path).IndexOf("winhttp.dll", StringComparison.OrdinalIgnoreCase) >= 0;
+                    }
+                    catch { return false; }
+                });
+            string installed = GetInstalledPackageDisplayName(rootPath);
+            bool managed = IsManagedInstallPresent(rootPath);
+            bool likelyConflict = managed && proxy != "not found" && !logExists && launcherLoadsWinHttp;
+            StringBuilder details = new StringBuilder();
+            details.AppendLine("Installed package: " + installed);
+            details.AppendLine("Doorstop proxy: " + proxy);
+            details.AppendLine("BepInEx log: " + (logExists ? logPath : "not created"));
+            details.AppendLine("Launcher references winhttp.dll: " + (launcherLoadsWinHttp ? "yes" : "no"));
+            details.AppendLine();
+            if (likelyConflict)
+                details.AppendLine("Likely Doorstop conflict: the game launcher loads winhttp.dll before BepInEx can create its log. Use Remove Managed Files to restore the original launch path.");
+            else if (managed && !logExists)
+                details.AppendLine("BepInEx has not created a log yet. Launch the game once, then run diagnostics again. If the game crashes immediately, remove the managed files.");
+            else if (logExists)
+                details.AppendLine("BepInEx created its log. Review LogOutput.log if a plugin still fails.");
+            else
+                details.AppendLine("No managed BepInEx installation was found.");
+            return new UnityDoorstopDiagnostic
+            {
+                InstalledPackage = installed,
+                ProxyName = proxy,
+                BepInExLogExists = logExists,
+                LauncherLoadsWinHttp = launcherLoadsWinHttp,
+                LikelyDoorstopConflict = likelyConflict,
+                Details = details.ToString()
+            };
+        }
+
         private static void InstallZip(string rootPath, string zipPath, string packageName)
         {
             rootPath = Path.GetFullPath(rootPath);
-            UnityDecensorManifest manifest = ReadManifest(rootPath);
-            using (FileStream input = File.OpenRead(zipPath))
-            using (ZipArchive archive = new ZipArchive(input, ZipArchiveMode.Read))
+            UnityDecensorManifest originalManifest = ReadManifest(rootPath);
+            string originalManifestJson = File.Exists(GetManifestPath(rootPath))
+                ? File.ReadAllText(GetManifestPath(rootPath), Encoding.UTF8)
+                : null;
+            string transactionRoot = Path.Combine(Path.GetTempPath(), "GameAssetTool-BepInEx-transaction-" + Guid.NewGuid().ToString("N"));
+            string stagingRoot = Path.Combine(transactionRoot, "staging");
+            string backupRoot = Path.Combine(transactionRoot, "backup");
+            List<string> packageFiles = new List<string>();
+            List<string> appliedFiles = new List<string>();
+            List<string> backedUpFiles = new List<string>();
+            Directory.CreateDirectory(stagingRoot);
+            Directory.CreateDirectory(backupRoot);
+            try
             {
-                EnsureArchiveLimits(archive);
-                foreach (ZipArchiveEntry entry in archive.Entries)
+                using (FileStream input = File.OpenRead(zipPath))
+                using (ZipArchive archive = new ZipArchive(input, ZipArchiveMode.Read))
                 {
-                    if (string.IsNullOrWhiteSpace(entry.Name)) continue;
-                    string relative = NormalizeRelativePath(entry.FullName);
-                    string destination = SafeDestination(rootPath, relative);
-                    if (File.Exists(destination) && !manifest.InstalledFiles.Contains(relative, StringComparer.OrdinalIgnoreCase))
-                        throw new IOException("Refusing to overwrite an existing game file: " + relative);
+                    EnsureArchiveLimits(archive);
+                    foreach (ZipArchiveEntry entry in archive.Entries)
+                    {
+                        if (string.IsNullOrWhiteSpace(entry.Name)) continue;
+                        string relative = NormalizeRelativePath(entry.FullName);
+                        string destination = SafeDestination(rootPath, relative);
+                        if (File.Exists(destination) && !originalManifest.InstalledFiles.Contains(relative, StringComparer.OrdinalIgnoreCase))
+                            throw new IOException("Refusing to overwrite an existing game file: " + relative);
+                        packageFiles.Add(relative);
+                        string staged = SafeDestination(stagingRoot, relative);
+                        Directory.CreateDirectory(Path.GetDirectoryName(staged));
+                        using (Stream source = entry.Open())
+                        using (FileStream output = File.Create(staged))
+                            source.CopyTo(output);
+                    }
                 }
-                foreach (ZipArchiveEntry entry in archive.Entries)
+
+                foreach (string relative in packageFiles)
                 {
-                    if (string.IsNullOrWhiteSpace(entry.Name)) continue;
-                    WriteManagedFile(rootPath, NormalizeRelativePath(entry.FullName), entry);
+                    string destination = SafeDestination(rootPath, relative);
+                    if (File.Exists(destination))
+                    {
+                        string backup = SafeDestination(backupRoot, relative);
+                        Directory.CreateDirectory(Path.GetDirectoryName(backup));
+                        File.Copy(destination, backup, true);
+                        backedUpFiles.Add(relative);
+                    }
+                    Directory.CreateDirectory(Path.GetDirectoryName(destination));
+                    File.Copy(SafeDestination(stagingRoot, relative), destination, true);
+                    appliedFiles.Add(relative);
+                }
+
+                UnityDecensorManifest manifest = ReadManifest(rootPath);
+                foreach (string relative in packageFiles)
+                    if (!manifest.InstalledFiles.Contains(relative, StringComparer.OrdinalIgnoreCase))
+                        manifest.InstalledFiles.Add(relative);
+                manifest.BepInExFiles = packageFiles.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                manifest.BepInExPackage = packageName;
+                WriteManifest(rootPath, manifest);
+            }
+            catch
+            {
+                RollBackBepInExTransaction(rootPath, backupRoot, appliedFiles, backedUpFiles, originalManifestJson);
+                throw;
+            }
+            finally
+            {
+                TryDeleteDirectory(transactionRoot);
+            }
+        }
+
+        private static void RollBackBepInExTransaction(
+            string rootPath,
+            string backupRoot,
+            List<string> appliedFiles,
+            List<string> backedUpFiles,
+            string originalManifestJson)
+        {
+            foreach (string relative in appliedFiles.OrderByDescending(delegate(string item) { return item.Length; }))
+            {
+                string destination = SafeDestination(rootPath, relative);
+                if (backedUpFiles.Contains(relative, StringComparer.OrdinalIgnoreCase))
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(destination));
+                    File.Copy(SafeDestination(backupRoot, relative), destination, true);
+                }
+                else
+                {
+                    TryDeleteFile(destination);
+                    TryDeleteEmptyParents(Path.GetDirectoryName(destination), rootPath);
                 }
             }
-            manifest = ReadManifest(rootPath);
-            manifest.BepInExPackage = packageName;
-            WriteManifest(rootPath, manifest);
+            if (originalManifestJson == null)
+                TryDeleteFile(GetManifestPath(rootPath));
+            else
+                File.WriteAllText(GetManifestPath(rootPath), originalManifestJson, new UTF8Encoding(false));
         }
 
         private static void WriteManagedFile(string rootPath, string relative, ZipArchiveEntry entry)
@@ -307,19 +454,25 @@ namespace RpgmvpConverterWinForms
 
         private static void AddBe6Packages(List<BepInExPackage> packages, string html)
         {
-            Match build = Regex.Match(html, @"href=""(?<url>/projects/bepinex_be/(?<id>\d+)/BepInEx-Unity\.(?<runtime>Mono|IL2CPP)-win-(?<arch>x86|x64)-(?<version>6\.0\.0-be\.[^""]+)\.zip)""", RegexOptions.IgnoreCase);
-            if (!build.Success)
-                throw new InvalidDataException("Latest BepInEx 6 artifact was not found.");
-            string id = build.Groups["id"].Value;
             MatchCollection artifacts = Regex.Matches(
                 html,
-                @"href=""(?<url>/projects/bepinex_be/" + Regex.Escape(id) + @"/BepInEx-Unity\.(?<runtime>Mono|IL2CPP)-win-(?<arch>x86|x64)-(?<version>6\.0\.0-be\.[^""]+)\.zip)""",
+                @"href=""(?<url>/projects/bepinex_be/(?<id>\d+)/BepInEx-Unity\.(?<runtime>Mono|IL2CPP)-win-(?<arch>x86|x64)-(?<version>6\.0\.0-be\.[^""]+)\.zip)""",
                 RegexOptions.IgnoreCase);
+            if (artifacts.Count == 0)
+                throw new InvalidDataException("Latest BepInEx 6 artifact was not found.");
+            List<string> buildIds = artifacts.Cast<Match>()
+                .Select(delegate(Match match) { return match.Groups["id"].Value; })
+                .Distinct()
+                .Take(VisibleBuildCount)
+                .ToList();
             foreach (Match match in artifacts)
             {
+                int buildIndex = buildIds.IndexOf(match.Groups["id"].Value);
+                if (buildIndex < 0) continue;
                 packages.Add(new BepInExPackage
                 {
-                    Channel = "BE6 latest",
+                    Channel = buildIndex == 0 ? "Latest" : buildIndex == 1 ? "Previous" : "Fallback",
+                    ArtifactId = match.Groups["id"].Value,
                     Runtime = match.Groups["runtime"].Value.Equals("IL2CPP", StringComparison.OrdinalIgnoreCase) ? "IL2CPP" : "Mono",
                     Architecture = match.Groups["arch"].Value.ToLowerInvariant(),
                     Version = WebUtility.UrlDecode(match.Groups["version"].Value),
@@ -375,6 +528,7 @@ namespace RpgmvpConverterWinForms
             UnityDecensorManifest manifest = Json.Deserialize<UnityDecensorManifest>(File.ReadAllText(path, Encoding.UTF8));
             if (manifest == null) return new UnityDecensorManifest();
             if (manifest.InstalledFiles == null) manifest.InstalledFiles = new List<string>();
+            if (manifest.BepInExFiles == null) manifest.BepInExFiles = new List<string>();
             return manifest;
         }
 
@@ -415,6 +569,12 @@ namespace RpgmvpConverterWinForms
         private static void TryDeleteFile(string path)
         {
             try { if (File.Exists(path)) File.Delete(path); }
+            catch { }
+        }
+
+        private static void TryDeleteDirectory(string path)
+        {
+            try { if (Directory.Exists(path)) Directory.Delete(path, true); }
             catch { }
         }
 

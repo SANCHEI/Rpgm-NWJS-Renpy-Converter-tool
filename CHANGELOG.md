@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Show the latest three compatible BepInEx Bleeding Edge artifacts as `Latest`, `Previous` and `Fallback` choices for manual Unity downgrade testing.
+- Install BepInEx transactionally through a staging folder, restore replaced managed files after failure and display the installed package inside the Unity assistant.
+- Added Unity launch diagnostics for missing BepInEx logs and likely Doorstop proxy conflicts such as launchers that load `winhttp.dll` before BepInEx starts.
+- Clarified that optional BepInEx and SW_Decensor tooling cannot guarantee compatibility with every Unity game.
+
 ## 2.2.0 - 2026-06-02
 
 - Preserve an explicitly selected or dropped directory instead of replacing it with a detected engine folder from one of its parents.

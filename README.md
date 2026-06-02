@@ -111,9 +111,11 @@ Bundle extraction is confirmed before processing. Direct media files are copied 
 
 Unity service objects and unavailable resources are reported as skipped items rather than extraction errors.
 
-For Unity games, the contextual **Unity Decensor...** button opens an optional installer. It detects the game executable architecture and selects one of three environments: an existing Mono / BE5 setup, Mono / BE6 or IL2CPP / BE6. The package list is loaded on demand from the official [BepInEx Bleeding Edge builds](https://builds.bepinex.dev/projects/bepinex_be) page, so BepInEx is not embedded into the main executable. Fresh Mono installations use the latest BE6 build.
+For Unity games, the contextual **Unity Decensor...** button opens an optional installer. It detects the game executable architecture and selects one of three environments: an existing Mono / BE5 setup, Mono / BE6 or IL2CPP / BE6. The package list is loaded on demand from the official [BepInEx Bleeding Edge builds](https://builds.bepinex.dev/projects/bepinex_be) page, so BepInEx is not embedded into the main executable. Fresh Mono installations use the latest BE6 build. The three newest compatible artifacts are shown as `Latest`, `Previous` and `Fallback` choices for downgrade testing.
 
-The release executable embeds `SW_Decensor v0.7.4.2` and installs the matching `BE5`, `BE6` or `IL2CPP` DLL automatically. A manifest tracks files installed by Game Asset Tool. **Remove Managed Files** removes only those tracked files and leaves an existing user-managed BepInEx setup unchanged.
+The release executable embeds `SW_Decensor v0.7.4.2` and installs the matching `BE5`, `BE6` or `IL2CPP` DLL automatically. BepInEx installation is transactional: interrupted updates restore replaced managed files. A manifest tracks files installed by Game Asset Tool. **Remove Managed Files** removes only those tracked files and leaves an existing user-managed BepInEx setup unchanged. **Diagnose Launch** reports missing BepInEx logs and likely Doorstop proxy conflicts.
+
+BepInEx and SW_Decensor are optional modding tools. Compatibility is not guaranteed for every Unity game, especially titles with custom launchers or anti-tamper behavior.
 
 ## Godot
 

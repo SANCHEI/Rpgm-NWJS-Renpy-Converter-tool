@@ -789,6 +789,9 @@ internal static class ReleaseInspector
         MethodInfo isManaged = installer.GetMethod("IsManagedInstallPresent", BindingFlags.Public | BindingFlags.Static);
         MethodInfo addBe6 = installer.GetMethod("AddBe6Packages", BindingFlags.NonPublic | BindingFlags.Static);
         MethodInfo recommended = installer.GetMethod("FindRecommendedPackage", BindingFlags.Public | BindingFlags.Static);
+        MethodInfo compatible = installer.GetMethod("GetCompatiblePackages", BindingFlags.Public | BindingFlags.Static);
+        MethodInfo installZip = installer.GetMethod("InstallZip", BindingFlags.NonPublic | BindingFlags.Static);
+        MethodInfo diagnose = installer.GetMethod("DiagnoseDoorstop", BindingFlags.Public | BindingFlags.Static);
 
         string root = Path.Combine(temp, "unity-decensor");
         CreateMinimalUnityGame(root, true, false);
@@ -868,24 +871,66 @@ internal static class ReleaseInspector
 
         IList parsed = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(packageType));
         string be6Html = "<a href=\"/projects/bepinex_be/755/BepInEx-Unity.Mono-win-x64-6.0.0-be.755%2Babc.zip\">mono</a>"
-            + "<a href=\"/projects/bepinex_be/755/BepInEx-Unity.IL2CPP-win-x86-6.0.0-be.755%2Babc.zip\">il2cpp</a>";
+            + "<a href=\"/projects/bepinex_be/755/BepInEx-Unity.IL2CPP-win-x86-6.0.0-be.755%2Babc.zip\">il2cpp</a>"
+            + "<a href=\"/projects/bepinex_be/754/BepInEx-Unity.Mono-win-x64-6.0.0-be.754%2Bdef.zip\">mono previous</a>"
+            + "<a href=\"/projects/bepinex_be/753/BepInEx-Unity.Mono-win-x64-6.0.0-be.753%2Bghi.zip\">mono fallback</a>"
+            + "<a href=\"/projects/bepinex_be/752/BepInEx-Unity.Mono-win-x64-6.0.0-be.752%2Bjkl.zip\">mono hidden</a>";
         addBe6.Invoke(null, new object[] { parsed, be6Html });
         object recommendedBe5 = recommended.Invoke(null, new object[] { parsed, monoBe5 });
         object recommendedBe6 = recommended.Invoke(null, new object[] { parsed, monoBe6 });
         object recommendedFreshMono = recommended.Invoke(null, new object[] { parsed, freshMono });
         object recommendedIl2Cpp = recommended.Invoke(null, new object[] { parsed, il2cpp });
-        bool packageParsing = parsed.Count == 2
+        IList compatibleFreshMono = (IList)compatible.Invoke(null, new object[] { parsed, freshMono });
+        bool packageParsing = parsed.Count == 4
             && recommendedBe5 == null
-            && GetString(recommendedBe6, "Channel") == "BE6 latest"
-            && GetString(recommendedFreshMono, "Channel") == "BE6 latest"
+            && GetString(recommendedBe6, "Channel") == "Latest"
+            && GetString(recommendedFreshMono, "Channel") == "Latest"
             && GetString(recommendedIl2Cpp, "Runtime") == "IL2CPP"
+            && compatibleFreshMono.Count == 3
+            && GetString(compatibleFreshMono[1], "Channel") == "Previous"
+            && GetString(compatibleFreshMono[2], "Channel") == "Fallback"
             && parsed.Cast<object>().Any(delegate(object package)
             {
                 return GetString(package, "Version") == "6.0.0-be.755+abc";
             });
 
+        string transactionRoot = Path.Combine(temp, "unity-decensor-transaction");
+        CreateMinimalUnityGame(transactionRoot, true, false);
+        File.WriteAllText(Path.Combine(transactionRoot, "doorstop_config.ini"), "original");
+        File.WriteAllText(Path.Combine(transactionRoot, ".gameassettool-unity-decensor.json"),
+            "{\"BepInExPackage\":\"old\",\"InstalledFiles\":[\"doorstop_config.ini\"],\"BepInExFiles\":[\"doorstop_config.ini\"]}");
+        File.WriteAllText(Path.Combine(transactionRoot, "BepInEx"), "blocks-directory");
+        string transactionZip = Path.Combine(temp, "BepInEx-transaction-test.zip");
+        using (FileStream stream = File.Create(transactionZip))
+        using (ZipArchive archive = new ZipArchive(stream, ZipArchiveMode.Create))
+        {
+            WriteZipText(archive, "doorstop_config.ini", "replacement");
+            WriteZipText(archive, "BepInEx/core/fail.dll", "fail");
+        }
+        bool transactionRollback = false;
+        try
+        {
+            installZip.Invoke(null, new object[] { transactionRoot, transactionZip, "new" });
+        }
+        catch (TargetInvocationException)
+        {
+            transactionRollback = File.ReadAllText(Path.Combine(transactionRoot, "doorstop_config.ini")) == "original"
+                && File.ReadAllText(Path.Combine(transactionRoot, ".gameassettool-unity-decensor.json")).Contains("\"old\"");
+        }
+
+        string diagnosticRoot = Path.Combine(temp, "unity-decensor-diagnostic");
+        CreateMinimalUnityGame(diagnosticRoot, true, false);
+        File.WriteAllText(Path.Combine(diagnosticRoot, ".gameassettool-unity-decensor.json"),
+            "{\"BepInExPackage\":\"test\",\"InstalledFiles\":[],\"BepInExFiles\":[]}");
+        File.WriteAllText(Path.Combine(diagnosticRoot, "winhttp.dll"), "proxy");
+        File.WriteAllText(Path.Combine(diagnosticRoot, "launcher.c"), "LoadLibraryA(\"winhttp.dll\");");
+        object diagnostic = diagnose.Invoke(null, new object[] { diagnosticRoot });
+        bool doorstopDiagnostics = GetBool(diagnostic, "LikelyDoorstopConflict")
+            && GetString(diagnostic, "ProxyName") == "winhttp.dll";
+
         return monoBe5Detected && be5Install && safeRemoval && embeddedInstall && unmanagedProtected
-            && monoBe6Detected && freshMonoDefaultsToBe6 && il2cppDetected && packageParsing;
+            && monoBe6Detected && freshMonoDefaultsToBe6 && il2cppDetected && packageParsing
+            && transactionRollback && doorstopDiagnostics;
     }
 
     private static bool VerifyCollectorExtraction(Assembly assembly, string temp)

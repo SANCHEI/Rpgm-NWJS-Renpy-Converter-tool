@@ -53,7 +53,9 @@ Extracts textures, videos, audio, OBJ meshes and direct media files. Unity extra
 
 Unity service objects and unavailable resources are reported as skipped items rather than extraction errors.
 
-The contextual **Unity Decensor...** assistant detects Mono BE5, Mono BE6 and IL2CPP games. It can fetch the latest compatible BepInEx package list from official online sources, install the recommended package on demand and install the matching built-in `SW_Decensor v0.7.4.2` DLL. Managed removal touches only files installed by Game Asset Tool.
+The contextual **Unity Decensor...** assistant detects Mono BE5, Mono BE6 and IL2CPP games. It fetches the three newest compatible BepInEx Bleeding Edge artifacts as `Latest`, `Previous` and `Fallback` choices, installs the selected package transactionally and installs the matching built-in `SW_Decensor v0.7.4.2` DLL. Managed removal touches only files installed by Game Asset Tool. Launch diagnostics report missing BepInEx logs and likely Doorstop proxy conflicts.
+
+BepInEx and SW_Decensor are optional modding tools. Compatibility is not guaranteed for every Unity game, especially titles with custom launchers or anti-tamper behavior.
 
 ### Godot 3 / 4
 
