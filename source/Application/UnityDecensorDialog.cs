@@ -137,6 +137,10 @@ namespace RpgmvpConverterWinForms
             if (!string.IsNullOrWhiteSpace(environment.ExistingBepInEx)
                 && MessageBox.Show("Update the BepInEx files previously installed by Game Asset Tool?", "Unity Decensor", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
                 return;
+            string launcherWarning = UnityDecensorInstaller.GetLauncherRiskWarning(gameRoot);
+            if (!string.IsNullOrWhiteSpace(launcherWarning)
+                && MessageBox.Show(launcherWarning, "Unity Decensor", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                return;
             try
             {
                 SetBusy(true, "Downloading and installing " + package.DisplayName + "...");
@@ -176,6 +180,7 @@ namespace RpgmvpConverterWinForms
                 : "Launch diagnostics completed.";
             MessageBox.Show(diagnostic.Details, "Unity Launch Diagnostics", MessageBoxButtons.OK,
                 diagnostic.LikelyDoorstopConflict ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
+            UpdateButtons();
         }
 
         private void RemoveManagedFiles()
@@ -193,7 +198,7 @@ namespace RpgmvpConverterWinForms
         {
             status.Text = message;
             installSelected.Enabled = !busy && GetSelectedPackage() != null;
-            installSw.Enabled = !busy;
+            installSw.Enabled = !busy && UnityDecensorInstaller.IsBepInExLaunchConfirmed(gameRoot);
             remove.Enabled = !busy && UnityDecensorInstaller.IsManagedInstallPresent(gameRoot);
             diagnose.Enabled = !busy;
         }

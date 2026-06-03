@@ -792,6 +792,8 @@ internal static class ReleaseInspector
         MethodInfo compatible = installer.GetMethod("GetCompatiblePackages", BindingFlags.Public | BindingFlags.Static);
         MethodInfo installZip = installer.GetMethod("InstallZip", BindingFlags.NonPublic | BindingFlags.Static);
         MethodInfo diagnose = installer.GetMethod("DiagnoseDoorstop", BindingFlags.Public | BindingFlags.Static);
+        MethodInfo launchConfirmed = installer.GetMethod("IsBepInExLaunchConfirmed", BindingFlags.Public | BindingFlags.Static);
+        MethodInfo launcherWarning = installer.GetMethod("GetLauncherRiskWarning", BindingFlags.Public | BindingFlags.Static);
 
         string root = Path.Combine(temp, "unity-decensor");
         CreateMinimalUnityGame(root, true, false);
@@ -927,10 +929,15 @@ internal static class ReleaseInspector
         object diagnostic = diagnose.Invoke(null, new object[] { diagnosticRoot });
         bool doorstopDiagnostics = GetBool(diagnostic, "LikelyDoorstopConflict")
             && GetString(diagnostic, "ProxyName") == "winhttp.dll";
+        bool launcherRisk = ((string)launcherWarning.Invoke(null, new object[] { diagnosticRoot })).IndexOf("winhttp.dll", StringComparison.OrdinalIgnoreCase) >= 0;
+        bool swRequiresLog = !(bool)launchConfirmed.Invoke(null, new object[] { diagnosticRoot });
+        Directory.CreateDirectory(Path.Combine(diagnosticRoot, "BepInEx"));
+        File.WriteAllText(Path.Combine(diagnosticRoot, "BepInEx", "LogOutput.log"), "BepInEx started");
+        swRequiresLog = swRequiresLog && (bool)launchConfirmed.Invoke(null, new object[] { diagnosticRoot });
 
         return monoBe5Detected && be5Install && safeRemoval && embeddedInstall && unmanagedProtected
             && monoBe6Detected && freshMonoDefaultsToBe6 && il2cppDetected && packageParsing
-            && transactionRollback && doorstopDiagnostics;
+            && transactionRollback && doorstopDiagnostics && launcherRisk && swRequiresLog;
     }
 
     private static bool VerifyCollectorExtraction(Assembly assembly, string temp)

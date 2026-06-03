@@ -6,7 +6,7 @@
 - Display name: `Game Asset Tool v2.2.0 - Windows x64`
 - Platform: Windows
 - Architecture: x64
-- SHA-256: `09CB0993E2D3E30954F8479BC2B9487BD8AF7C2895A4DF37B23756674EC642E1`
+- SHA-256: `AA21989A6130985AEC6C64F5FC6FC0AF6B055B5E9BF0045DD72BE023063C54B0`
 
 ## Page Update
 
@@ -28,4 +28,7 @@
 - Select an unknown folder and confirm that **Recover Embedded Assets** extracts recognized media and creates a report.
 - Select a Java game and confirm that all three Java extraction modes are visible.
 - Complete an extraction and confirm that **Results Gallery** stays responsive while filtering, loads beyond 300 files while scrolling and shows an enlarged selected image.
+- Complete an extraction and confirm that **Copy Summary** copies the results text.
+- Select a Unity game, open **Unity Decensor...** and confirm that SW_Decensor stays disabled until `BepInEx/LogOutput.log` exists.
+- Try an encrypted Godot PCK without a key and confirm that the report says no key candidates were found.
 - Switch the interface between `EN` and `RU`.

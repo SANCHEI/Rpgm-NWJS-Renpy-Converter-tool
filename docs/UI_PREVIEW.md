@@ -44,7 +44,7 @@ The **Show Log** button expands the same fixed-width window vertically.
 
 - RPG Maker MV/MZ: RPGM HEX key field.
 - RPG Maker XP/VX/VX Ace: built-in RGSS archive extraction notice.
-- Unity: Textures, Videos, Audio, Meshes or All filter plus the optional **Unity Decensor...** assistant with installed-package status, `Latest` / `Previous` / `Fallback` BepInEx choices and launch diagnostics.
+- Unity: Textures, Videos, Audio, Meshes or All filter plus the optional **Unity Decensor...** assistant with installed-package status, `Latest` / `Previous` / `Fallback` BepInEx choices, custom-launcher warnings, launch diagnostics and SW_Decensor installation after a confirmed BepInEx launch.
 - Unreal: optional Unreal AES key field and experimental-mode notice.
 - Ren'Py: RPA extraction or explicit loose-resource collection without unnecessary inputs.
 - Godot: optional PCK key field with automatic `keys.txt` and textual EXE-key discovery.
@@ -73,4 +73,21 @@ The header includes an `EN` / `RU` language switch. Dropping a folder or support
 
 ## Results Dialog
 
-Results are shown after extraction and saved as `GameAssetTool-report.txt` in the extractor output folder. The **Results Gallery** button opens a searchable thumbnail grid with image, SVG, audio and video filters. Files are indexed in the background, loaded in batches while scrolling and shown in a larger preview panel when selected.
+Results are shown after extraction and saved as `GameAssetTool-report.txt` in the extractor output folder. **Copy Summary** copies the same text to the clipboard for bug reports or support messages. The **Results Gallery** button opens a searchable thumbnail grid with image, SVG, audio and video filters. Files are indexed in the background, loaded in batches while scrolling and shown in a larger preview panel when selected.
+
+```text
+------------------------------------------------------------------+
+| Extraction finished with warnings                               |
+|                                                                  |
+| Engine: Godot                                                    |
+| Extracted files: 0                                               |
+| Errors: 1                                                        |
+| Output: D:\Games\Example\extracted\godot                        |
+|                                                                  |
+| Encrypted Godot PCK: tried 1 key candidate(s), but none passed   |
+| MD5 validation. The key is likely wrong or the archive uses an    |
+| unsupported encryption variant.                                  |
+|                                                                  |
+| [ Open Output ] [ Results Gallery ] [ Copy Summary ] [ Close ]   |
++------------------------------------------------------------------+
+```

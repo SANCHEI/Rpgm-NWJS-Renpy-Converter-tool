@@ -757,7 +757,7 @@ namespace RpgmvpConverterWinForms
                 {
                     Text = russian ? "Открыть результат" : "Open Output Folder",
                     Location = new Point(20, 292),
-                    Size = new Size(180, 34),
+                    Size = new Size(165, 34),
                     BackColor = Color.FromArgb(68, 197, 255),
                     FlatStyle = FlatStyle.Flat
                 };
@@ -771,8 +771,8 @@ namespace RpgmvpConverterWinForms
                 Button galleryButton = new Button
                 {
                     Text = russian ? "Галерея файлов" : "Results Gallery",
-                    Location = new Point(210, 292),
-                    Size = new Size(160, 34),
+                    Location = new Point(195, 292),
+                    Size = new Size(135, 34),
                     BackColor = Color.FromArgb(45, 50, 60),
                     ForeColor = Color.White,
                     FlatStyle = FlatStyle.Flat
@@ -784,10 +784,25 @@ namespace RpgmvpConverterWinForms
                 };
                 Controls.Add(galleryButton);
 
+                Button copyButton = new Button
+                {
+                    Text = russian ? "Копировать отчёт" : "Copy Summary",
+                    Location = new Point(340, 292),
+                    Size = new Size(130, 34),
+                    BackColor = Color.FromArgb(45, 50, 60),
+                    ForeColor = Color.White,
+                    FlatStyle = FlatStyle.Flat
+                };
+                copyButton.Click += delegate
+                {
+                    Clipboard.SetText(summary.Text);
+                };
+                Controls.Add(copyButton);
+
                 Button closeButton = new Button
                 {
                     Text = russian ? "Закрыть" : "Close",
-                    Location = new Point(470, 292),
+                    Location = new Point(480, 292),
                     Size = new Size(110, 34),
                     BackColor = Color.FromArgb(45, 50, 60),
                     ForeColor = Color.White,

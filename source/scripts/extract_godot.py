@@ -20,6 +20,7 @@ MAX_KEY_FILE_BYTES = 4 * 1024 * 1024
 MAX_SCANNED_EXE_BYTES = 256 * 1024 * 1024
 HEX_KEY = re.compile(rb"(?<![0-9a-fA-F])[0-9a-fA-F]{64}(?![0-9a-fA-F])")
 BASE64_KEY = re.compile(rb"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{43}=(?![A-Za-z0-9+/=])")
+KEY_SOURCES = []
 
 
 class UnsupportedArchive(Exception):
@@ -129,13 +130,22 @@ def parse_key(value):
 def append_key(keys, key):
     if key is not None and key not in keys:
         keys.append(key)
+        return True
+    return False
+
+
+def add_key(keys, value, source):
+    key = parse_key(value)
+    if append_key(keys, key):
+        KEY_SOURCES.append(source)
 
 
 def discover_keys(game_path, output_path):
     keys = []
+    del KEY_SOURCES[:]
     optional = os.environ.get("OPTIONAL_KEY", "")
     for value in re.split(r"[\s,;]+", optional):
-        append_key(keys, parse_key(value))
+        add_key(keys, value, "manual field")
 
     output_path = os.path.abspath(output_path)
     for root, directories, files in os.walk(game_path):
@@ -152,14 +162,14 @@ def discover_keys(game_path, output_path):
                 if lowered in ("keys.txt", "godot.keys", "godot-key.txt") and size <= MAX_KEY_FILE_BYTES:
                     with open(path, "r", encoding="utf-8", errors="ignore") as stream:
                         for line in stream:
-                            append_key(keys, parse_key(line.split("#", 1)[0]))
+                            add_key(keys, line.split("#", 1)[0], lowered)
                 elif lowered.endswith(".exe") and size <= MAX_SCANNED_EXE_BYTES:
                     with open(path, "rb") as stream:
                         content = stream.read()
                     for match in HEX_KEY.findall(content):
-                        append_key(keys, parse_key(match.decode("ascii")))
+                        add_key(keys, match.decode("ascii"), name)
                     for match in BASE64_KEY.findall(content):
-                        append_key(keys, parse_key(match.decode("ascii")))
+                        add_key(keys, match.decode("ascii"), name)
             except OSError:
                 continue
     return keys
@@ -180,7 +190,7 @@ def decrypt_block(stream, key):
 
 def decrypt_with_candidates(stream, keys):
     if not keys:
-        raise UnsupportedArchive("Encrypted Godot PCK: enter the 64-character HEX key or place it in keys.txt.")
+        raise UnsupportedArchive("Encrypted Godot PCK: no key candidates were found. Paste a 64-character HEX key or place it in keys.txt next to the game.")
     start = stream.tell()
     for key in keys:
         try:
@@ -188,7 +198,7 @@ def decrypt_with_candidates(stream, keys):
             return decrypt_block(stream, key), key
         except (OSError, ValueError):
             continue
-    raise UnsupportedArchive("Encrypted Godot PCK: none of the discovered keys could decrypt the archive.")
+    raise UnsupportedArchive("Encrypted Godot PCK: tried {} key candidate(s), but none passed MD5 validation. The key is likely wrong or the archive uses an unsupported encryption variant.".format(len(keys)))
 
 
 def read_directory(stream, file_count, file_base, archive_size):
@@ -238,7 +248,7 @@ def read_entries(stream, pck_start, keys):
         return entries, None
 
     if pack_version not in (2, 3, 4):
-        raise UnsupportedArchive("Unsupported Godot PCK format version: {}".format(pack_version))
+        raise UnsupportedArchive("Unsupported Godot PCK format version: {}. Supported versions: 1, 2, 3 and compatible 4 archives.".format(pack_version))
 
     pack_flags = read_u32(stream)
     file_base = read_u64(stream)
@@ -323,6 +333,9 @@ def main():
     keys = discover_keys(game_path, output_path)
     if keys:
         print("Discovered Godot key candidate(s): {}".format(len(keys)))
+        print("Godot key source(s): {}".format(", ".join(sorted(set(KEY_SOURCES)))))
+    else:
+        print("Godot key candidate(s): 0")
     archives = find_archives(game_path, output_path)
     print("TOTAL:{}".format(len(archives)))
 

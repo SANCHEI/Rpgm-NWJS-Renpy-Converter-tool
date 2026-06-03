@@ -35,13 +35,13 @@
 - RAGS recovery is not a complete database parser. It preserves the original `.rag` and extracts only confidently detected embedded media.
 - GameMaker recovery does not yet decode every external-texture layout.
 - SPITE ChaCha20 decoding depends on runtime resource paths recovered from the embedded Tauri frontend. Unreferenced or dynamically generated paths remain `.dat` files under `protected/`.
-- The Unity decensor assistant downloads a user-selected `Latest`, `Previous` or `Fallback` BepInEx Bleeding Edge artifact only after confirmation. Installation is transactional and `SW_Decensor v0.7.4.2` is embedded for offline installation. Existing user-managed BepInEx files are not overwritten or removed. Compatibility is not guaranteed for every Unity game, particularly custom launchers with Doorstop proxy conflicts.
+- The Unity decensor assistant downloads a user-selected `Latest`, `Previous` or `Fallback` BepInEx Bleeding Edge artifact only after confirmation. Installation is transactional and warns before touching games with likely custom launchers. `SW_Decensor v0.7.4.2` is embedded for offline installation, but the install button is enabled only after BepInEx creates `BepInEx/LogOutput.log`. Existing user-managed BepInEx files are not overwritten or removed. Compatibility is not guaranteed for every Unity game, particularly custom launchers with Doorstop proxy conflicts.
 
 ## Next Priorities
 
 2. GameMaker external texture layouts.
 3. KiriKiri TLG6 preview conversion.
-4. Unity `TextAsset` and Sprite export.
+4. Unity `TextAsset` and Sprite export with JSON/TXT/CSV and atlas-sprite previews.
 5. Diagnostics-guided support for additional unknown formats.
 
 [`UndertaleModTool`](https://github.com/UnderminersTeam/UndertaleModTool) is not limited to Undertale: its own documentation explicitly covers other GameMaker games. It remains a useful format reference for extending the focused built-in recovery path without directly integrating the GPL-3.0 editor.

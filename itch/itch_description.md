@@ -19,11 +19,11 @@ Drop a game folder or supported file into the window, review the detected engine
 - Action tooltips, drag-and-drop highlighting and DPI-aware scaling
 - Visible runtime status while the built-in extraction tools are prepared silently
 - Collision-safe output names such as `image (2).png`
-- Extraction summary dialog and saved `GameAssetTool-report.txt`
+- Extraction summary dialog with clipboard copy and saved `GameAssetTool-report.txt`
 - Searchable results gallery with background indexing, lazy thumbnail batches, enlarged image previews and image, SVG, audio and video filters
 - Separate **Install Unlocker** and **Remove Unlocker** buttons
 - One portable `GameAssetTool.exe` with no neighboring files or installers
-- Offline operation: no internet connection is required while using the application
+- Offline extraction: internet is only needed for the optional Unity BepInEx package download
 
 ## Supported Engines
 
@@ -53,13 +53,13 @@ Extracts textures, videos, audio, OBJ meshes and direct media files. Unity extra
 
 Unity service objects and unavailable resources are reported as skipped items rather than extraction errors.
 
-The contextual **Unity Decensor...** assistant detects Mono BE5, Mono BE6 and IL2CPP games. It fetches the three newest compatible BepInEx Bleeding Edge artifacts as `Latest`, `Previous` and `Fallback` choices, installs the selected package transactionally and installs the matching built-in `SW_Decensor v0.7.4.2` DLL. Managed removal touches only files installed by Game Asset Tool. Launch diagnostics report missing BepInEx logs and likely Doorstop proxy conflicts.
+The contextual **Unity Decensor...** assistant detects Mono BE5, Mono BE6 and IL2CPP games. It fetches the three newest compatible BepInEx Bleeding Edge artifacts as `Latest`, `Previous` and `Fallback` choices, warns about likely custom launchers, installs the selected package transactionally and installs the matching built-in `SW_Decensor v0.7.4.2` DLL after BepInEx has launched once. Managed removal touches only files installed by Game Asset Tool. Launch diagnostics report missing BepInEx logs and likely Doorstop proxy conflicts.
 
 BepInEx and SW_Decensor are optional modding tools. Compatibility is not guaranteed for every Unity game, especially titles with custom launchers or anti-tamper behavior.
 
 ### Godot 3 / 4
 
-Extracts standard and supported encrypted PCK archives, including PCK data embedded into an executable. Paste a key manually or leave the field empty to search `keys.txt` and textual key candidates inside game executables.
+Extracts standard and supported encrypted PCK archives, including PCK data embedded into an executable. Paste a key manually or leave the field empty to search `keys.txt` and textual key candidates inside game executables. Diagnostics show whether no key was found, a supplied key failed validation or the archive uses an unsupported encrypted variant.
 
 ### KiriKiri
 
@@ -151,7 +151,7 @@ Each extractor writes `GameAssetTool-report.txt` into its output folder.
 - Windows 10 version 1803 or later, or Windows 11
 - 64-bit Windows
 - No separate Python, package or .NET runtime installation
-- No internet connection required
+- No internet connection required for extraction
 
 The built-in extraction runtime is prepared silently under `%LocalAppData%\GameAssetTool\runtime\` when it is needed and removed when the application closes.
 

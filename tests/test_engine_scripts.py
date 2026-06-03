@@ -38,6 +38,19 @@ def run_script(script_name, game_path, output_path, optional_key=""):
     return process.stdout
 
 
+def run_script_result(script_name, game_path, output_path, optional_key=""):
+    environment = os.environ.copy()
+    environment["GAME_PATH"] = str(game_path)
+    environment["OUTPUT_PATH"] = str(output_path)
+    environment["OPTIONAL_KEY"] = optional_key
+    return subprocess.run(
+        [sys.executable, str(ROOT / "source" / "scripts" / script_name)],
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+
+
 def assert_extracted(output_path, expected):
     matches = [path for path in output_path.rglob("*") if path.is_file() and path.read_bytes() == expected]
     if not matches:
@@ -330,6 +343,32 @@ def main():
             assert "RESULT:1:" in log
             assert_extracted(output, content)
             print("{}=ok".format(label))
+
+        godot_no_key_game = temp / "godot-encrypted-no-key" / "game"
+        godot_no_key_output = temp / "godot-encrypted-no-key" / "output"
+        godot_no_key_game.mkdir(parents=True)
+        build_godot_encrypted_v2(godot_no_key_game / "sample.pck", b"godot-encrypted-no-key")
+        (godot_no_key_game / "keys.txt").unlink()
+        no_key = run_script_result("extract_godot.py", godot_no_key_game, godot_no_key_output)
+        assert no_key.returncode == 0
+        assert "Godot key candidate(s): 0" in no_key.stdout
+        assert "no key candidates were found" in no_key.stdout
+
+        godot_wrong_key_game = temp / "godot-encrypted-wrong-key" / "game"
+        godot_wrong_key_output = temp / "godot-encrypted-wrong-key" / "output"
+        godot_wrong_key_game.mkdir(parents=True)
+        build_godot_encrypted_v2(godot_wrong_key_game / "sample.pck", b"godot-encrypted-wrong-key")
+        (godot_wrong_key_game / "keys.txt").unlink()
+        wrong_key = run_script_result(
+            "extract_godot.py",
+            godot_wrong_key_game,
+            godot_wrong_key_output,
+            "ff" * 32,
+        )
+        assert wrong_key.returncode == 0
+        assert "Godot key source(s): manual field" in wrong_key.stdout
+        assert "tried 1 key candidate(s)" in wrong_key.stdout
+        print("godot-encrypted-diagnostics=ok")
 
         tlg_game = temp / "xp3-tlg5" / "game"
         tlg_output = temp / "xp3-tlg5" / "output"

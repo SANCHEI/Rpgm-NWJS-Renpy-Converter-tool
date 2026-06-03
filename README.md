@@ -35,7 +35,7 @@ Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **RP
 - Preserves relative paths and renames collisions with suffixes such as `image (2).png`.
 - Opens a searchable results gallery with background indexing, lazy thumbnail batches, enlarged image previews and SVG, audio and video filters.
 - Shows the Ren'Py gallery unlocker only for relevant folders or when installed files can be removed.
-- Writes an extraction summary to the results dialog and `GameAssetTool-report.txt`.
+- Writes an extraction summary to the results dialog, lets you copy it to the clipboard and saves `GameAssetTool-report.txt`.
 
 ## Usage
 
@@ -113,13 +113,13 @@ Unity service objects and unavailable resources are reported as skipped items ra
 
 For Unity games, the contextual **Unity Decensor...** button opens an optional installer. It detects the game executable architecture and selects one of three environments: an existing Mono / BE5 setup, Mono / BE6 or IL2CPP / BE6. The package list is loaded on demand from the official [BepInEx Bleeding Edge builds](https://builds.bepinex.dev/projects/bepinex_be) page, so BepInEx is not embedded into the main executable. Fresh Mono installations use the latest BE6 build. The three newest compatible artifacts are shown as `Latest`, `Previous` and `Fallback` choices for downgrade testing.
 
-The release executable embeds `SW_Decensor v0.7.4.2` and installs the matching `BE5`, `BE6` or `IL2CPP` DLL automatically. BepInEx installation is transactional: interrupted updates restore replaced managed files. A manifest tracks files installed by Game Asset Tool. **Remove Managed Files** removes only those tracked files and leaves an existing user-managed BepInEx setup unchanged. **Diagnose Launch** reports missing BepInEx logs and likely Doorstop proxy conflicts.
+The release executable embeds `SW_Decensor v0.7.4.2` and installs the matching `BE5`, `BE6` or `IL2CPP` DLL automatically after BepInEx has successfully launched once and created `BepInEx/LogOutput.log`. BepInEx installation is transactional: interrupted updates restore replaced managed files. A manifest tracks files installed by Game Asset Tool. **Remove Managed Files** removes only those tracked files and leaves an existing user-managed BepInEx setup unchanged. **Diagnose Launch** reports missing BepInEx logs and likely Doorstop proxy conflicts. If a game contains a top-level `startup.exe` or `launcher.exe`, the assistant warns before installing because custom launchers can conflict with Doorstop proxy DLL loading.
 
 BepInEx and SW_Decensor are optional modding tools. Compatibility is not guaranteed for every Unity game, especially titles with custom launchers or anti-tamper behavior.
 
 ## Godot
 
-Godot extraction supports PCK format versions `1`, `2`, `3` and compatible `4` archives, including PCK data embedded into an executable. For encrypted PCK directories and files, paste a 64-character HEX key or leave the field empty to search `keys.txt` and textual HEX/Base64 candidates inside game executables.
+Godot extraction supports PCK format versions `1`, `2`, `3` and compatible `4` archives, including PCK data embedded into an executable. For encrypted PCK directories and files, paste a 64-character HEX key or leave the field empty to search `keys.txt` and textual HEX/Base64 candidates inside game executables. The report shows whether a key came from the manual field, a key file or an executable scan, and distinguishes missing keys from wrong keys.
 
 ## KiriKiri
 
@@ -188,7 +188,7 @@ Choose **Soft** first. Use **Hard** only when the soft mode is insufficient.
 
 - Windows 10 version 1803 or later, or Windows 11, x64.
 - No separate Python, package or .NET runtime installation is required on supported Windows versions.
-- No internet connection is required while using the application.
+- No internet connection is required for extraction. The optional Unity BepInEx installer needs internet access only when downloading a selected package.
 
 After selecting a supported game folder, the built-in runtime is prepared silently in the background under `%LocalAppData%\GameAssetTool\runtime\`. It does not block the first window display. The session folder is removed when the application closes.
 

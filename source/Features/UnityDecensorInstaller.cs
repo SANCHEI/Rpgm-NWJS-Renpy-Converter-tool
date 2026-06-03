@@ -96,6 +96,7 @@ namespace RpgmvpConverterWinForms
         private const long MaxArchiveExpandedBytes = 512L * 1024 * 1024;
         private const int MaxArchiveEntries = 10000;
         private const int VisibleBuildCount = 3;
+        private const int MaxLauncherScanBytes = 8 * 1024 * 1024;
         private static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
 
         public static UnityDecensorEnvironment DetectEnvironment(string rootPath)
@@ -162,6 +163,22 @@ namespace RpgmvpConverterWinForms
                 return manifest.BepInExPackage;
             string existing = DetectExistingBepInEx(Path.GetFullPath(rootPath));
             return string.IsNullOrWhiteSpace(existing) ? "not installed" : existing + " unmanaged";
+        }
+
+        public static bool IsBepInExLaunchConfirmed(string rootPath)
+        {
+            return File.Exists(Path.Combine(Path.GetFullPath(rootPath), "BepInEx", "LogOutput.log"));
+        }
+
+        public static string GetLauncherRiskWarning(string rootPath)
+        {
+            rootPath = Path.GetFullPath(rootPath);
+            List<string> markers = new List<string>();
+            if (File.Exists(Path.Combine(rootPath, "startup.exe"))) markers.Add("startup.exe");
+            if (File.Exists(Path.Combine(rootPath, "launcher.exe"))) markers.Add("launcher.exe");
+            if (LauncherReferencesWinHttp(rootPath)) markers.Add("launcher references winhttp.dll");
+            if (markers.Count == 0) return "";
+            return "This game appears to use a custom launcher (" + string.Join(", ", markers.Distinct().ToArray()) + "). BepInEx Doorstop uses a proxy DLL and may conflict with custom launchers. Install anyway?";
         }
 
         public static void InstallBepInExPackage(string rootPath, BepInExPackage package)
@@ -249,15 +266,7 @@ namespace RpgmvpConverterWinForms
                 .FirstOrDefault(delegate(string name) { return File.Exists(Path.Combine(rootPath, name)); }) ?? "not found";
             string logPath = Path.Combine(rootPath, "BepInEx", "LogOutput.log");
             bool logExists = File.Exists(logPath);
-            bool launcherLoadsWinHttp = Directory.EnumerateFiles(rootPath, "*.c", SearchOption.TopDirectoryOnly)
-                .Any(delegate(string path)
-                {
-                    try
-                    {
-                        return File.ReadAllText(path).IndexOf("winhttp.dll", StringComparison.OrdinalIgnoreCase) >= 0;
-                    }
-                    catch { return false; }
-                });
+            bool launcherLoadsWinHttp = LauncherReferencesWinHttp(rootPath);
             string installed = GetInstalledPackageDisplayName(rootPath);
             bool managed = IsManagedInstallPresent(rootPath);
             bool likelyConflict = managed && proxy != "not found" && !logExists && launcherLoadsWinHttp;
@@ -284,6 +293,39 @@ namespace RpgmvpConverterWinForms
                 LikelyDoorstopConflict = likelyConflict,
                 Details = details.ToString()
             };
+        }
+
+        private static bool LauncherReferencesWinHttp(string rootPath)
+        {
+            foreach (string path in Directory.EnumerateFiles(rootPath, "*.*", SearchOption.TopDirectoryOnly)
+                .Where(delegate(string path)
+                {
+                    string name = Path.GetFileName(path).ToLowerInvariant();
+                    return name == "launcher.c" || name == "startup.c" || name == "launcher.exe" || name == "startup.exe";
+                }))
+            {
+                try
+                {
+                    byte[] data;
+                    using (FileStream stream = File.OpenRead(path))
+                    {
+                        int length = (int)Math.Min(stream.Length, MaxLauncherScanBytes);
+                        data = new byte[length];
+                        int offset = 0;
+                        while (offset < length)
+                        {
+                            int read = stream.Read(data, offset, length - offset);
+                            if (read == 0) break;
+                            offset += read;
+                        }
+                    }
+                    string text = Encoding.ASCII.GetString(data);
+                    if (text.IndexOf("winhttp.dll", StringComparison.OrdinalIgnoreCase) >= 0)
+                        return true;
+                }
+                catch { }
+            }
+            return false;
         }
 
         private static void InstallZip(string rootPath, string zipPath, string packageName)
