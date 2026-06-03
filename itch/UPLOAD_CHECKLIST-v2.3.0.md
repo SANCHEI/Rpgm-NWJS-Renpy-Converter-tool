@@ -1,12 +1,12 @@
-# itch.io Upload Checklist - v2.2.0
+# itch.io Upload Checklist - v2.3.0
 
 ## Upload
 
-- File: `release/GameAssetTool-v2.2.0.exe`
-- Display name: `Game Asset Tool v2.2.0 - Windows x64`
+- File: `release/GameAssetTool-v2.3.0.exe`
+- Display name: `Game Asset Tool v2.3.0 - Windows x64`
 - Platform: Windows
 - Architecture: x64
-- SHA-256: `AA21989A6130985AEC6C64F5FC6FC0AF6B055B5E9BF0045DD72BE023063C54B0`
+- SHA-256: `6C64B99533A3D012E5C646E2AD4F325A51D9A75CE94220E85BC073C3D650479F`
 
 ## Page Update
 

@@ -23,7 +23,7 @@ namespace RpgmvpConverterWinForms
             Font titleFont = new Font("Segoe UI Semibold", 14f, FontStyle.Regular);
             Font logFont = new Font("Consolas", 9.5f, FontStyle.Regular);
 
-            Text = "Game Asset Tool v2.2.0";
+            Text = "Game Asset Tool v2.3.0";
             StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;

@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $root = [IO.Path]::GetFullPath($PSScriptRoot)
 $release = [IO.Path]::GetFullPath((Join-Path $root "release"))
-$releaseExe = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v2.2.0.exe"))
+$releaseExe = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v2.3.0.exe"))
 $obsoletePreviousReleaseExe = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v2.1.0.exe"))
 $obsoletePreviousMajorExe = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v2.0.0.exe"))
 $obsoleteCurrentMajorExe = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v1.9.0.exe"))

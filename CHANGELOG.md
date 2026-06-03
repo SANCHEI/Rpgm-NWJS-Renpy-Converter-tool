@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## 2.2.0 - 2026-06-03
+## 2.3.0 - 2026-06-03
 
 - Show the latest three compatible BepInEx Bleeding Edge artifacts as `Latest`, `Previous` and `Fallback` choices for manual Unity downgrade testing.
 - Install BepInEx transactionally through a staging folder, restore replaced managed files after failure and display the installed package inside the Unity assistant.
@@ -13,6 +13,9 @@
 - Added **Copy Summary** to the extraction results dialog for easier bug reports and support messages.
 - Clarified that optional BepInEx and SW_Decensor tooling cannot guarantee compatibility with every Unity game.
 - Documented kumarin's permission to redistribute the embedded `SW_Decensor v0.7.4.2` package.
+
+## 2.2.0 - 2026-06-02
+
 - Preserve an explicitly selected or dropped directory instead of replacing it with a detected engine folder from one of its parents.
 - Added experimental SPAK `.dat` container detection, streaming entry extraction, adjacent DAT collection, open-media extension inference and a manifest for protected blocks.
 - Added automatic SPITE ChaCha20 decoding for media routes recovered from embedded Brotli-compressed Tauri frontend bundles, while preserving unresolved blocks under `protected/`.

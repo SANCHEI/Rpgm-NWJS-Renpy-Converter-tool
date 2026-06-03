@@ -702,7 +702,7 @@ namespace RpgmvpConverterWinForms
             {
                 return string.Join(Environment.NewLine, new[]
                 {
-                    "Game Asset Tool v2.2.0 report",
+                    "Game Asset Tool v2.3.0 report",
                     "Engine: " + Engine,
                     "Extracted files: " + Extracted,
                     "Extracted size: " + FormatBytes(Bytes),
