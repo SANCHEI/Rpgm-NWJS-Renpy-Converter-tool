@@ -6,6 +6,7 @@
 - Install BepInEx transactionally through a staging folder, restore replaced managed files after failure and display the installed package inside the Unity assistant.
 - Added Unity launch diagnostics for missing BepInEx logs and likely Doorstop proxy conflicts such as launchers that load `winhttp.dll` before BepInEx starts.
 - Clarified that optional BepInEx and SW_Decensor tooling cannot guarantee compatibility with every Unity game.
+- Documented kumarin's permission to redistribute the embedded `SW_Decensor v0.7.4.2` package.
 
 ## 2.2.0 - 2026-06-02
 
