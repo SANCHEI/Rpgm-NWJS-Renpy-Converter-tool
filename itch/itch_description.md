@@ -44,7 +44,9 @@ SHA-256 for v2.4.1:
 
 ## Support Development
 
-Game Asset Tool is released as a pay-what-you-want download. If the tool saved you time, optional support through itch helps fund compatibility fixes, new engine support and gallery improvements.
+Game Asset Tool is released as a pay-what-you-want download. You can leave an optional $2 donation when downloading on itch, or support development on Ko-fi: https://ko-fi.com/sanchei
+
+Optional support helps fund compatibility fixes, new engine support and gallery improvements.
 
 ## Notes And Limits
 
