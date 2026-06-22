@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{D1FE3D2D-2A75-4E38-B926-F8C4B1C2435F}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>RpgmvpConverterWinForms</RootNamespace>
+    <AssemblyName>GameAssetTool</AssemblyName>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Windows.Forms" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="source\Program.cs" />
+    <Compile Include="source\Application\Controls\NativeVirtualGalleryDemoForm.cs" />
+    <Compile Include="source\Application\Controls\ResultsGalleryForm.cs" />
+    <Compile Include="source\Application\UnityDecensorDialog.cs" />
+    <Compile Include="source\Application\Dialogs\DiagnosticsDialog.cs" />
+    <Compile Include="source\Application\Dialogs\ResultsDialog.cs" />
+    <Compile Include="source\Application\Dialogs\SpriteSheetPreviewForm.cs" />
+    <Compile Include="source\Application\Controllers\DryScanCache.cs" />
+    <Compile Include="source\Application\Controllers\ExtractionProfile.cs" />
+    <Compile Include="source\Application\Controllers\ExtractionProgressEvent.cs" />
+    <Compile Include="source\Application\Controllers\PreflightBuilder.cs" />
+    <Compile Include="source\Application\RpgmvpConverterForm.cs" />
+    <Compile Include="source\Application\RpgmvpConverterForm.Ui.cs" />
+    <Compile Include="source\Application\RpgmvpConverterForm.Extraction.cs" />
+    <Compile Include="source\Application\RpgmvpConverterForm.Detection.cs" />
+    <Compile Include="source\Extractors\ArchiveSafetyPolicy.cs" />
+    <Compile Include="source\Extractors\AndroidApkExtractorService.cs" />
+    <Compile Include="source\Extractors\AssetCollectors.cs" />
+    <Compile Include="source\Extractors\ElectronAsarExtractor.cs" />
+    <Compile Include="source\Extractors\ExtractionPathUtils.cs" />
+    <Compile Include="source\Extractors\FlashSwfExtractor.cs" />
+    <Compile Include="source\Extractors\HiddenMediaExtensions.cs" />
+    <Compile Include="source\Extractors\IAssetExtractor.cs" />
+    <Compile Include="source\Extractors\ExtractionRunContext.cs" />
+    <Compile Include="source\Extractors\JavaSvgPreviewRenderer.cs" />
+    <Compile Include="source\Extractors\LegacyRpgMakerExtractor.cs" />
+    <Compile Include="source\Extractors\MediaTypeRegistry.cs" />
+    <Compile Include="source\Extractors\SignatureAssetExtractor.cs" />
+    <Compile Include="source\Extractors\SpakDatExtractor.cs" />
+    <Compile Include="source\Extractors\UnityExtractionConfig.cs" />
+    <Compile Include="source\Features\UnlockerResources.cs" />
+    <Compile Include="source\Features\UnityDecensorInstaller.cs" />
+    <Compile Include="source\Reporting\ApkDiagnosticBuilder.cs" />
+    <Compile Include="source\Reporting\ExtractionReportBuilder.cs" />
+    <Compile Include="source\Reporting\ExtractionReportSnapshot.cs" />
+    <Compile Include="source\Reporting\OperationResult.cs" />
+    <Compile Include="source\Reporting\SkippedDiagnosticsBuilder.cs" />
+    <Compile Include="source\Runtime\EmbeddedScripts.cs" />
+    <Compile Include="source\Runtime\ApplicationIcon.cs" />
+    <Compile Include="source\Runtime\ApplicationErrorLog.cs" />
+    <Compile Include="source\Runtime\HealthCheckRunner.cs" />
+    <Compile Include="source\Runtime\PortableRuntime.cs" />
+    <Compile Include="source\Runtime\ToolRuntime.cs" />
+    <Compile Include="source\Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="source\scripts\extract_unity.py">
+      <LogicalName>RpgmvpConverterWinForms.scripts.extract_unity.py</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="source\scripts\extract_godot.py">
+      <LogicalName>RpgmvpConverterWinForms.scripts.extract_godot.py</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="source\scripts\extract_xp3.py">
+      <LogicalName>RpgmvpConverterWinForms.scripts.extract_xp3.py</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="source\scripts\extract_unreal.py">
+      <LogicalName>RpgmvpConverterWinForms.scripts.extract_unreal.py</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="source\scripts\extract_gamemaker.py">
+      <LogicalName>RpgmvpConverterWinForms.scripts.extract_gamemaker.py</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="source\scripts\extract_spite.py">
+      <LogicalName>RpgmvpConverterWinForms.scripts.extract_spite.py</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="payload\runtime-win-x64.zip">
+      <LogicalName>RpgmvpConverterWinForms.runtime.runtime-win-x64.zip</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="third_party\uberwolf\UberWolfCli.exe">
+      <LogicalName>RpgmvpConverterWinForms.tools.UberWolfCli.exe</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="third_party\resvg\resvg.exe">
+      <LogicalName>RpgmvpConverterWinForms.tools.resvg.exe</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="third_party\sw_decensor\SW_Decensor_v0.7.4.2.zip">
+      <LogicalName>RpgmvpConverterWinForms.tools.SW_Decensor_v0.7.4.2.zip</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

@@ -1,6 +1,10 @@
 bin/
 obj/
-Unity_Version/bin/
+tools/**/bin/
+dist/
+payload/
+__pycache__/
+*.pyc
 *.exe
 *.dll
 *.pdb

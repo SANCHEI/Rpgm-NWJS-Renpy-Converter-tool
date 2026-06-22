@@ -1,57 +1,81 @@
-Game Asset Tool - All-in-one game modding utility
+# Game Asset Tool
 
-Convert, Extract, Unlock hidden content from games.
+**Game Asset Tool** is a portable Windows tool for extracting, collecting, previewing and diagnosing assets from visual novels and indie games.
 
-[Watch Demo Video](https://youtu.be/y7z-_byQjXo)
+Drop a game folder or supported file into the window, run **Dry Run / Scan**, then extract only what the detected engine supports. Output is written into an `extracted` folder inside the selected game directory, so original files are left untouched.
 
----
+[Watch Demo Video](https://youtu.be/BnjRjik9fk0)
 
-Features:
+## What It Can Do
 
-* RPGMVP / NWJS Converter - Convert encrypted RPGMVP images to PNG with auto-detect key, live progress, ETA and pause/cancel
-* Unity Asset Extractor - Extract textures from .assets and .bundle files (auto-installs UnityPy)
-* Renpy RPA Extraction - Extract files from Renpy .rpa archives (no Python dependencies required)
-* Gallery Unlocker - Unlock galleries in Renpy/NWJS games
-* Auto-Detection - Automatically detect game type and encryption key
+- Auto-detect the selected game engine.
+- Extract archives and loose assets into organized output folders.
+- Drag a folder or file onto the window, or directly onto `GameAssetTool.exe`.
+- Preview results in a fast virtual gallery with search, grouping, thumbnail size presets and a resizable preview panel.
+- Filter gallery output by media type, large images, small UI/sprites, portrait images and landscape images.
+- View image resolution, file size, modified time and source path in the gallery preview panel.
+- Copy the extraction summary for bug reports or support messages.
+- Run a built-in Health Check for embedded runtime files, temp/AppData access and helper tool availability.
+- Get richer Unity extraction reports with archive, bundle, direct-media and zero-output diagnostics.
+- Recover embedded PNG, JPEG, GIF, OGG, WAV and WebP files from unknown formats.
+- Convert Java SVG assets to PNG previews while keeping the original SVG files.
+- Save WebM-backed `.nlch` videos as ordinary `.webm` files.
+- Install and remove the supported Ren'Py gallery unlocker.
+- Optional Unity decensor assistant for Mono BE5, Mono BE6 and IL2CPP games.
+- One portable EXE. No separate Python packages or helper files are required.
 
----
+## Supported Engines
 
-Supported Games:
+**Supported / built-in workflows**
 
-- RPG Maker MV/MZ (RPGMVP encryption)
-- NWJS games (Node WebKit)
-- Unity games (all versions with .assets/.bundle)
-- Renpy games (RPA archive extraction + gallery unlocker)
+- RPG Maker MV / MZ
+- RPG Maker XP / VX / VX Ace
+- Ren'Py
+- NWJS
+- Electron
+- Unity
+- Godot 3 / 4
+- KiriKiri
+- WOLF RPG
+- TyranoScript
+- Java / JAR
+- HTML
+- QSP
+- Android APK recovery
 
----
+**Experimental / recovery workflows**
 
-Requirements:
+- Unreal Engine `.pak`
+- Flash `.swf`
+- RAGS `.rag`
+- GameMaker `data.win`
+- SRPG Studio recovery
+- Pixel Game Maker MV recovery
+- SPAK `.dat` / SPITE
+- Unknown binary formats with recognizable embedded media
 
-- Windows 7/8/10/11
-- .NET Framework 4.0
-- Python 3.x (auto-installed for Unity extraction)
+## Unity Decensor Assistant
 
----
+For Unity games, the **Unity Decensor...** window can detect Mono BE5, Mono BE6 and IL2CPP setups, offer compatible BepInEx Bleeding Edge builds and install the matching embedded `SW_Decensor v0.7.4.2` DLL after BepInEx has successfully launched once.
 
-Usage:
+BepInEx downloads require internet access. Extraction itself works offline.
 
-1. Run the tool
-2. Select game folder (auto-detected)
-3. Enter HEX key or use auto-detect
-4. Click Start/Extract/Unlock
+## Notes And Limits
 
----
+- Encrypted Godot PCK archives require a valid key.
+- Some protected XP3, Unreal IoStore and custom archive formats are detected but not fully extracted.
+- Unreal Oodle extraction uses a built-in open-source fallback; a local official `oo2core*_win64.dll` is preferred when available.
+- BepInEx and SW_Decensor compatibility is not guaranteed for every Unity game, especially games with custom launchers or anti-tamper behavior.
+- The Health Check can help identify blocked helper tools, but Windows SmartScreen/Defender decisions may still require manual user approval.
 
-Output:
+## Requirements
 
-- RPGMVP/NWJS: Extracted PNGs in original folders
-- Unity: Textures in game_folder/extracted/
-- Renpy RPA: Extracted files in game_folder/extracted/
-- Unlocker: Mod files in game/_mods/
+- Windows 10 version 1803 or later, or Windows 11
+- 64-bit Windows
+- No separate Python, package or .NET runtime installation required on supported Windows versions
 
----
+The built-in runtime is prepared silently under `%LocalAppData%\GameAssetTool\runtime\` when needed and removed when the application closes.
 
-Demo Video: https://youtu.be/y7z-_byQjXo
-Source Code: https://github.com/SANCHEI/Rpgm-NWJS-Renpy-Converter-tool
+Source code: [GitHub repository](https://github.com/SANCHEI/Rpgm-NWJS-Renpy-Converter-tool)
 
-MIT License
+License: MIT

@@ -1,0 +1,17 @@
+Game Asset Tool embeds GameAssetTool.OozExtract.dll as an offline fallback for
+Unreal PAK files compressed with Oodle Data.
+
+The DLL is a small Game Asset Tool C ABI wrapper around:
+
+  oozextract 0.5.4
+  https://github.com/lvlvllvlvllvlvl/oozextract
+  https://crates.io/crates/oozextract
+
+The published crate declares the MIT License in Cargo.toml and on crates.io.
+The pinned wrapper source and Cargo.lock are stored under:
+
+  source/tools/oozextract_ffi/
+
+Embedded DLL SHA-256:
+
+  D8D24BA3C9115241E45692A82A53B4E272BD4A67F8D654EB0E833A91C6DF0C31

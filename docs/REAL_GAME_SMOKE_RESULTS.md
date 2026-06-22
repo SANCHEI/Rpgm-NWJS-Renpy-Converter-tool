@@ -1,0 +1,23 @@
+# Real-game smoke results
+
+Tested on 2026-06-01 with local copies under `D:\123123\games to test`.
+Extraction outputs were written to separate temporary folders and removed after verification.
+The source game folders were not modified.
+
+| Sample | Detected engine | Result |
+| --- | --- | --- |
+| `Flash ImpregDef` | Flash | Copied 6 SWF files and extracted 1 embedded JPEG |
+| `Java Lilith's Throne (exe version)` | Java | Extracted 1588 image sources and rendered 1169 SVG files into PNG previews; final repeat extraction reused all cached previews and completed in 18.90 seconds without duplicate output |
+| `RPGM RedJill_SUCCESS` | RPG Maker | Auto-detected the HEX key and decrypted 5 sampled PNG files with valid PNG signatures |
+| `Unity resident slut 4` | Unity | Extracted 101 files; 2829 unsupported Unity objects were skipped without errors |
+| `VN Ren'Py AuraOfSin-0.1-pc` | Ren'Py | Extracted 1205 files from `archive.rpa` |
+| `Ren'Py ExiliumBreeding-0.4-pc` | Ren'Py | Detected 602 loose files, 998516714 bytes; no `.rpa` archive was required |
+| `Wolf RPG Chamber Game` | WOLF RPG | Copied 2626 loose `Data` files |
+| `Unreal Engine Nehyr` | Unreal | Extracted all 15951 files, 6232082603 bytes, without errors or skipped items through the embedded open-source Oodle fallback; the game does not ship `oo2core*_win64.dll` |
+| `HTML romance-rails-offline` | HTML | Detected 43 open resource files, 1165642714 bytes |
+| `1QSP Zireael 1.3.1` | QSP | Detected the `.qsp` database and 1125 loose resource files, 5329752337 bytes total |
+| `Rag Dark_of_the_Night_Resurrected.rag` | RAGS | Accepted standalone file input; preserved the database and recovered 10 embedded media files without errors |
+
+The reusable audit and extraction harness lives in `tests/RealGameSmoke.cs`.
+
+The built-in legacy RPG Maker parser also passed synthetic `RGSSAD`, `RGSS2A` and `RGSS3A` round trips plus the upstream `uuksu/RPGMakerDecrypter` test archives. Electron ASAR extraction, Flash FLV recovery, archive safety limits, GameMaker `data.win` PNG-page streaming and results-gallery filtering beyond 300 files are covered by synthetic release checks.
