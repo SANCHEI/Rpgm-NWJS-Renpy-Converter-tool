@@ -12,59 +12,29 @@
   <a href="https://youtu.be/BnjRjik9fk0">Watch Demo Video</a>
 </p>
 
-<h2>What It Can Do</h2>
+<h2>Main Features</h2>
 
 <ul>
-  <li>Auto-detect the selected game engine.</li>
-  <li>Extract archives and loose assets into organized output folders.</li>
-  <li>Drag a folder or file onto the window, or directly onto <code>GameAssetTool.exe</code>.</li>
-  <li>Preview results in a fast virtual gallery with search, grouping, thumbnail size presets and a resizable preview panel.</li>
-  <li>Filter gallery output by media type, large images, small UI/sprites, portrait images and landscape images.</li>
-  <li>View image resolution, file size, modified time and source path in the gallery preview panel.</li>
-  <li>Copy the extraction summary for bug reports or support messages.</li>
-  <li>Run a built-in Health Check for embedded runtime files, temp/AppData access and helper tool availability.</li>
-  <li>Get richer Unity extraction reports with archive, bundle, direct-media and zero-output diagnostics.</li>
-  <li>Recover embedded PNG, JPEG, GIF, OGG, WAV and WebP files from unknown formats.</li>
-  <li>Convert Java SVG assets to PNG previews while keeping the original SVG files.</li>
-  <li>Save WebM-backed <code>.nlch</code> videos as ordinary <code>.webm</code> files.</li>
-  <li>Install and remove the supported Ren'Py gallery unlocker.</li>
-  <li>Use the optional Unity decensor assistant for Mono BE5, Mono BE6 and IL2CPP games.</li>
-  <li>Run from one portable EXE. No separate Python packages or helper files are required.</li>
+  <li>One portable Windows EXE with a built-in runtime.</li>
+  <li>Drag and drop game folders, archives or files into the window.</li>
+  <li>Auto-detect engines and run a dry scan before extraction.</li>
+  <li>Extract images, video and supported loose media into organized folders.</li>
+  <li>Fast searchable results gallery with filters, grouping, thumbnail presets and a resizable preview panel.</li>
+  <li>HTML reports with extraction summary, diagnostics, skipped-item details, health snapshot and performance notes.</li>
+  <li>Recovery mode for unknown binary files with recognizable embedded media.</li>
+  <li>Ren'Py gallery unlocker and optional Unity decensor assistant where supported.</li>
+  <li>No telemetry.</li>
 </ul>
 
-<h2>Supported Engines</h2>
+<h2>Supported Engines And Formats</h2>
 
-<h3>Supported / built-in workflows</h3>
+<p>
+  <strong>Built-in workflows:</strong> RPG Maker MV/MZ, RPG Maker XP/VX/VX Ace, Ren'Py, NWJS, Electron, Unity, Godot 3/4, KiriKiri, WOLF RPG, TyranoScript, Java/JAR, HTML, QSP and Android APK recovery.
+</p>
 
-<ul>
-  <li>RPG Maker MV / MZ</li>
-  <li>RPG Maker XP / VX / VX Ace</li>
-  <li>Ren'Py</li>
-  <li>NWJS</li>
-  <li>Electron</li>
-  <li>Unity</li>
-  <li>Godot 3 / 4</li>
-  <li>KiriKiri</li>
-  <li>WOLF RPG</li>
-  <li>TyranoScript</li>
-  <li>Java / JAR</li>
-  <li>HTML</li>
-  <li>QSP</li>
-  <li>Android APK recovery</li>
-</ul>
-
-<h3>Experimental / recovery workflows</h3>
-
-<ul>
-  <li>Unreal Engine <code>.pak</code></li>
-  <li>Flash <code>.swf</code></li>
-  <li>RAGS <code>.rag</code></li>
-  <li>GameMaker <code>data.win</code></li>
-  <li>SRPG Studio recovery</li>
-  <li>Pixel Game Maker MV recovery</li>
-  <li>SPAK <code>.dat</code> / SPITE</li>
-  <li>Unknown binary formats with recognizable embedded media</li>
-</ul>
+<p>
+  <strong>Experimental / recovery workflows:</strong> Unreal Engine <code>.pak</code>, Flash <code>.swf</code>, RAGS <code>.rag</code>, GameMaker <code>data.win</code>, SRPG Studio, Pixel Game Maker MV, SPAK <code>.dat</code> / SPITE and unknown formats with embedded PNG, JPEG, GIF, WebP, OGG, WAV or video data.
+</p>
 
 <h2>Unity Decensor Assistant</h2>
 
@@ -73,35 +43,40 @@
 </p>
 
 <p>
-  BepInEx downloads require internet access. Extraction itself works offline.
+  BepInEx downloads require internet access. Asset extraction itself works offline.
+</p>
+
+<h2>Transparency</h2>
+
+<p>
+  Source code, changelog and release notes are available on GitHub:<br>
+  <a href="https://github.com/SANCHEI/Rpgm-NWJS-Renpy-Converter-tool">https://github.com/SANCHEI/Rpgm-NWJS-Renpy-Converter-tool</a>
+</p>
+
+<p>
+  The Windows build is unsigned, so SmartScreen or Defender may show a warning until the app gains reputation. This does not automatically mean the file is malicious; verify the SHA-256 below if needed.
+</p>
+
+<p>
+  <strong>SHA-256 for v2.4.1:</strong><br>
+  <code>4DFF2C87572776B55C7789387EB2D13F1E6F6DA3961E4B651E91D24B3C0FC832</code>
+</p>
+
+<h2>Support Development</h2>
+
+<p>
+  Game Asset Tool is released as a pay-what-you-want download. If the tool saved you time, optional support through itch helps fund compatibility fixes, new engine support and gallery improvements.
 </p>
 
 <h2>Notes And Limits</h2>
 
 <ul>
+  <li>Windows 10 version 1803 or later, or Windows 11 x64 is recommended.</li>
+  <li>No separate Python, package or .NET runtime installation is required on supported Windows versions.</li>
   <li>Encrypted Godot PCK archives require a valid key.</li>
   <li>Some protected XP3, Unreal IoStore and custom archive formats are detected but not fully extracted.</li>
-  <li>Unreal Oodle extraction uses a built-in open-source fallback; a local official <code>oo2core*_win64.dll</code> is preferred when available.</li>
+  <li>Unreal Oodle-compressed PAK files may need the game's own <code>oo2core*_win64.dll</code>.</li>
   <li>BepInEx and SW_Decensor compatibility is not guaranteed for every Unity game, especially games with custom launchers or anti-tamper behavior.</li>
-  <li>The Health Check can help identify blocked helper tools, but Windows SmartScreen/Defender decisions may still require manual user approval.</li>
 </ul>
 
-<h2>Requirements</h2>
-
-<ul>
-  <li>Windows 10 version 1803 or later, or Windows 11</li>
-  <li>64-bit Windows</li>
-  <li>No separate Python, package or .NET runtime installation required on supported Windows versions</li>
-</ul>
-
-<p>
-  The built-in runtime is prepared silently under <code>%LocalAppData%\GameAssetTool\runtime\</code> when needed and removed when the application closes.
-</p>
-
-<p>
-  Source code: <a href="https://github.com/SANCHEI/Rpgm-NWJS-Renpy-Converter-tool">GitHub repository</a>
-</p>
-
-<p>
-  License: MIT
-</p>
+<p>License: MIT</p>

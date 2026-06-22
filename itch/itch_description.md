@@ -6,76 +6,53 @@ Drop a game folder or supported file into the window, run **Dry Run / Scan**, th
 
 [Watch Demo Video](https://youtu.be/BnjRjik9fk0)
 
-## What It Can Do
+## Main Features
 
-- Auto-detect the selected game engine.
-- Extract archives and loose assets into organized output folders.
-- Drag a folder or file onto the window, or directly onto `GameAssetTool.exe`.
-- Preview results in a fast virtual gallery with search, grouping, thumbnail size presets and a resizable preview panel.
-- Filter gallery output by media type, large images, small UI/sprites, portrait images and landscape images.
-- View image resolution, file size, modified time and source path in the gallery preview panel.
-- Copy the extraction summary for bug reports or support messages.
-- Run a built-in Health Check for embedded runtime files, temp/AppData access and helper tool availability.
-- Get richer Unity extraction reports with archive, bundle, direct-media and zero-output diagnostics.
-- Recover embedded PNG, JPEG, GIF, OGG, WAV and WebP files from unknown formats.
-- Convert Java SVG assets to PNG previews while keeping the original SVG files.
-- Save WebM-backed `.nlch` videos as ordinary `.webm` files.
-- Install and remove the supported Ren'Py gallery unlocker.
-- Optional Unity decensor assistant for Mono BE5, Mono BE6 and IL2CPP games.
-- One portable EXE. No separate Python packages or helper files are required.
+- One portable Windows EXE with a built-in runtime.
+- Drag and drop game folders, archives or files into the window.
+- Auto-detect engines and run a dry scan before extraction.
+- Extract images, video and supported loose media into organized folders.
+- Fast searchable results gallery with filters, grouping, thumbnail presets and a resizable preview panel.
+- HTML reports with extraction summary, diagnostics, skipped-item details, health snapshot and performance notes.
+- Recovery mode for unknown binary files with recognizable embedded media.
+- Ren'Py gallery unlocker and optional Unity decensor assistant where supported.
+- No telemetry.
 
-## Supported Engines
+## Supported Engines And Formats
 
-**Supported / built-in workflows**
+**Built-in workflows:** RPG Maker MV/MZ, RPG Maker XP/VX/VX Ace, Ren'Py, NWJS, Electron, Unity, Godot 3/4, KiriKiri, WOLF RPG, TyranoScript, Java/JAR, HTML, QSP and Android APK recovery.
 
-- RPG Maker MV / MZ
-- RPG Maker XP / VX / VX Ace
-- Ren'Py
-- NWJS
-- Electron
-- Unity
-- Godot 3 / 4
-- KiriKiri
-- WOLF RPG
-- TyranoScript
-- Java / JAR
-- HTML
-- QSP
-- Android APK recovery
-
-**Experimental / recovery workflows**
-
-- Unreal Engine `.pak`
-- Flash `.swf`
-- RAGS `.rag`
-- GameMaker `data.win`
-- SRPG Studio recovery
-- Pixel Game Maker MV recovery
-- SPAK `.dat` / SPITE
-- Unknown binary formats with recognizable embedded media
+**Experimental / recovery workflows:** Unreal Engine `.pak`, Flash `.swf`, RAGS `.rag`, GameMaker `data.win`, SRPG Studio, Pixel Game Maker MV, SPAK `.dat` / SPITE and unknown formats with embedded PNG, JPEG, GIF, WebP, OGG, WAV or video data.
 
 ## Unity Decensor Assistant
 
 For Unity games, the **Unity Decensor...** window can detect Mono BE5, Mono BE6 and IL2CPP setups, offer compatible BepInEx Bleeding Edge builds and install the matching embedded `SW_Decensor v0.7.4.2` DLL after BepInEx has successfully launched once.
 
-BepInEx downloads require internet access. Extraction itself works offline.
+BepInEx downloads require internet access. Asset extraction itself works offline.
+
+## Transparency
+
+Source code, changelog and release notes are available on GitHub:
+
+https://github.com/SANCHEI/Rpgm-NWJS-Renpy-Converter-tool
+
+The Windows build is unsigned, so SmartScreen or Defender may show a warning until the app gains reputation. This does not automatically mean the file is malicious; verify the SHA-256 below if needed.
+
+SHA-256 for v2.4.1:
+
+`4DFF2C87572776B55C7789387EB2D13F1E6F6DA3961E4B651E91D24B3C0FC832`
+
+## Support Development
+
+Game Asset Tool is released as a pay-what-you-want download. If the tool saved you time, optional support through itch helps fund compatibility fixes, new engine support and gallery improvements.
 
 ## Notes And Limits
 
+- Windows 10 version 1803 or later, or Windows 11 x64 is recommended.
+- No separate Python, package or .NET runtime installation is required on supported Windows versions.
 - Encrypted Godot PCK archives require a valid key.
 - Some protected XP3, Unreal IoStore and custom archive formats are detected but not fully extracted.
-- Unreal Oodle extraction uses a built-in open-source fallback; a local official `oo2core*_win64.dll` is preferred when available.
+- Unreal Oodle-compressed PAK files may need the game's own `oo2core*_win64.dll`.
 - BepInEx and SW_Decensor compatibility is not guaranteed for every Unity game, especially games with custom launchers or anti-tamper behavior.
-- The Health Check can help identify blocked helper tools, but Windows SmartScreen/Defender decisions may still require manual user approval.
-
-## Requirements
-
-- Windows 10 version 1803 or later, or Windows 11
-- 64-bit Windows
-- No separate Python, package or .NET runtime installation required on supported Windows versions
-
-The built-in runtime is prepared silently under `%LocalAppData%\GameAssetTool\runtime\` when needed and removed when the application closes.
-
-Source code: [GitHub repository](https://github.com/SANCHEI/Rpgm-NWJS-Renpy-Converter-tool)
 
 License: MIT
