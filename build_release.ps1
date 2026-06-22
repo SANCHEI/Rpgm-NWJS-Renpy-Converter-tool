@@ -1,8 +1,11 @@
 $ErrorActionPreference = "Stop"
 
 $root = [IO.Path]::GetFullPath($PSScriptRoot)
+$version = "2.4.1"
 $release = [IO.Path]::GetFullPath((Join-Path $root "release"))
-$releaseExe = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v2.3.0.exe"))
+$releaseExe = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v$version.exe"))
+$inspectorSource = [IO.Path]::GetFullPath((Join-Path $root "tests\ReleaseInspector.cs"))
+$inspectorExe = [IO.Path]::GetFullPath((Join-Path $root "tests\ReleaseInspector.exe"))
 $obsoletePreviousReleaseExe = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v2.1.0.exe"))
 $obsoletePreviousMajorExe = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v2.0.0.exe"))
 $obsoleteCurrentMajorExe = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v1.9.0.exe"))
@@ -19,11 +22,23 @@ $obsoleteZip = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v1.4.0.
 $obj = [IO.Path]::GetFullPath((Join-Path $root "obj"))
 $releaseBin = [IO.Path]::GetFullPath((Join-Path $root "bin\Release"))
 
-foreach ($path in @($release, $releaseExe, $obsoletePreviousReleaseExe, $obsoletePreviousMajorExe, $obsoleteCurrentMajorExe, $obsoletePreviousMinorPatchExe, $obsoleteCurrentPatchExe, $obsoletePreviousMinorExe, $obsoleteMinorExe, $obsoleteEarlierMinorExe, $obsoletePatchExe, $obsoletePreviousPatchExe, $obsoleteOlderPatchExe, $obsoleteReleaseExe, $obsoleteZip, $obj, $releaseBin)) {
+foreach ($path in @($release, $releaseExe, $inspectorSource, $inspectorExe, $obsoletePreviousReleaseExe, $obsoletePreviousMajorExe, $obsoleteCurrentMajorExe, $obsoletePreviousMinorPatchExe, $obsoleteCurrentPatchExe, $obsoletePreviousMinorExe, $obsoleteMinorExe, $obsoleteEarlierMinorExe, $obsoletePatchExe, $obsoletePreviousPatchExe, $obsoleteOlderPatchExe, $obsoleteReleaseExe, $obsoleteZip, $obj, $releaseBin)) {
     if (-not $path.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) {
         throw "Refusing to use path outside workspace: $path"
     }
 }
+
+function Assert-FileContains([string]$path, [string]$pattern, [string]$message) {
+    $text = [IO.File]::ReadAllText($path)
+    if ($text -notmatch [regex]::Escape($pattern)) {
+        throw $message
+    }
+}
+
+Assert-FileContains (Join-Path $root "source\Properties\AssemblyInfo.cs") "AssemblyInformationalVersion(`"$version`")" "Assembly informational version is not $version"
+Assert-FileContains (Join-Path $root "source\Application\RpgmvpConverterForm.Ui.cs") "Game Asset Tool v$version" "Main window title is not $version"
+Assert-FileContains (Join-Path $root "source\Reporting\OperationResult.cs") "`"$version`"," "Text report version is not $version"
+Assert-FileContains (Join-Path $root "CHANGELOG.md") "## $version" "CHANGELOG does not contain $version"
 
 & cmd /c (Join-Path $root "build_winforms.bat")
 if ($LASTEXITCODE -ne 0) {
@@ -38,6 +53,51 @@ if (Test-Path -LiteralPath $releaseExe) {
     Remove-Item -LiteralPath $releaseExe -Force
 }
 Copy-Item -LiteralPath (Join-Path $root "bin\GameAssetTool.exe") -Destination $releaseExe
+
+$fileVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($releaseExe)
+if ($fileVersion.FileVersion -ne "$version.0" -or $fileVersion.ProductVersion -ne $version) {
+    throw "Release file/product version is not $version"
+}
+
+$releaseBytes = [IO.File]::ReadAllBytes($releaseExe)
+$releaseText = [Text.Encoding]::UTF8.GetString($releaseBytes)
+foreach ($resource in @(
+    "RpgmvpConverterWinForms.scripts.extract_unity.py",
+    "RpgmvpConverterWinForms.scripts.extract_godot.py",
+    "RpgmvpConverterWinForms.scripts.extract_xp3.py",
+    "RpgmvpConverterWinForms.scripts.extract_unreal.py",
+    "RpgmvpConverterWinForms.scripts.extract_gamemaker.py",
+    "RpgmvpConverterWinForms.scripts.extract_spite.py",
+    "RpgmvpConverterWinForms.runtime.runtime-win-x64.zip",
+    "RpgmvpConverterWinForms.tools.UberWolfCli.exe",
+    "RpgmvpConverterWinForms.tools.resvg.exe",
+    "RpgmvpConverterWinForms.tools.SW_Decensor_v0.7.4.2.zip"
+)) {
+    if (-not $releaseText.Contains($resource)) {
+        throw "Release resource is missing: $resource"
+    }
+}
+
+foreach ($typeName in @(
+    "ExtractionProfile",
+    'DryScanCache`1',
+    "PreflightBuilder",
+    "ExtractionProgressEvent",
+    "ExtractionReportSnapshot"
+)) {
+    if (-not $releaseText.Contains($typeName)) {
+        throw "Release type is missing: $typeName"
+    }
+}
+
+if (-not $releaseText.Contains("RESULT:{0}:{1}:{2}:{3}:{4}")) {
+    throw "Embedded Unity extractor does not contain the expected result format"
+}
+
+Assert-FileContains $inspectorSource "(unknown) SPITE тест" "ReleaseInspector path/root fixture is missing"
+
+Write-Host "ReleaseInspector executable check skipped to avoid Windows Defender / Smart App Control blocking a freshly compiled test exe. Static release checks above still ran."
+Write-Host "Release checks passed."
 
 if (Test-Path -LiteralPath $obsoletePreviousReleaseExe) {
     Remove-Item -LiteralPath $obsoletePreviousReleaseExe -Force

@@ -23,7 +23,7 @@ namespace RpgmvpConverterWinForms
             Font titleFont = new Font("Segoe UI Semibold", 14f, FontStyle.Regular);
             Font logFont = new Font("Consolas", 9.5f, FontStyle.Regular);
 
-            Text = "Game Asset Tool v2.3.0";
+            Text = "Game Asset Tool v2.4.1";
             StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
@@ -47,7 +47,7 @@ namespace RpgmvpConverterWinForms
                 Font = titleFont,
                 ForeColor = textColor,
                 Location = new Point(18, 10),
-                Size = new Size(500, 28),
+                Size = new Size(360, 28),
                 BackColor = Color.Transparent
             });
             subtitleLabel = new Label
@@ -55,7 +55,7 @@ namespace RpgmvpConverterWinForms
                 Text = "Drop a game folder or file here, scan it, then extract or unlock",
                 ForeColor = mutedColor,
                 Location = new Point(19, 39),
-                Size = new Size(700, 20),
+                Size = new Size(380, 20),
                 BackColor = Color.Transparent
             };
             header.Controls.Add(subtitleLabel);
@@ -63,12 +63,15 @@ namespace RpgmvpConverterWinForms
             {
                 Text = "Runtime: waiting for a supported folder",
                 ForeColor = mutedColor,
-                Location = new Point(575, 24),
-                Size = new Size(265, 20),
+                Location = new Point(500, 24),
+                Size = new Size(245, 20),
                 TextAlign = ContentAlignment.MiddleRight,
                 BackColor = Color.Transparent
             };
             header.Controls.Add(runtimeStatusLabel);
+            healthCheckButton = CreateButton("Health", new Point(755, 20), new Size(82, 28), Color.FromArgb(45, 50, 60), textColor, uiBold);
+            healthCheckButton.Click += delegate { RunHealthCheck(); };
+            header.Controls.Add(healthCheckButton);
             languageBox = new ComboBox
             {
                 Location = new Point(852, 21),
@@ -138,12 +141,12 @@ namespace RpgmvpConverterWinForms
             {
                 Text = "Select a folder or drop it into this window.",
                 Location = new Point(10, 30),
-                Size = new Size(690, 20),
+                Size = new Size(500, 20),
                 ForeColor = mutedColor
             };
             scanPanel.Controls.Add(scanSummaryLabel);
             dryRunButton = CreateButton("Dry Run / Scan", new Point(718, 13), new Size(158, 30), Color.FromArgb(45, 50, 60), textColor, uiBold);
-            dryRunButton.Click += delegate { RunDryScan(true); };
+            dryRunButton.Click += async delegate { await RunDryScanAsync(true); };
             scanPanel.Controls.Add(dryRunButton);
             y += 66;
 
@@ -187,32 +190,6 @@ namespace RpgmvpConverterWinForms
                 Visible = false
             };
             extractionPanel.Controls.Add(keyBox);
-            unityModeLabel = new Label
-            {
-                Text = "Asset type",
-                Location = new Point(8, 40),
-                Size = new Size(100, 20),
-                ForeColor = mutedColor,
-                Visible = false
-            };
-            extractionPanel.Controls.Add(unityModeLabel);
-            unityExtractModeBox = new ComboBox
-            {
-                Location = new Point(112, 36),
-                Size = new Size(180, 26),
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                BackColor = inputBack,
-                ForeColor = textColor,
-                FlatStyle = FlatStyle.Flat,
-                Visible = false
-            };
-            unityExtractModeBox.Items.Add("Textures");
-            unityExtractModeBox.Items.Add("Videos");
-            unityExtractModeBox.Items.Add("Audio");
-            unityExtractModeBox.Items.Add("Meshes");
-            unityExtractModeBox.Items.Add("All");
-            unityExtractModeBox.SelectedIndex = 4;
-            extractionPanel.Controls.Add(unityExtractModeBox);
             javaModeLabel = new Label
             {
                 Text = "Java mode",
@@ -237,13 +214,31 @@ namespace RpgmvpConverterWinForms
             javaExtractModeBox.Items.Add("All resources");
             javaExtractModeBox.SelectedIndex = 1;
             extractionPanel.Controls.Add(javaExtractModeBox);
-            startButton = CreateButton("Extract Assets", new Point(704, 8), new Size(180, 26), successColor, formBack, uiBold);
+            extractModeMenu = new ContextMenuStrip();
+            extractModeMenu.BackColor = panelBack;
+            extractModeMenu.ForeColor = textColor;
+            extractModeMenu.ShowCheckMargin = false;
+            extractModeMenu.ShowImageMargin = false;
+            looseModeMenu = new ContextMenuStrip();
+            looseModeMenu.BackColor = panelBack;
+            looseModeMenu.ForeColor = textColor;
+            looseModeMenu.ShowCheckMargin = false;
+            looseModeMenu.ShowImageMargin = false;
+
+            startButton = CreateButton("Extract: Auto", new Point(704, 8), new Size(150, 26), successColor, formBack, uiBold);
             startButton.Click += async delegate { await StartDetectedExtractionAsync(); };
             extractionPanel.Controls.Add(startButton);
-            collectLooseButton = CreateButton("Collect Loose Files", new Point(704, 39), new Size(180, 26), Color.FromArgb(45, 50, 60), textColor, uiBold);
+            extractModeButton = CreateButton("▼", new Point(858, 8), new Size(26, 26), Color.FromArgb(45, 50, 60), textColor, uiBold);
+            extractModeButton.Click += delegate { ShowModeMenu(extractModeMenu, extractModeButton); };
+            extractionPanel.Controls.Add(extractModeButton);
+
+            collectLooseButton = CreateButton("Loose: Images + Video", new Point(704, 39), new Size(150, 26), Color.FromArgb(45, 50, 60), textColor, uiBold);
             collectLooseButton.Click += async delegate { await StartLooseResourceCollectionAsync(); };
             extractionPanel.Controls.Add(collectLooseButton);
-            unityDecensorButton = CreateButton("Unity Decensor...", new Point(306, 36), new Size(180, 26), Color.FromArgb(95, 65, 80), textColor, uiBold);
+            looseModeButton = CreateButton("▼", new Point(858, 39), new Size(26, 26), Color.FromArgb(45, 50, 60), textColor, uiBold);
+            looseModeButton.Click += delegate { ShowModeMenu(looseModeMenu, looseModeButton); };
+            extractionPanel.Controls.Add(looseModeButton);
+            unityDecensorButton = CreateButton("Unity Decensor...", new Point(514, 39), new Size(180, 26), Color.FromArgb(95, 65, 80), textColor, uiBold);
             unityDecensorButton.Click += delegate { OpenUnityDecensor(); };
             unityDecensorButton.Visible = false;
             extractionPanel.Controls.Add(unityDecensorButton);
@@ -285,7 +280,11 @@ namespace RpgmvpConverterWinForms
             openOutputButton.Enabled = false;
             openOutputButton.Click += delegate { OpenOutputFolder(); };
             Controls.Add(openOutputButton);
-            toggleLogButton = CreateButton("Show Log", new Point(426, y), new Size(120, 30), Color.FromArgb(45, 50, 60), textColor, uiBold);
+            lastResultButton = CreateButton("Last Result", new Point(426, y), new Size(150, 30), Color.FromArgb(45, 50, 60), textColor, uiBold);
+            lastResultButton.Enabled = false;
+            lastResultButton.Click += delegate { ShowLastResult(); };
+            Controls.Add(lastResultButton);
+            toggleLogButton = CreateButton("Show Log", new Point(586, y), new Size(120, 30), Color.FromArgb(45, 50, 60), textColor, uiBold);
             toggleLogButton.Click += delegate { ToggleLog(); };
             Controls.Add(toggleLogButton);
             y += 40;
@@ -411,6 +410,123 @@ namespace RpgmvpConverterWinForms
             return russianUi ? russian : english;
         }
 
+        private void BuildModeMenus()
+        {
+            if (extractModeMenu != null)
+            {
+                extractModeMenu.Items.Clear();
+                AddModeItem(extractModeMenu, ExtractionProfileDisplayName(0), selectedExtractionProfileIndex == 0, delegate { SelectExtractionProfile(0); });
+                AddModeItem(extractModeMenu, ExtractionProfileDisplayName(1), selectedExtractionProfileIndex == 1, delegate { SelectExtractionProfile(1); });
+                AddModeItem(extractModeMenu, ExtractionProfileDisplayName(2), selectedExtractionProfileIndex == 2, delegate { SelectExtractionProfile(2); });
+                AddModeItem(extractModeMenu, ExtractionProfileDisplayName(3), selectedExtractionProfileIndex == 3, delegate { SelectExtractionProfile(3); });
+                AddModeItem(extractModeMenu, ExtractionProfileDisplayName(4), selectedExtractionProfileIndex == 4, delegate { SelectExtractionProfile(4); });
+                AddModeItem(extractModeMenu, ExtractionProfileDisplayName(5), selectedExtractionProfileIndex == 5, delegate { SelectExtractionProfile(5); });
+            }
+
+            if (looseModeMenu != null)
+            {
+                looseModeMenu.Items.Clear();
+                AddModeItem(looseModeMenu, LooseModeDisplayName(0), selectedLooseModeIndex == 0, delegate { SelectLooseMode(0); });
+                AddModeItem(looseModeMenu, LooseModeDisplayName(1), selectedLooseModeIndex == 1, delegate { SelectLooseMode(1); });
+                AddModeItem(looseModeMenu, LooseModeDisplayName(2), selectedLooseModeIndex == 2, delegate { SelectLooseMode(2); });
+            }
+        }
+
+        private void AddModeItem(ContextMenuStrip menu, string text, bool selected, EventHandler clickHandler)
+        {
+            ToolStripMenuItem item = new ToolStripMenuItem((selected ? "✓ " : "   ") + text);
+            item.Checked = false;
+            item.ForeColor = selected ? accentColor : textColor;
+            item.BackColor = panelBack;
+            item.Font = new Font("Segoe UI", 9f, selected ? FontStyle.Bold : FontStyle.Regular);
+            item.Click += clickHandler;
+            menu.Items.Add(item);
+        }
+
+        private void ShowModeMenu(ContextMenuStrip menu, Control anchor)
+        {
+            if (menu == null || anchor == null || !anchor.Enabled) return;
+            menu.Show(anchor, new Point(0, anchor.Height));
+        }
+
+        private void SelectExtractionProfile(int index)
+        {
+            selectedExtractionProfileIndex = Math.Max(0, Math.Min(5, index));
+            BuildModeMenus();
+            UpdateModeButtonTexts();
+            OnProfileChanged();
+        }
+
+        private void SelectLooseMode(int index)
+        {
+            selectedLooseModeIndex = Math.Max(0, Math.Min(2, index));
+            BuildModeMenus();
+            UpdateModeButtonTexts();
+        }
+
+        private void UpdateModeButtonTexts()
+        {
+            if (startButton != null)
+            {
+                string verb = selectedEngine == GameEngine.Unknown || IsRecoveryProfile()
+                    ? T("Recover", "Поиск")
+                    : T("Extract", "Извлечь");
+                if (IsDiagnosticsOnlyProfile()) verb = T("Diagnostics", "Диагностика");
+                startButton.Text = verb + ": " + ExtractionProfileShortName(selectedExtractionProfileIndex);
+            }
+
+            if (collectLooseButton != null)
+            {
+                collectLooseButton.Text = T("Loose: ", "Открытые: ") + LooseModeShortName(selectedLooseModeIndex);
+            }
+        }
+
+        private string ExtractionProfileDisplayName(int index)
+        {
+            switch (index)
+            {
+                case 1: return T("Images only", "Только изображения");
+                case 2: return T("Images + Video", "Изображения + видео");
+                case 3: return T("Everything", "Все файлы");
+                case 4: return T("Diagnostics only", "Только диагностика");
+                case 5: return T("Recovery mode", "Восстановление");
+                default: return T("Auto: Images + Video", "Авто: изображения + видео");
+            }
+        }
+
+        private string ExtractionProfileShortName(int index)
+        {
+            switch (index)
+            {
+                case 1: return T("Images", "Изобр.");
+                case 2: return T("Media", "Медиа");
+                case 3: return T("Everything", "Все");
+                case 4: return T("Only", "Только");
+                case 5: return T("Recovery", "Восст.");
+                default: return T("Auto media", "Авто медиа");
+            }
+        }
+
+        private string LooseModeDisplayName(int index)
+        {
+            switch (index)
+            {
+                case 1: return T("Images only", "Только изображения");
+                case 2: return T("All loose files", "Все открытые файлы");
+                default: return T("Images + Video", "Изображения + видео");
+            }
+        }
+
+        private string LooseModeShortName(int index)
+        {
+            switch (index)
+            {
+                case 1: return T("Images", "Изобр.");
+                case 2: return T("All", "Все");
+                default: return T("Media", "Медиа");
+            }
+        }
+
         private void LocalizeUi()
         {
             if (subtitleLabel == null) return;
@@ -422,27 +538,21 @@ namespace RpgmvpConverterWinForms
             logSectionLabel.Text = T("Log", "Лог");
             browseButton.Text = T("Browse...", "Обзор...");
             dryRunButton.Text = T("Dry Run / Scan", "Проверить");
-            startButton.Text = T("Extract Assets", "Извлечь ресурсы");
-            collectLooseButton.Text = T("Collect Loose Files", "Собрать открытые");
+            extractModeButton.Text = "▼";
+            looseModeButton.Text = "▼";
             unityDecensorButton.Text = T("Unity Decensor...", "Unity Decensor...");
             unlockerButton.Text = T("Install Unlocker", "Установить анлокер");
             removeUnlockerButton.Text = T("Remove Unlocker", "Удалить анлокер");
             pauseButton.Text = T("Pause", "Пауза");
             cancelButton.Text = T("Cancel", "Отмена");
-            openOutputButton.Text = T("Open Output Folder", "Открыть результат");
+            openOutputButton.Text = T("Open Output Folder", "Открыть папку");
+            lastResultButton.Text = T("Last Result", "Последний отчёт");
+            healthCheckButton.Text = T("Health", "Проверка");
             toggleLogButton.Text = logExpanded ? T("Hide Log", "Скрыть лог") : T("Show Log", "Показать лог");
             clearLogButton.Text = T("Clear", "Очистить");
 
-            int unityMode = unityExtractModeBox.SelectedIndex;
-            unityExtractModeBox.Items.Clear();
-            unityExtractModeBox.Items.Add(T("Textures", "Текстуры"));
-            unityExtractModeBox.Items.Add(T("Videos", "Видео"));
-            unityExtractModeBox.Items.Add(T("Audio", "Аудио"));
-            unityExtractModeBox.Items.Add(T("Meshes", "Меши"));
-            unityExtractModeBox.Items.Add(T("All", "Все"));
-            unityExtractModeBox.SelectedIndex = unityMode >= 0 ? unityMode : 4;
-
-            int javaMode = javaExtractModeBox.SelectedIndex;
+            BuildModeMenus();
+            UpdateModeButtonTexts();            int javaMode = javaExtractModeBox.SelectedIndex;
             javaExtractModeBox.Items.Clear();
             javaExtractModeBox.Items.Add(T("Images only", "Только изображения"));
             javaExtractModeBox.Items.Add(T("Images + SVG previews", "Изображения + PNG-превью SVG"));
@@ -458,7 +568,7 @@ namespace RpgmvpConverterWinForms
             string path = pathBox.Text.Trim();
             if (IsExistingInput(path))
             {
-                detectedEngineLabel.Text = T("Engine: ", "Движок: ") + EngineName(DetectEngineFast(path));
+                detectedEngineLabel.Text = T("Engine: ", "Движок: ") + EngineName(EffectiveEngine(DetectEngineFast(path)));
                 scanSummaryLabel.Text = T(
                     "Ready to scan. Click Dry Run / Scan to inspect files before extraction.",
                     "Готово к проверке. Нажмите «Проверить», чтобы просмотреть файлы перед извлечением.");
@@ -475,7 +585,7 @@ namespace RpgmvpConverterWinForms
                 statsLabel.Text = T("Processed: 0 / 0 | Size: -- | ETA: --:--", "Обработано: 0 / 0 | Размер: -- | Осталось: --:--");
             }
 
-            UpdateEngineContext(selectedEngine);
+            UpdateEngineContext(EffectiveEngine(selectedEngine));
             ConfigureActionTooltips();
         }
 
@@ -516,6 +626,13 @@ namespace RpgmvpConverterWinForms
             string path = paths[0];
             if (!string.IsNullOrWhiteSpace(path))
                 ApplyGamePath(path, true);
+            if (paths.Length > 1)
+            {
+                WriteLog("Multiple dropped items detected; using the first path only.");
+                scanSummaryLabel.Text = T(
+                    "Multiple items dropped. Using the first path only.",
+                    "Перетащено несколько элементов. Используется только первый путь.");
+            }
         }
 
         private void ApplyGamePath(string path, bool scan)
@@ -523,7 +640,23 @@ namespace RpgmvpConverterWinForms
             string detectedRoot = IsExistingInput(path) ? null : TryFindGameRoot(path);
             pathBox.Text = string.IsNullOrWhiteSpace(detectedRoot) ? path : detectedRoot;
             TryAutoDetectKey(InputDirectory(pathBox.Text));
-            if (scan) RunDryScan(false);
+            if (scan && IsHandleCreated && Visible)
+            {
+                Task ignored = RunDryScanAsync(false);
+            }
+        }
+
+        private void OnProfileChanged()
+        {
+            string path = pathBox.Text.Trim();
+            GameEngine engine = IsExistingInput(path) ? DetectEngineFast(path) : GameEngine.Unknown;
+            UpdateEngineContext(EffectiveEngine(engine));
+        }
+
+        private GameEngine EffectiveEngine(GameEngine detected)
+        {
+            if (CurrentExtractionProfile().IsRecovery) return GameEngine.Unknown;
+            return detected;
         }
 
         private void TryApplyStartupGamePath()
@@ -553,18 +686,23 @@ namespace RpgmvpConverterWinForms
             }
 
             TryAutoDetectKey(InputDirectory(path));
-            GameEngine engine = DetectEngineFast(path);
+            GameEngine engine = EffectiveEngine(DetectEngineFast(path));
             detectedEngineLabel.Text = T("Engine: ", "Движок: ") + EngineName(engine);
             detectedEngineLabel.ForeColor = EngineColor(engine);
             scanSummaryLabel.Text = T(
                 "Ready to scan. Click Dry Run / Scan to inspect files before extraction.",
                 "Готово к проверке. Нажмите «Проверить», чтобы просмотреть файлы перед извлечением.");
             UpdateEngineContext(engine);
-            WarmPortableRuntimeInBackground(engine);
         }
 
-        private void RunDryScan(bool showLog)
+        private async Task RunDryScanAsync(bool showLog)
         {
+            if (dryScanRunning)
+            {
+                CancelDryScan();
+                return;
+            }
+
             string inputPath = pathBox.Text.Trim();
             if (!IsExistingInput(inputPath))
             {
@@ -573,31 +711,185 @@ namespace RpgmvpConverterWinForms
             }
 
             Cursor previous = Cursor;
+            dryScanCancellation = new CancellationTokenSource();
+            CancellationToken token = dryScanCancellation.Token;
+            SetDryScanRunningState(true);
             Cursor = Cursors.WaitCursor;
             try
             {
-                ScanSummary summary = BuildScanSummary(inputPath);
-                detectedEngineLabel.Text = T("Engine: ", "Движок: ") + EngineName(summary.Engine);
-                detectedEngineLabel.ForeColor = EngineColor(summary.Engine);
-                scanSummaryLabel.Text = string.Format(
+                scanSummaryLabel.Text = T("Scanning in background. Click Cancel Scan to stop.", "Проверка в фоне. Нажмите «Отмена», чтобы остановить.");
+                statusLabel.Text = T("Dry Run: scanning", "Проверка: сканирование");
+                statsLabel.Text = T("Reading folders and archive lists...", "Чтение папок и списка архивов...");
+                ScanSummary summary;
+                if (dryScanCache.TryGet(inputPath, out summary))
+                {
+                    if (showLog) WriteLog("Dry run: using cached scan summary.");
+                }
+                else
+                {
+                    summary = await Task.Run(delegate { return BuildScanSummaryCore(inputPath, token); }, token);
+                    dryScanCache.Store(inputPath, summary);
+                }
+                token.ThrowIfCancellationRequested();
+                if (!string.Equals(pathBox.Text.Trim(), inputPath, StringComparison.OrdinalIgnoreCase))
+                    return;
+                GameEngine engine = EffectiveEngine(summary.Engine);
+                detectedEngineLabel.Text = T("Engine: ", "Движок: ") + EngineName(engine);
+                detectedEngineLabel.ForeColor = EngineColor(engine);
+                string scanSummary = string.Format(
                     T(
                         "{0} archive(s), {1} candidate file(s), input size {2} (not estimated output)",
                         "{0} архив(а), {1} подходящих файлов, входной размер {2} (не оценка результата)"),
                     summary.ArchiveCount,
                     summary.FileCount,
                     FormatBytes(summary.TotalBytes));
-                UpdateEngineContext(summary.Engine);
+                if (!string.IsNullOrWhiteSpace(summary.UnknownExtensions))
+                    scanSummary += T(" | Unknown: ", " | Неизвестные: ") + summary.UnknownExtensions;
+                if (!string.IsNullOrWhiteSpace(summary.TopExtensions))
+                    scanSummary += T(" | Top: ", " | Топ: ") + summary.TopExtensions;
+                if (!string.IsNullOrWhiteSpace(summary.RouteHints))
+                    scanSummary += T(" | Route: ", " | Маршрут: ") + ShortUiText(summary.RouteHints, 140);
+                scanSummaryLabel.Text = scanSummary;
+                string preflight = BuildPreflightSummary(inputPath, engine, summary);
+                statsLabel.Text = ShortUiText(preflight.Replace(Environment.NewLine, " | "), 150);
+                UpdateEngineContext(engine);
                 if (showLog)
                 {
                     WriteLog("Dry run: " + EngineName(summary.Engine));
                     WriteLog("Found: " + summary.ArchiveCount + " archive(s), " + summary.FileCount + " candidate file(s), input size " + FormatBytes(summary.TotalBytes));
+                    foreach (string line in preflight.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries))
+                        WriteLog(line);
+                    if (!string.IsNullOrWhiteSpace(summary.UnknownExtensions))
+                        WriteLog("Unknown extensions: " + summary.UnknownExtensions);
+                    if (!string.IsNullOrWhiteSpace(summary.TopExtensions))
+                        WriteLog("Top extensions: " + summary.TopExtensions);
+                    if (!string.IsNullOrWhiteSpace(summary.LargestFiles))
+                        WriteLog("Largest inputs: " + summary.LargestFiles);
+                    if (!string.IsNullOrWhiteSpace(summary.RouteHints))
+                        WriteLog("Route hints: " + summary.RouteHints);
                 }
-                WarmPortableRuntimeInBackground(summary.Engine);
+            }
+            catch (OperationCanceledException)
+            {
+                scanSummaryLabel.Text = T("Dry Run cancelled.", "Проверка отменена.");
+                statusLabel.Text = T("Scan cancelled", "Проверка отменена");
+                if (showLog) WriteLog("Dry run cancelled.");
+            }
+            catch (Exception ex)
+            {
+                scanSummaryLabel.Text = T("Dry Run failed. See log.", "Проверка не удалась. Смотрите лог.");
+                WriteLog("Dry run failed: " + ex.Message);
             }
             finally
             {
+                SetDryScanRunningState(false);
+                if (dryScanCancellation != null)
+                {
+                    dryScanCancellation.Dispose();
+                    dryScanCancellation = null;
+                }
                 Cursor = previous;
             }
+        }
+
+        private string BuildPreflightSummary(string inputPath, GameEngine engine, ScanSummary summary)
+        {
+            string rootPath = InputDirectory(inputPath);
+            return PreflightBuilder.Build(new PreflightInfo
+            {
+                EngineName = EngineName(engine),
+                ProfileName = ExtractionProfileName(),
+                OutputDir = GetDefaultOutputFolder(rootPath, engine),
+                FileCount = summary.FileCount,
+                ArchiveCount = summary.ArchiveCount,
+                TotalSize = FormatBytes(summary.TotalBytes),
+                ExistingOutputPolicy = "ask",
+                DiagnosticsOnly = IsDiagnosticsOnlyProfile(),
+                UsesPortableRuntime = engine == GameEngine.Unity
+                    || engine == GameEngine.Renpy
+                    || engine == GameEngine.Godot
+                    || engine == GameEngine.Kirikiri
+                    || engine == GameEngine.Unreal
+                    || engine == GameEngine.GameMaker
+                    || engine == GameEngine.SpakDat,
+                IsRpgMaker = engine == GameEngine.RpgMaker,
+                HasManualKey = keyBox != null && !string.IsNullOrWhiteSpace(keyBox.Text),
+                IsUnreal = engine == GameEngine.Unreal,
+                IsUnity = engine == GameEngine.Unity,
+                UnityMode = UnityModeValue(),
+                UnknownExtensions = summary.UnknownExtensions
+            });
+        }
+
+        private static string GetDefaultOutputFolder(string rootPath, GameEngine engine)
+        {
+            switch (engine)
+            {
+                case GameEngine.RpgMaker: return Path.Combine(rootPath, "extracted", "rpgm");
+                case GameEngine.Renpy: return Path.Combine(rootPath, "extracted", "renpy");
+                case GameEngine.Unity: return Path.Combine(rootPath, "extracted", "unity");
+                case GameEngine.Godot: return Path.Combine(rootPath, "extracted", "godot");
+                case GameEngine.Kirikiri: return Path.Combine(rootPath, "extracted", "kirikiri");
+                case GameEngine.Unreal: return Path.Combine(rootPath, "extracted", "unreal");
+                case GameEngine.Nwjs: return Path.Combine(rootPath, "extracted", "nwjs");
+                case GameEngine.WolfRpg: return Path.Combine(rootPath, "extracted", "wolf");
+                case GameEngine.TyranoScript: return Path.Combine(rootPath, "extracted", "tyrano");
+                case GameEngine.JavaJar: return Path.Combine(rootPath, "extracted", "java");
+                case GameEngine.AndroidApk: return Path.Combine(rootPath, "extracted", "android-apk");
+                case GameEngine.SrpgStudio: return Path.Combine(rootPath, "extracted", "srpg-studio");
+                case GameEngine.PixelGameMaker: return Path.Combine(rootPath, "extracted", "pixel-game-maker");
+                case GameEngine.Flash: return Path.Combine(rootPath, "extracted", "flash");
+                case GameEngine.Electron: return Path.Combine(rootPath, "extracted", "electron");
+                case GameEngine.Html: return Path.Combine(rootPath, "extracted", "html");
+                case GameEngine.Qsp: return Path.Combine(rootPath, "extracted", "qsp");
+                case GameEngine.Rags: return Path.Combine(rootPath, "extracted", "rags");
+                case GameEngine.LegacyRpgMaker: return Path.Combine(rootPath, "extracted", "rgss");
+                case GameEngine.GameMaker: return Path.Combine(rootPath, "extracted", "gamemaker");
+                case GameEngine.SpakDat: return Path.Combine(rootPath, "extracted", "spak-dat");
+                case GameEngine.PygamePyInstaller: return Path.Combine(rootPath, "extracted", "pygame");
+                default: return Path.Combine(rootPath, "extracted", "signature-recovery");
+            }
+        }
+
+        private void CancelDryScan()
+        {
+            if (dryScanCancellation != null)
+                dryScanCancellation.Cancel();
+        }
+
+        private void SetDryScanRunningState(bool running)
+        {
+            dryScanRunning = running;
+            pathBox.Enabled = !running;
+            browseButton.Enabled = !running;
+            extractModeButton.Enabled = !running;
+            startButton.Enabled = !running;
+            collectLooseButton.Enabled = !running;
+            unityDecensorButton.Enabled = !running;
+            looseModeButton.Enabled = !running;
+            healthCheckButton.Enabled = !running;
+            dryRunButton.Enabled = true;
+            dryRunButton.Text = running ? T("Cancel Scan", "Отмена") : T("Dry Run / Scan", "Проверить");
+            progressBar.Style = running ? ProgressBarStyle.Marquee : ProgressBarStyle.Continuous;
+            if (running)
+            {
+                progressBar.MarqueeAnimationSpeed = 25;
+                cancelButton.Enabled = false;
+            }
+            else
+            {
+                progressBar.MarqueeAnimationSpeed = 0;
+                progressBar.Value = Math.Min(progressBar.Value, progressBar.Maximum);
+                cancelButton.Enabled = currentRun != null || externalRunning;
+                UpdateEngineContext(selectedEngine);
+            }
+            UpdateActionTooltips();
+        }
+
+        private static string ShortUiText(string value, int maxLength)
+        {
+            if (string.IsNullOrWhiteSpace(value) || value.Length <= maxLength) return value;
+            return value.Substring(0, Math.Max(1, maxLength - 3)) + "...";
         }
 
         private void SetRpgmRunningState(bool running)
@@ -605,13 +897,17 @@ namespace RpgmvpConverterWinForms
             pathBox.Enabled = !running;
             browseButton.Enabled = !running;
             dryRunButton.Enabled = !running;
+            extractModeButton.Enabled = !running;
             startButton.Enabled = !running;
             collectLooseButton.Enabled = !running;
             unityDecensorButton.Enabled = !running;
+            looseModeButton.Enabled = !running;
+            healthCheckButton.Enabled = !running;
             UpdateUnlockerControls(running);
             pauseButton.Enabled = running;
             cancelButton.Enabled = running;
             openOutputButton.Enabled = !running && Directory.Exists(lastOutputDir);
+            lastResultButton.Enabled = !running && lastOperationResult != null && File.Exists(lastReportPath);
             if (!running) UpdateEngineContext(selectedEngine);
             else UpdateActionTooltips();
         }
@@ -619,27 +915,48 @@ namespace RpgmvpConverterWinForms
         private void SetExternalRunningState(bool running, string operation)
         {
             externalRunning = running;
+            if (running)
+            {
+                externalOperationName = operation;
+                externalStartUtc = DateTime.UtcNow;
+                externalOutputFiles = 0;
+                externalOutputBytes = 0;
+                externalLastFile = "";
+                StartExternalOutputWatcher();
+                uiTimer.Start();
+            }
+            else
+            {
+                uiTimer.Stop();
+                StopExternalOutputWatcher();
+            }
             BeginUi(delegate
             {
                 pathBox.Enabled = !running;
                 browseButton.Enabled = !running;
                 dryRunButton.Enabled = !running;
+                extractModeButton.Enabled = !running;
                 startButton.Enabled = !running;
                 collectLooseButton.Enabled = !running;
                 unityDecensorButton.Enabled = !running;
+                looseModeButton.Enabled = !running;
+                healthCheckButton.Enabled = !running;
                 UpdateUnlockerControls(running);
                 pauseButton.Enabled = false;
                 cancelButton.Enabled = running;
                 openOutputButton.Enabled = !running && Directory.Exists(lastOutputDir);
+                lastResultButton.Enabled = !running && lastOperationResult != null && File.Exists(lastReportPath);
                 if (running)
                 {
+                    progressBar.Style = ProgressBarStyle.Continuous;
                     progressBar.Maximum = 1;
                     progressBar.Value = 0;
                     statusLabel.Text = operation + T(": starting...", ": запуск...");
-                    statsLabel.Text = "";
+                    statsLabel.Text = T("Watching output folder for new files...", "Отслеживание новых файлов в папке результата...");
                 }
                 else
                 {
+                    progressBar.Style = ProgressBarStyle.Continuous;
                     UpdateEngineContext(selectedEngine);
                 }
                 UpdateActionTooltips();
@@ -660,22 +977,20 @@ namespace RpgmvpConverterWinForms
             selectedEngine = engine;
             bool busy = currentRun != null || externalRunning;
             bool showKey = engine == GameEngine.RpgMaker || engine == GameEngine.Godot || engine == GameEngine.Unreal;
-            bool showUnityMode = engine == GameEngine.Unity;
+            bool isUnity = engine == GameEngine.Unity;
             bool showJavaMode = engine == GameEngine.JavaJar;
 
             keyLabel.Visible = showKey;
             keyBox.Visible = showKey;
-            unityModeLabel.Visible = showUnityMode;
-            unityExtractModeBox.Visible = showUnityMode;
-            unityDecensorButton.Visible = showUnityMode;
-            unityDecensorButton.Enabled = !busy && showUnityMode && Directory.Exists(InputDirectory(pathBox.Text.Trim()));
+            unityDecensorButton.Visible = isUnity;
+            unityDecensorButton.Enabled = !busy && isUnity && Directory.Exists(InputDirectory(pathBox.Text.Trim()));
             javaModeLabel.Visible = showJavaMode;
             javaExtractModeBox.Visible = showJavaMode;
+            extractModeButton.Enabled = !busy;
+            looseModeButton.Enabled = !busy && IsExistingInput(pathBox.Text.Trim());
             startButton.Enabled = !busy && (CanExtractAssets(engine) || IsExistingInput(pathBox.Text.Trim()));
-            startButton.Text = engine == GameEngine.Unknown
-                ? T("Recover Embedded Assets", "Извлечь найденные ресурсы")
-                : T("Extract Assets", "Извлечь ресурсы");
             collectLooseButton.Enabled = !busy && IsExistingInput(pathBox.Text.Trim());
+            UpdateModeButtonTexts();
             UpdateUnlockerControls(busy);
 
             switch (engine)
@@ -687,7 +1002,9 @@ namespace RpgmvpConverterWinForms
                         "Зашифрованные изображения. Ключ определяется автоматически, когда это возможно.");
                     break;
                 case GameEngine.Unity:
-                    extractionHintLabel.Text = T("Choose the Unity asset types to export.", "Выберите типы ресурсов Unity для извлечения.");
+                    extractionHintLabel.Text = T(
+                        "Unity extraction follows the selected Extract profile.",
+                        "Unity извлекается по выбранному профилю Extract.");
                     break;
                 case GameEngine.Renpy:
                     extractionHintLabel.Text = FindRenpyArchives(pathBox.Text.Trim()).Count > 0
@@ -763,10 +1080,30 @@ namespace RpgmvpConverterWinForms
                         "Experimental data.win recovery preserves the original and extracts PNG, QOI and BZ2QOI texture pages.",
                         "Экспериментальное восстановление data.win сохраняет оригинал и извлекает страницы текстур PNG, QOI и BZ2QOI.");
                     break;
+                case GameEngine.AndroidApk:
+                    extractionHintLabel.Text = T(
+                        "APK files are unpacked as ZIP containers and scanned for embedded assets, including GPU texture containers.",
+                        "APK распаковывается как ZIP-контейнер и сканируется на встроенные ресурсы, включая контейнеры GPU-текстур.");
+                    break;
+                case GameEngine.SrpgStudio:
+                    extractionHintLabel.Text = T(
+                        "SRPG Studio resources are collected, and .rts/.dts/.srk containers are scanned by signatures.",
+                        "Ресурсы SRPG Studio собираются, а контейнеры .rts/.dts/.srk сканируются по сигнатурам.");
+                    break;
+                case GameEngine.PixelGameMaker:
+                    extractionHintLabel.Text = T(
+                        "Pixel Game Maker MV open resources are collected, encrypted or packed data is scanned by signatures.",
+                        "Открытые ресурсы Pixel Game Maker MV собираются, зашифрованные или упакованные данные сканируются по сигнатурам.");
+                    break;
                 case GameEngine.SpakDat:
                     extractionHintLabel.Text = T(
                         "Experimental SPAK DAT / SPITE extraction decodes resources whose runtime paths can be recovered. Remaining protected blocks stay as .dat files in protected/.",
                         "Экспериментальное извлечение SPAK DAT / SPITE декодирует ресурсы с восстановленными runtime-путями. Остальные защищённые блоки остаются .dat-файлами в protected/.");
+                    break;
+                case GameEngine.PygamePyInstaller:
+                    extractionHintLabel.Text = T(
+                        "Pygame/PyInstaller assets will be collected. XOR-obfuscated image .dat files are decoded when recognized.",
+                        "Ресурсы Pygame/PyInstaller будут собраны. XOR-зашифрованные изображения .dat декодируются при распознавании.");
                     break;
                 default:
                     extractionHintLabel.Text = T(
@@ -809,7 +1146,11 @@ namespace RpgmvpConverterWinForms
                 || engine == GameEngine.Rags
                 || engine == GameEngine.LegacyRpgMaker
                 || engine == GameEngine.GameMaker
-                || engine == GameEngine.SpakDat;
+                || engine == GameEngine.AndroidApk
+                || engine == GameEngine.SrpgStudio
+                || engine == GameEngine.PixelGameMaker
+                || engine == GameEngine.SpakDat
+                || engine == GameEngine.PygamePyInstaller;
         }
 
         private void UpdateUnlockerLayout(bool visible)
@@ -825,7 +1166,7 @@ namespace RpgmvpConverterWinForms
             }
 
             int offset = visible ? ScaleLogicalHeight(UnlockerSectionHeight) : -ScaleLogicalHeight(UnlockerSectionHeight);
-            foreach (Control control in new Control[] { pauseButton, cancelButton, openOutputButton, toggleLogButton, progressBar, statusLabel, statsLabel, logPanel })
+            foreach (Control control in new Control[] { pauseButton, cancelButton, openOutputButton, lastResultButton, toggleLogButton, progressBar, statusLabel, statsLabel, logPanel })
                 control.Top += offset;
             unlockerLayoutVisible = visible;
             UpdateWindowHeight();
@@ -853,9 +1194,12 @@ namespace RpgmvpConverterWinForms
         {
             SetActionTooltip(pathBox, T("Drop a game folder or a supported file here, or choose a folder with Browse.", "Перетащите папку или поддерживаемый файл игры либо выберите папку через «Обзор»."));
             SetActionTooltip(browseButton, T("Select the root folder of a game.", "Выберите корневую папку игры."));
-            SetActionTooltip(dryRunButton, T("Inspect supported archives and estimate the input size without extracting files.", "Проверьте архивы и входной размер без извлечения файлов."));
+            SetActionTooltip(dryRunButton, T("Inspect supported archives, show preflight details and estimate the input size without extracting files.", "Проверить архивы, показать preflight-сводку и входной размер без извлечения файлов."));
             SetActionTooltip(toggleLogButton, T("Show or hide technical extraction messages.", "Показать или скрыть технические сообщения."));
+            SetActionTooltip(healthCheckButton, T("Check embedded runtime, tools, temp folders and common Windows blocking symptoms.", "Проверить встроенный runtime, инструменты, temp-папки и возможные блокировки Windows."));
             SetActionTooltip(languageBox, T("Switch interface language.", "Переключить язык интерфейса."));
+            SetActionTooltip(extractModeButton, T("Choose the extraction profile shown on the Extract button.", "Выбрать профиль извлечения, который отображается на кнопке запуска."));
+            SetActionTooltip(looseModeButton, T("Choose what Collect Loose Media should copy: images/videos, images only, or all already unpacked files.", "Выбрать, что копирует «Открытые медиа»: изображения/видео, только изображения или все уже распакованные файлы."));
             SetActionTooltip(javaExtractModeBox, T(
                 "Images only is fastest. SVG previews are cached after the first conversion. All resources keeps non-image JAR and res files.",
                 "«Только изображения» работает быстрее всего. PNG-превью SVG кэшируются после первой конвертации. «Все ресурсы» сохраняет и файлы других типов из JAR и res."));
@@ -869,9 +1213,9 @@ namespace RpgmvpConverterWinForms
             SetActionTooltip(startButton, busy
                 ? T("Wait for the current operation to finish.", "Дождитесь завершения текущей операции.")
                 : CanExtractAssets(selectedEngine)
-                    ? T("Extract supported assets for the detected engine.", "Извлечь поддерживаемые ресурсы определённого движка.")
+                    ? T("Extract supported assets for the detected engine using the selected profile.", "Извлечь поддерживаемые ресурсы определённого движка с выбранным профилем.")
                     : T("Recover embedded media by signatures and write diagnostics for this unknown format.", "Извлечь встроенные медиа по сигнатурам и записать диагностику неизвестного формата."));
-            SetActionTooltip(collectLooseButton, T("Collect open media, scripts and project files without unpacking archives.", "Собрать открытые медиа, скрипты и файлы проекта без распаковки архивов."));
+            SetActionTooltip(collectLooseButton, T("Copy already unpacked files using the selected loose mode. This does not unpack archives like data.win, .rpa, .assets or .pak.", "Скопировать уже распакованные файлы с выбранным loose-режимом. Это не распаковывает архивы вроде data.win, .rpa, .assets или .pak."));
             SetActionTooltip(unityDecensorButton, T("Detect Mono BE5, Mono BE6 or IL2CPP, install the latest compatible BepInEx online and install the built-in SW_Decensor.", "Определить Mono BE5, Mono BE6 или IL2CPP, установить актуальный совместимый BepInEx из сети и встроенный SW_Decensor."));
             SetActionTooltip(unlockerButton, selectedEngine == GameEngine.Renpy
                 ? T("Install the Ren'Py gallery unlocker. Try Soft mode first.", "Установить анлокер галереи Ren'Py. Сначала попробуйте мягкий режим.")
@@ -881,6 +1225,9 @@ namespace RpgmvpConverterWinForms
                 : T("No installed Ren'Py gallery unlocker was found.", "Установленный анлокер Ren'Py не найден."));
             SetActionTooltip(pauseButton, T("Pause or resume RPG Maker asset conversion.", "Приостановить или продолжить конвертацию RPG Maker."));
             SetActionTooltip(cancelButton, busy ? T("Stop the current operation.", "Остановить текущую операцию.") : T("No operation is currently running.", "Сейчас нет выполняемой операции."));
+            SetActionTooltip(lastResultButton, lastOperationResult != null && File.Exists(lastReportPath)
+                ? T("Open the last extraction summary, diagnostics and gallery again.", "Повторно открыть последний отчёт, диагностику и галерею.")
+                : T("Run an extraction first to create a saved result.", "Сначала выполните извлечение, чтобы появился сохранённый результат."));
             SetActionTooltip(openOutputButton, Directory.Exists(lastOutputDir)
                 ? T("Open the most recent extraction output folder.", "Открыть папку последнего результата.")
                 : T("Run an extraction first to create an output folder.", "Сначала выполните извлечение, чтобы создать папку результата."));
@@ -941,12 +1288,8 @@ namespace RpgmvpConverterWinForms
                 return;
             }
 
-            Task warmup;
-            lock (runtimeWarmupSync) warmup = runtimeWarmupTask;
             SetRuntimeStatus(
-                warmup != null && !warmup.IsCompleted
-                    ? T("Runtime: preparing silently...", "Runtime: подготовка в фоне...")
-                    : T("Runtime: preparing after selection", "Runtime: подготовится после выбора"),
+                T("Runtime: preparing on extraction", "Runtime: подготовится при извлечении"),
                 warningColor);
         }
 

@@ -1,6 +1,129 @@
 # Changelog
 
-## Unreleased
+## 2.4.1 - 2026-06-20
+
+- Removed the redundant Unity **Asset type** selector; Unity extraction now follows the selected **Extract** profile.
+- Shortened the completion dialog to a minimal one-screen summary with compact file type and Unity diagnostic lines.
+- Removed largest-file noise from the result summary and HTML report; detailed diagnostics remain available through the HTML diagnostics tab or engine-specific files where applicable.
+- Fixed a Results Gallery startup crash caused by loading the initial folder before the gallery window handle exists.
+- Added Godot imported texture preview recovery for `.ctex` files that contain embedded WebP, PNG or JPEG image data.
+- Hide the follow-up extractor button when no APK follow-up exists and give it a concrete engine-specific label when it is available.
+- Removed the always-visible **Clean extracted** checkbox; existing output now prompts to delete only when needed, with more robust long-path cleanup.
+- Added Pygame/PyInstaller detection and recovery for XOR `0x6A` image `.dat` files used by games such as Isekai NTR Inn.
+- Added a **Last Result** button that reopens the latest extraction summary, diagnostics and gallery without rerunning extraction.
+- Removed the built-in **Help** menu/button from the main window to keep the header simpler.
+- Added gallery tooltips for filter, sort, grouping, thumbnail size and upscale controls.
+- Improved **Show in Folder** in the results gallery so Explorer opens with the selected file highlighted.
+- Embedded Unity diagnostics into the HTML report as a separate **Diagnostics** tab and removed the separate Unity diagnostics TXT after report generation.
+- Added per-row **Copy** buttons to the HTML report.
+- Added a **Skipped summary** section to HTML reports with skipped count, likely reasons and skipped type candidates from engine diagnostics.
+- Added an **HTML Report** button to the extraction results window.
+- Removed obsolete old release executables, native-gallery demo build files and outdated itch upload checklists from the project tree.
+- Simplified result-dialog shell opening through a shared helper.
+- Removed the result-window **Skipped / Errors** and **Copy Summary** buttons; skipped/errors are now shown in the main summary and detailed in the HTML report.
+- Added a lightweight **Health Check** snapshot to the HTML diagnostics.
+- Reduced gallery upscale stalls by avoiding a full synchronous thumbnail list reset and throttling thumbnail redraws.
+- Added persistent cached thumbnails for the results gallery so repeated filters, thumbnail sizes and upscale mode reuse generated previews.
+- Added asset-class gallery filters for sprites, UI, backgrounds/CG and animation-frame candidates.
+- Added a lightweight sprite-sheet preview/export tool for selected raster images in the gallery.
+- Added extraction performance statistics to the HTML report, including files/sec, data/sec and process memory.
+- Stopped writing `GameAssetTool-report.txt`; `GameAssetTool-report.html` is now the single persisted report file.
+- Updated the release version to 2.4.1.
+
+## 2.4.0 - 2026-06-18
+
+- Replaced the main results gallery with the native virtual `ListView` gallery that was tested as a separate demo build.
+- Added a resizable preview panel to the main results gallery with larger image/GIF/WebP previews where Windows/.NET can decode them.
+- Added gallery thumbnail size presets and an optional upscale toggle for small UI assets.
+- Added gallery grouping by folder, type, kind or size without leaving virtual list mode.
+- Added gallery filters for large images, small UI/sprite-like images, portrait images and landscape images.
+- Read common raster image dimensions during background gallery indexing so resolution filters do not freeze the UI.
+- Show image resolution in the gallery preview metadata and file tooltips when it is available.
+- Added Unity extraction diagnostics written to `GameAssetTool-unity-diagnostics.txt`, including archive counts, bundle/assets split, direct media count, zero-output archives and largest archives.
+- Include a compact Unity diagnostics summary in `GameAssetTool-report.txt`.
+- Added a **Health** button that checks writable temp/AppData folders, embedded resources, portable Python runtime, UberWolf CLI and `resvg.exe` preflight status.
+- Added extraction profiles: auto images/video, images only, images/video, everything, diagnostics only and recovery mode.
+- Added richer Dry Run / Scan preflight output with profile, output path, clean-output state, runtime notes and engine-specific key/archive warnings.
+- Added compact skipped-item diagnostics to extraction reports so large skip counts are easier to interpret.
+- Added automatic `GameAssetTool-report.html` generation next to the existing text report.
+- Added a built-in **Help** dialog covering the main workflow, profiles, supported routes, protected formats and reports.
+- Refactored extraction profiles into a dedicated model so Unity, Java and loose-file modes no longer depend on raw UI indexes.
+- Added a lightweight Dry Run cache for repeated scans of the same unchanged input.
+- Moved Dry Run preflight formatting and local progress updates behind small reusable DTOs.
+- Centralized report file enumeration in `ExtractionReportSnapshot` so report summaries reuse one captured output listing.
+- Hardened release checks: version consistency, embedded resource checks and the compiled `ReleaseInspector` now run as part of the release build.
+- Renamed **Collect Loose Files** to **Collect Loose Media** and clarified that it copies already-unpacked media instead of unpacking archives.
+- Expanded the built-in Help window with more practical guidance for profiles, loose media, recovery, reports, gallery and health checks.
+- Removed the queue buttons from the main window to keep the single-game extraction flow simpler.
+- Reworked the Help window into a compact no-scroll overview with six larger sections.
+- Moved results, diagnostics and help dialogs into `source/Application/Dialogs`.
+- Moved the native virtual gallery implementation into `source/Application/Controls`.
+- Centralized image/vector/audio/video extension handling in `MediaTypeRegistry` for reports, loose collection, APK recovery, Java resources and gallery filters.
+- Improved Unity progress reporting with explicit scan, direct-media copy and archive-extraction phases.
+- Strengthened Dry Run cache invalidation with a recursive file-count/size/timestamp fingerprint.
+- Added release-time engine detection fixtures for GameMaker-vs-Unity priority and NWJS folders that also contain a `game` folder.
+- Updated the release version to `2.4.0`.
+
+## 2.3.1 - 2026-06-04
+
+- Detect `.nlch` files that contain WebM video data and extract them as `.webm` for NWJS and loose-resource workflows.
+- Replace the results gallery tile list with a virtualized grid so large outputs can be filtered and scrolled without creating thousands of WinForms controls.
+- Add gallery tile context actions: open, show in folder and copy path.
+- Remove the results gallery enlarged-preview panel and keep thumbnail loading throttled.
+- Try Windows shell thumbnails for `.webm` videos and avoid repeated preview attempts for files that cannot produce thumbnails.
+- Index the results gallery incrementally, reuse a lightweight `GameAssetTool-index.tsv` cache and add sorting by name, type, size or modified date.
+- Cancel results gallery indexing when the gallery window is closed.
+- Show live image, SVG, video and audio counters in the results gallery status bar.
+- Build the results gallery index immediately after extraction so the gallery can open from cache.
+- Show live extraction activity for long external operations: elapsed time, output file count, output size and the last changed output file.
+- Remove animated dots from long-operation status text.
+- Reduce live output polling overhead during extraction and increase Unity extraction worker scaling on multi-core CPUs.
+- Replace repeated live-output folder scans with `FileSystemWatcher` updates during extraction.
+- Ask for **Clean extracted** confirmation before any expensive locked-file diagnostics.
+- Copy Unity direct media files in parallel.
+- Save extracted Unity textures with faster PNG compression to improve export speed.
+- Save decoded Unity images and streamed media through a bounded parallel writer so large archives can keep decoding while files are written.
+- Add a faster default Unity **Media** mode that extracts textures and videos while skipping audio and mesh exports.
+- Make Unity loose-file copying respect the selected asset type instead of copying unrelated direct media.
+- Limit noisy Unity warning output so error-heavy archives do not slow the UI with thousands of log lines.
+- Move Unity extractor runtime settings into a dedicated configuration class instead of keeping process environment values in the form code.
+- Skip existing `extracted` folders during Unity source scanning.
+- Keep the **Clean extracted** option readable while an extraction is running without making it visually clash with the rest of the interface.
+- Make repeated NWJS extraction overwrite its own previous output instead of creating `file (2)` duplicates.
+- Add a visible **Clean extracted** option, confirmation before deleting old results and locked-file checks before cleanup.
+- Add extraction profiles for Auto, RPG Maker / NWJS, Unity, Ren'Py and Unknown / Recovery.
+- Add **Collect Loose Files** modes for images plus videos, images only or all supported loose files.
+- Prepare the embedded Python runtime only when an extractor that needs it is started.
+- Show extracted file type counters, unknown output extensions and DAT diagnostics in the completion report.
+- Show top unknown extensions in Dry Run / Scan diagnostics.
+- Add DAT signature diagnostics to unknown-format reports.
+- Add Android APK recovery: safely unpack ZIP-compatible APK asset entries and run signature recovery on embedded data.
+- Add SRPG Studio recovery detection for `.rts`, `.dts`, `.srk` and `.srpgs` inputs.
+- Add Pixel Game Maker MV recovery detection for PGMMV project/export markers and player folders.
+- Expand signature recovery to carve WebM, MP3, TLG, DDS, KTX/KTX2, PVR, PKM, ASTC, CRN and QOI containers with source offsets in output names.
+- Add `GameAssetTool-signatures.tsv` manifest with recovered type, offset, byte size, SHA-256 and output path.
+- Deduplicate signature recovery results by SHA-256 so repeated embedded assets are not written again.
+- Scan large unknown files in bounded chunks instead of skipping every file above the in-memory scan limit.
+- Write ZIP/APK diagnostics for skipped, protected or unreadable archive entries.
+- Add APK inner-engine hints for likely Unity, Godot, HTML/NWJS-like, GameMaker or Java payloads.
+- Add APK route hints with suggested next extractor/folder and keep common inner engine containers such as Unity `.assets`, Godot `.pck` and GameMaker `data.win`.
+- Expand Dry Run / Scan with top input extensions, largest input files and APK route hints.
+- Run Dry Run / Scan in the background with a cancellable scan state so large folders do not freeze the UI.
+- Move extraction report composition into a dedicated report builder and add largest output files plus duplicate-candidate summaries.
+- Move Android APK extraction into a dedicated extractor service instead of keeping ZIP, diagnostics and signature recovery details in the form.
+- Add **Run Suggested** in the results dialog for APK outputs with a detected inner Unity, Godot, GameMaker, HTML/NWJS or Java route.
+- Add **Skipped / Errors** details in the results dialog, collecting report summaries and diagnostic files such as ZIP/APK skipped-entry logs.
+- Write unexpected application crashes to `%LOCALAPPDATA%\GameAssetTool\GameAssetTool-last-error.log`.
+- Introduce a shared local extraction cancellation context used by local copy/signature recovery routes.
+- Remove obsolete report-building helper methods from the main WinForms form now that reports are composed by `ExtractionReportBuilder`.
+- Add a preflight check and timeout for embedded `resvg.exe`; if Windows security blocks it, Java SVG originals are kept and PNG previews are skipped without freezing extraction.
+- Make unknown-format signature recovery cancellable during large file chunk scans and ZIP entry reads.
+- Include GPU texture containers in loose-resource collection and gallery image filtering.
+- Show GPU/TLG image containers in the results gallery as explicit container tiles instead of attempting unavailable thumbnails.
+- Preserve KiriKiri TLG6 originals with a preview note when PNG preview conversion is unavailable.
+- Include TLG preview counts and preview-note counts in extraction reports.
+- Write WOLF RPG diagnostics listing archive candidates and loose Data file counts.
+- Extend ReleaseInspector synthetic checks for APK, SRPG Studio, Pixel Game Maker MV, signature manifests, dedupe and recovered GPU containers.
 
 ## 2.3.0 - 2026-06-03
 

@@ -104,6 +104,60 @@ def safe_output_path(root, relative):
     return candidate
 
 
+def imported_preview_stem(path):
+    name = os.path.basename(path)
+    stem = os.path.splitext(name)[0]
+    match = re.match(r"^(.*)-[0-9a-fA-F]{32}(?:\.[^.]+)?$", stem)
+    if match:
+        stem = match.group(1)
+    original_stem, _ = os.path.splitext(stem)
+    return original_stem or stem or "asset"
+
+
+def extract_embedded_image(data):
+    candidates = []
+    webp = data.find(b"RIFF")
+    while webp >= 0:
+        if webp + 12 <= len(data) and data[webp + 8:webp + 12] == b"WEBP":
+            size = struct.unpack_from("<I", data, webp + 4)[0] + 8
+            if size > 12 and webp + size <= len(data):
+                candidates.append((webp, webp + size, ".webp"))
+                break
+        webp = data.find(b"RIFF", webp + 1)
+
+    png = data.find(b"\x89PNG\r\n\x1a\n")
+    if png >= 0:
+        end = data.find(b"IEND", png)
+        if end >= 0 and end + 8 <= len(data):
+            candidates.append((png, end + 8, ".png"))
+
+    jpg = data.find(b"\xff\xd8\xff")
+    if jpg >= 0:
+        end = data.find(b"\xff\xd9", jpg + 2)
+        if end >= 0:
+            candidates.append((jpg, end + 2, ".jpg"))
+
+    if not candidates:
+        return None, None
+    start, end, extension = sorted(candidates, key=lambda item: item[0])[0]
+    return data[start:end], extension
+
+
+def write_imported_preview(destination, data):
+    lowered = destination.lower()
+    if not lowered.endswith(".ctex"):
+        return 0, 0, 0
+    image, extension = extract_embedded_image(data)
+    if not image:
+        return 0, 0, 0
+    preview_name = imported_preview_stem(destination) + extension
+    preview_path = os.path.join(os.path.dirname(destination), preview_name)
+    preview_path, was_renamed = unique_path(preview_path)
+    with open(preview_path, "wb") as output:
+        output.write(image)
+    return 1, len(image), int(was_renamed)
+
+
 def choose_offset(raw_offset, size, archive_size, pck_start):
     relative_offset = pck_start + raw_offset
     if relative_offset + size <= archive_size:
@@ -323,6 +377,10 @@ def extract_archive(archive, output_path, keys):
                 output.write(data)
             extracted += 1
             byte_count += len(data)
+            preview_extracted, preview_bytes, preview_renamed = write_imported_preview(destination, data)
+            extracted += preview_extracted
+            byte_count += preview_bytes
+            renamed += preview_renamed
     return extracted, byte_count, renamed
 
 

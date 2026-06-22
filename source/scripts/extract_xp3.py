@@ -228,7 +228,14 @@ def save_tlg_preview(content, destination):
     raw = bytes(content)
     wrapped = raw[15:] if raw.startswith(TLG0) and len(raw) >= 15 else raw
     if wrapped.startswith(TLG6):
-        print("WARN:{}: TLG6 preview conversion is not supported yet.".format(os.path.basename(destination)))
+        note = os.path.splitext(destination)[0] + ".preview-note.txt"
+        try:
+            with open(note, "w", encoding="utf-8") as output:
+                output.write("TLG6 image was extracted as the original .tlg file.\n")
+                output.write("Built-in PNG preview conversion currently supports TLG5 only.\n")
+        except Exception:
+            pass
+        print("WARN:{}: TLG6 preview conversion is not supported yet; original TLG was kept.".format(os.path.basename(destination)))
         return 0, 0
     if not wrapped.startswith(TLG5):
         return 0, 0

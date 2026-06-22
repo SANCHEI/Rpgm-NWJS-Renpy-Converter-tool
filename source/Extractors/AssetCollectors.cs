@@ -8,16 +8,6 @@ namespace RpgmvpConverterWinForms
 {
     internal static class AssetCollectors
     {
-        private static readonly HashSet<string> looseExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ".html", ".htm", ".css", ".js", ".json", ".xml", ".txt", ".csv", ".ini",
-            ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".ico",
-            ".mp3", ".ogg", ".wav", ".flac", ".m4a", ".aac", ".mid", ".midi",
-            ".mp4", ".webm", ".avi", ".wmv", ".mov", ".mkv",
-            ".ttf", ".otf", ".woff", ".woff2",
-            ".qsp", ".qproj", ".rpy", ".rpyc", ".rpym", ".rpymc", ".ks"
-        };
-
         public static bool IsHtmlGame(string inputPath)
         {
             string root = InputDirectory(inputPath);
@@ -81,7 +71,7 @@ namespace RpgmvpConverterWinForms
                         string fullPath = Path.GetFullPath(path);
                         return !fullPath.StartsWith(outputPrefix, StringComparison.OrdinalIgnoreCase)
                             && !fullPath.StartsWith(extractedPrefix, StringComparison.OrdinalIgnoreCase)
-                            && looseExtensions.Contains(Path.GetExtension(path));
+                            && MediaTypeRegistry.IsLooseResource(Path.GetExtension(path));
                     })
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList();
@@ -103,7 +93,10 @@ namespace RpgmvpConverterWinForms
             {
                 try
                 {
-                    string relative = MakeRelativePath(relativeRoot, source);
+                    string originalRelative = MakeRelativePath(relativeRoot, source);
+                    string relative = HiddenMediaExtensions.NormalizeRelativePath(originalRelative, source);
+                    if (!string.Equals(originalRelative, relative, StringComparison.OrdinalIgnoreCase))
+                        TryDelete(SafeOutputPath(outputDir, Path.Combine(prefix ?? "", originalRelative)));
                     string destination = SafeOutputPath(outputDir, Path.Combine(prefix ?? "", relative));
                     destination = UniqueFilePath(destination, ref renamed);
                     Directory.CreateDirectory(Path.GetDirectoryName(destination));
@@ -194,10 +187,45 @@ namespace RpgmvpConverterWinForms
                     report.AppendLine(Path.GetFileName(file) + " | " + ReadHeader(file, 16));
             }
             catch { }
+            report.AppendLine();
+            report.AppendLine("DAT diagnostics:");
+            try
+            {
+                List<string> datFiles = Directory.EnumerateFiles(root, "*.dat", SearchOption.AllDirectories).ToList();
+                report.AppendLine("DAT files: " + datFiles.Count);
+                foreach (string file in datFiles.Take(100))
+                    report.AppendLine(MakeRelativePath(root, file) + " | " + ClassifyDatHeader(file) + " | " + ReadHeader(file, 16));
+            }
+            catch { report.AppendLine("DAT files: unavailable"); }
 
             string reportPath = Path.Combine(outputDir, "GameAssetTool-diagnostics.txt");
             File.WriteAllText(reportPath, report.ToString(), new UTF8Encoding(false));
             return reportPath;
+        }
+
+        private static string ClassifyDatHeader(string path)
+        {
+            byte[] header;
+            try
+            {
+                header = File.ReadAllBytes(path).Take(16).ToArray();
+            }
+            catch
+            {
+                return "unreadable";
+            }
+
+            if (header.Length >= 4 && header[0] == (byte)'S' && header[1] == (byte)'P' && header[2] == (byte)'A' && header[3] == (byte)'K')
+                return "SPAK-like";
+            if (header.Length >= 4 && header[0] == 0x1a && header[1] == 0x45 && header[2] == 0xdf && header[3] == 0xa3)
+                return "WebM-like";
+            if (header.Length >= 4 && header[0] == 0x89 && header[1] == 0x50 && header[2] == 0x4e && header[3] == 0x47)
+                return "PNG-like";
+            if (header.Length >= 3 && header[0] == 0xff && header[1] == 0xd8 && header[2] == 0xff)
+                return "JPEG-like";
+            if (header.Length >= 4 && header[0] == (byte)'O' && header[1] == (byte)'g' && header[2] == (byte)'g' && header[3] == (byte)'S')
+                return "OGG-like";
+            return "unknown/protected";
         }
 
         public static string InputDirectory(string inputPath)

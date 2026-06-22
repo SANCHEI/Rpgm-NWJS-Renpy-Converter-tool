@@ -19,22 +19,49 @@ GAME_PATH = os.environ.get("GAME_PATH", "")
 OUTPUT_PATH = os.environ.get("OUTPUT_PATH", "")
 EXTRACT_MODE = os.environ.get("EXTRACT_MODE", "all")
 INCLUDE_BUNDLES = os.environ.get("INCLUDE_BUNDLES", "1") == "1"
-MAX_WORKERS = max(1, min(int(os.environ.get("MAX_WORKERS", "4")), 8))
+MAX_WORKERS = max(1, min(int(os.environ.get("MAX_WORKERS", "4")), 12))
+PNG_COMPRESSION_LEVEL = max(0, min(int(os.environ.get("PNG_COMPRESSION_LEVEL", "1")), 9))
+MAX_WARNINGS = int(os.environ.get("MAX_WARNINGS", "120"))
+SAVE_WORKERS = max(1, min(int(os.environ.get("SAVE_WORKERS", "2")), 4))
+SAVE_BACKLOG = max(SAVE_WORKERS * 4, 4)
 
-DIRECT_EXTENSIONS = (
-    ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tga", ".tiff",
-    ".mp4", ".webm", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".3gp",
-    ".ogg", ".wav", ".mp3", ".flac",
-)
+IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tga", ".tiff")
+VIDEO_EXTENSIONS = (".mp4", ".webm", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".3gp")
+AUDIO_EXTENSIONS = (".ogg", ".wav", ".mp3", ".flac")
+DIRECT_EXTENSIONS = IMAGE_EXTENSIONS + VIDEO_EXTENSIONS + AUDIO_EXTENSIONS
 TEXTURE_TYPES = ("Texture2D", "Sprite", "Cubemap", "Texture3D", "Texture2DArray")
+MODE_TEXTURES = EXTRACT_MODE in ("textures", "media", "all")
+MODE_VIDEOS = EXTRACT_MODE in ("videos", "media", "all")
+MODE_AUDIOS = EXTRACT_MODE in ("audios", "all")
+MODE_MESHES = EXTRACT_MODE in ("meshes", "all")
 
 reserved_paths = set()
 path_lock = threading.Lock()
+warning_lock = threading.Lock()
+warning_count = 0
+warning_suppressed = False
 
 
 def log(message):
     print(message)
     sys.stdout.flush()
+
+
+def log_warn(message):
+    global warning_count, warning_suppressed
+    if MAX_WARNINGS < 0:
+        log(message)
+        return
+    with warning_lock:
+        if warning_count < MAX_WARNINGS:
+            warning_count += 1
+            output = message
+        elif not warning_suppressed:
+            warning_suppressed = True
+            output = "WARN:Unity warnings limit reached; additional warnings are counted but hidden."
+        else:
+            return
+    log(output)
 
 
 def safe_component(value, fallback):
@@ -108,7 +135,7 @@ def save_bytes(path, data):
 def save_image(path, image):
     path, renamed = unique_path(path)
     ensure_parent(path)
-    image.save(path)
+    image.save(path, "PNG", compress_level=PNG_COMPRESSION_LEVEL, optimize=False)
     return os.path.getsize(path), int(renamed)
 
 
@@ -126,19 +153,39 @@ def extract_archive(file_path):
     errors = 0
     renamed = 0
     skipped = 0
+    object_count = 0
+    pending_saves = []
+    save_pool = ThreadPoolExecutor(max_workers=SAVE_WORKERS) if (MODE_TEXTURES or MODE_VIDEOS or MODE_AUDIOS) else None
+
+    def drain_saves(force=False):
+        nonlocal extracted, total_size, errors, renamed
+        while pending_saves and (force or len(pending_saves) >= SAVE_BACKLOG):
+            future = pending_saves.pop(0)
+            try:
+                size, collision = future.result()
+                extracted += 1
+                total_size += size
+                renamed += collision
+            except Exception as error:
+                errors += 1
+                log_warn("WARN:{0}:{1}".format(os.path.basename(file_path), error))
 
     try:
         env = UnityPy.load(file_path)
+        try:
+            object_count = len(env.objects)
+        except Exception:
+            object_count = 0
         output_dir = archive_output_dir(file_path)
         os.makedirs(output_dir, exist_ok=True)
 
         for index, obj in enumerate(env.objects):
             obj_type = obj.type.name
             supported = (
-                (EXTRACT_MODE in ("textures", "all") and obj_type in TEXTURE_TYPES)
-                or (EXTRACT_MODE in ("videos", "all") and obj_type == "VideoClip")
-                or (EXTRACT_MODE in ("audios", "all") and obj_type == "AudioClip")
-                or (EXTRACT_MODE in ("meshes", "all") and obj_type == "Mesh")
+                (MODE_TEXTURES and obj_type in TEXTURE_TYPES)
+                or (MODE_VIDEOS and obj_type == "VideoClip")
+                or (MODE_AUDIOS and obj_type == "AudioClip")
+                or (MODE_MESHES and obj_type == "Mesh")
             )
             if not supported:
                 skipped += 1
@@ -147,21 +194,23 @@ def extract_archive(file_path):
             try:
                 data = obj.read()
 
-                if EXTRACT_MODE in ("textures", "all") and obj_type in TEXTURE_TYPES:
+                if MODE_TEXTURES and obj_type in TEXTURE_TYPES:
                     name = getattr(data, "name", None) or getattr(data, "m_Name", None)
                     image = safe_getattr(data, "image")
                     if image:
-                        size, collision = save_image(
-                            os.path.join(output_dir, safe_component(name, "texture_{0}".format(index)) + ".png"),
-                            image,
+                        image.load()
+                        pending_saves.append(
+                            save_pool.submit(
+                                save_image,
+                                os.path.join(output_dir, safe_component(name, "texture_{0}".format(index)) + ".png"),
+                                image,
+                            )
                         )
-                        extracted += 1
-                        total_size += size
-                        renamed += collision
+                        drain_saves()
                     else:
                         skipped += 1
 
-                elif EXTRACT_MODE in ("videos", "all") and obj_type == "VideoClip":
+                elif MODE_VIDEOS and obj_type == "VideoClip":
                     name = getattr(data, "m_Name", None)
                     video_data = read_streamed_resource(file_path, getattr(data, "m_ExternalResources", None))
                     if not video_data:
@@ -172,33 +221,35 @@ def extract_archive(file_path):
                         original = getattr(resource, "m_OriginalPath", "") if resource else ""
                         if original:
                             ext = os.path.splitext(original)[1] or ext
-                        size, collision = save_bytes(
-                            os.path.join(output_dir, safe_component(name, "video_{0}".format(index)) + ext),
-                            video_data,
+                        pending_saves.append(
+                            save_pool.submit(
+                                save_bytes,
+                                os.path.join(output_dir, safe_component(name, "video_{0}".format(index)) + ext),
+                                video_data,
+                            )
                         )
-                        extracted += 1
-                        total_size += size
-                        renamed += collision
+                        drain_saves()
                     else:
                         skipped += 1
 
-                elif EXTRACT_MODE in ("audios", "all") and obj_type == "AudioClip":
+                elif MODE_AUDIOS and obj_type == "AudioClip":
                     name = getattr(data, "name", None) or getattr(data, "m_Name", None)
                     audio_data = read_streamed_resource(file_path, getattr(data, "m_Resource", None))
                     if not audio_data:
                         audio_data = safe_getattr(data, "audio_data") or safe_getattr(data, "m_AudioData")
                     if audio_data:
-                        size, collision = save_bytes(
-                            os.path.join(output_dir, safe_component(name, "audio_{0}".format(index)) + ".wav"),
-                            audio_data,
+                        pending_saves.append(
+                            save_pool.submit(
+                                save_bytes,
+                                os.path.join(output_dir, safe_component(name, "audio_{0}".format(index)) + ".wav"),
+                                audio_data,
+                            )
                         )
-                        extracted += 1
-                        total_size += size
-                        renamed += collision
+                        drain_saves()
                     else:
                         skipped += 1
 
-                elif EXTRACT_MODE in ("meshes", "all") and obj_type == "Mesh":
+                elif MODE_MESHES and obj_type == "Mesh":
                     name = getattr(data, "m_Name", None)
                     size, collision = export_mesh(
                         os.path.join(output_dir, safe_component(name, "mesh_{0}".format(index)) + ".obj"),
@@ -210,20 +261,49 @@ def extract_archive(file_path):
 
             except Exception as error:
                 errors += 1
-                log("WARN:{0}:{1}".format(os.path.basename(file_path), error))
+                log_warn("WARN:{0}:{1}".format(os.path.basename(file_path), error))
 
     except Exception as error:
         errors += 1
-        log("WARN:{0}:{1}".format(os.path.basename(file_path), error))
+        log_warn("WARN:{0}:{1}".format(os.path.basename(file_path), error))
 
-    return extracted, total_size, errors, renamed, skipped
+    drain_saves(force=True)
+    if save_pool:
+        save_pool.shutdown(wait=True)
+
+    return {
+        "path": file_path,
+        "extracted": extracted,
+        "size": total_size,
+        "errors": errors,
+        "renamed": renamed,
+        "skipped": skipped,
+        "objects": object_count,
+    }
+
+
+def direct_file_supported(filename):
+    lower = filename.lower()
+    return (
+        (MODE_TEXTURES and lower.endswith(IMAGE_EXTENSIONS))
+        or (MODE_VIDEOS and lower.endswith(VIDEO_EXTENSIONS))
+        or (MODE_AUDIOS and lower.endswith(AUDIO_EXTENSIONS))
+    )
 
 
 def collect_files():
     archives = []
     direct_files = []
-    for root, _, files in os.walk(GAME_PATH):
-        if os.path.abspath(root).startswith(os.path.abspath(OUTPUT_PATH)):
+    output_abs = os.path.abspath(OUTPUT_PATH)
+    extracted_abs = os.path.abspath(os.path.join(GAME_PATH, "extracted"))
+    for root, dirs, files in os.walk(GAME_PATH):
+        root_abs = os.path.abspath(root)
+        dirs[:] = [
+            name for name in dirs
+            if not os.path.abspath(os.path.join(root, name)).startswith(output_abs)
+            and not os.path.abspath(os.path.join(root, name)).startswith(extracted_abs)
+        ]
+        if root_abs.startswith(output_abs) or root_abs.startswith(extracted_abs):
             continue
         for filename in files:
             full_path = os.path.join(root, filename)
@@ -233,9 +313,21 @@ def collect_files():
                     archives.append(full_path)
             elif lower.endswith(".assets"):
                 archives.append(full_path)
-            elif lower.endswith(DIRECT_EXTENSIONS):
+            elif lower.endswith(DIRECT_EXTENSIONS) and direct_file_supported(filename):
                 direct_files.append(full_path)
     return sorted(set(archives)), sorted(set(direct_files))
+
+
+def copy_direct_file(source):
+    try:
+        relative = os.path.relpath(source, GAME_PATH)
+        destination, collision = unique_path(os.path.join(OUTPUT_PATH, "direct", relative))
+        ensure_parent(destination)
+        shutil.copy2(source, destination)
+        return 1, os.path.getsize(destination), 0, int(collision)
+    except Exception as error:
+        log("WARN:{0}:{1}".format(source, error))
+        return 0, 0, 1, 0
 
 
 def copy_direct_files(files):
@@ -243,19 +335,87 @@ def copy_direct_files(files):
     total_size = 0
     errors = 0
     renamed = 0
-    for source in files:
-        try:
-            relative = os.path.relpath(source, GAME_PATH)
-            destination, collision = unique_path(os.path.join(OUTPUT_PATH, "direct", relative))
-            ensure_parent(destination)
-            shutil.copy2(source, destination)
-            extracted += 1
-            total_size += os.path.getsize(destination)
-            renamed += int(collision)
-        except Exception as error:
-            errors += 1
-            log("WARN:{0}:{1}".format(source, error))
+    if not files:
+        return extracted, total_size, errors, renamed
+    processed = 0
+    with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, max(1, len(files)))) as executor:
+        futures = [executor.submit(copy_direct_file, source) for source in files]
+        for future in as_completed(futures):
+            item_extracted, item_size, item_errors, item_renamed = future.result()
+            extracted += item_extracted
+            total_size += item_size
+            errors += item_errors
+            renamed += item_renamed
+            processed += 1
+            if processed == 1 or processed == len(files) or processed % 25 == 0:
+                log("DIRECT_PROGRESS:{0}:{1}:{2}".format(processed, len(files), total_size))
     return extracted, total_size, errors, renamed
+
+
+def format_bytes(value):
+    value = float(max(0, value))
+    units = ("B", "KB", "MB", "GB")
+    unit = 0
+    while value >= 1024.0 and unit < len(units) - 1:
+        value /= 1024.0
+        unit += 1
+    if unit == 0:
+        return "{0} {1}".format(int(value), units[unit])
+    return "{0:.1f} {1}".format(value, units[unit])
+
+
+def rel_path(path):
+    try:
+        return os.path.relpath(path, GAME_PATH).replace("\\", "/")
+    except Exception:
+        return path
+
+
+def write_unity_diagnostics(archives, direct_files, archive_results):
+    path = os.path.join(OUTPUT_PATH, "GameAssetTool-unity-diagnostics.txt")
+    try:
+        bundle_count = sum(1 for item in archives if item.lower().endswith(".bundle"))
+        assets_count = sum(1 for item in archives if item.lower().endswith(".assets"))
+        archive_input_size = sum(os.path.getsize(item) for item in archives if os.path.isfile(item))
+        zero_output = [item for item in archive_results if item.get("extracted", 0) == 0]
+        error_archives = [item for item in archive_results if item.get("errors", 0) > 0]
+        largest = sorted(
+            [item for item in archives if os.path.isfile(item)],
+            key=lambda item: os.path.getsize(item),
+            reverse=True,
+        )[:8]
+
+        with open(path, "w", encoding="utf-8") as output:
+            output.write("Unity diagnostics\n")
+            output.write("Mode: {0}\n".format(EXTRACT_MODE))
+            output.write("Include bundles: {0}\n".format("yes" if INCLUDE_BUNDLES else "no"))
+            output.write("Archives: {0}\n".format(len(archives)))
+            output.write("Bundles: {0}\n".format(bundle_count))
+            output.write("Assets: {0}\n".format(assets_count))
+            output.write("Direct files: {0}\n".format(len(direct_files)))
+            output.write("Archive input size: {0}\n".format(format_bytes(archive_input_size)))
+            output.write("Archives with output: {0}\n".format(max(0, len(archives) - len(zero_output))))
+            output.write("Archives with zero output: {0}\n".format(len(zero_output)))
+            output.write("Archives with errors: {0}\n".format(len(error_archives)))
+            output.write("Skipped Unity objects: {0}\n".format(sum(item.get("skipped", 0) for item in archive_results)))
+            output.write("Warnings emitted: {0}\n".format(warning_count))
+            if largest:
+                output.write("Largest archives:\n")
+                for item in largest:
+                    output.write("- {0} ({1})\n".format(rel_path(item), format_bytes(os.path.getsize(item))))
+            if zero_output:
+                output.write("Zero-output archives:\n")
+                for item in zero_output[:40]:
+                    output.write("- {0} | objects={1} | skipped={2} | errors={3}\n".format(
+                        rel_path(item.get("path", "")),
+                        item.get("objects", 0),
+                        item.get("skipped", 0),
+                        item.get("errors", 0),
+                    ))
+                if len(zero_output) > 40:
+                    output.write("- ... {0} more\n".format(len(zero_output) - 40))
+    except Exception as error:
+        log_warn("WARN:Unity diagnostics failed:{0}".format(error))
 
 
 def main():
@@ -264,18 +424,28 @@ def main():
         return 2
 
     os.makedirs(OUTPUT_PATH, exist_ok=True)
+    log("PHASE:scan")
     archives, direct_files = collect_files()
     log("TOTAL:{0}".format(len(archives)))
     log("DIRECT:{0}".format(len(direct_files)))
 
+    log("PHASE:direct")
     total_extracted, total_size, total_errors, total_renamed = copy_direct_files(direct_files)
     total_skipped = 0
     processed = 0
+    archive_results = []
 
+    log("PHASE:archives")
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         futures = [executor.submit(extract_archive, path) for path in archives]
         for future in as_completed(futures):
-            extracted, size, errors, renamed, skipped = future.result()
+            result = future.result()
+            archive_results.append(result)
+            extracted = result.get("extracted", 0)
+            size = result.get("size", 0)
+            errors = result.get("errors", 0)
+            renamed = result.get("renamed", 0)
+            skipped = result.get("skipped", 0)
             total_extracted += extracted
             total_size += size
             total_errors += errors
@@ -284,6 +454,7 @@ def main():
             processed += 1
             log("PROGRESS:{0}:{1}:{2}".format(processed, len(archives), total_size))
 
+    write_unity_diagnostics(archives, direct_files, archive_results)
     log("RESULT:{0}:{1}:{2}:{3}:{4}".format(total_extracted, total_size, total_errors, total_renamed, total_skipped))
     return 0 if total_errors == 0 else 1
 

@@ -33,14 +33,12 @@ namespace RpgmvpConverterWinForms
         private TextBox keyBox;
         private ComboBox languageBox;
         private ComboBox unlockerModeBox;
-        private ComboBox unityExtractModeBox;
         private ComboBox javaExtractModeBox;
         private Label subtitleLabel;
         private Label folderSectionLabel;
         private Label extractSectionLabel;
         private Label logSectionLabel;
         private Label keyLabel;
-        private Label unityModeLabel;
         private Label javaModeLabel;
         private Label extractionHintLabel;
         private Label detectedEngineLabel;
@@ -55,43 +53,59 @@ namespace RpgmvpConverterWinForms
         private Button browseButton;
         private Button dryRunButton;
         private Button startButton;
+        private Button extractModeButton;
         private Button collectLooseButton;
+        private Button looseModeButton;
         private Button unityDecensorButton;
         private Button unlockerButton;
         private Button removeUnlockerButton;
         private Button pauseButton;
         private Button cancelButton;
         private Button openOutputButton;
+        private Button lastResultButton;
         private Button toggleLogButton;
         private Button clearLogButton;
+        private Button healthCheckButton;
         private ToolTip actionToolTip;
+        private ContextMenuStrip extractModeMenu;
+        private ContextMenuStrip looseModeMenu;
+        private int selectedExtractionProfileIndex;
+        private int selectedLooseModeIndex;
 
         private readonly object processSync = new object();
-        private readonly object runtimeWarmupSync = new object();
+        private readonly object externalOutputSync = new object();
+        private readonly Dictionary<string, long> externalOutputFileSizes = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
         private readonly List<Panel> dragHighlightPanels = new List<Panel>();
+        private readonly DryScanCache<ScanSummary> dryScanCache = new DryScanCache<ScanSummary>();
         private readonly JavaSvgPreviewRenderer svgPreviewRenderer;
         private System.Windows.Forms.Timer uiTimer;
         private ConversionRun currentRun;
-        private Task runtimeWarmupTask;
         private Process activeProcess;
+        private FileSystemWatcher externalOutputWatcher;
         private bool externalRunning;
+        private bool dryScanRunning;
         private bool closing;
         private bool logExpanded;
         private bool unlockerLayoutVisible = true;
         private bool localCopyCancellationRequested;
         private bool russianUi;
+        private CancellationTokenSource dryScanCancellation;
+        private ExtractionRunContext localExtractionContext;
         private string lastOutputDir = "";
+        private OperationResult lastOperationResult;
+        private string lastReportPath = "";
+        private string lastReportText = "";
+        private string externalOperationName = "";
+        private string externalLastFile = "";
+        private DateTime externalStartUtc;
+        private int externalOutputFiles;
+        private long externalOutputBytes;
         private readonly string startupGamePath;
         private GameEngine selectedEngine;
 
         private const int CompactClientHeight = 570;
         private const int ExpandedClientHeight = 872;
         private const int UnlockerSectionHeight = 64;
-        private static readonly HashSet<string> JavaImageExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".ico",
-            ".tga", ".dds", ".tif", ".tiff", ".avif"
-        };
 
         public RpgmvpConverterForm() : this(null)
         {
@@ -162,6 +176,57 @@ namespace RpgmvpConverterWinForms
             UpdateEngineContext(selectedEngine);
         }
 
+
+        private void ShowLastResult()
+        {
+            if (lastOperationResult == null || string.IsNullOrWhiteSpace(lastReportPath) || !File.Exists(lastReportPath))
+            {
+                MessageBox.Show(
+                    T("No saved extraction result is available yet.", "Сохранённый результат извлечения пока недоступен."),
+                    T("Last Result", "Последний результат"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
+            }
+
+            string reportText = string.IsNullOrWhiteSpace(lastReportText) ? lastOperationResult.ToReport() : lastReportText;
+            using (ResultsDialog dialog = new ResultsDialog(lastOperationResult, lastReportPath, reportText, russianUi, RunApkFollowup))
+                dialog.ShowDialog(this);
+        }
+
+        private async void RunHealthCheck()
+        {
+            if (healthCheckButton == null || healthCheckButton.Enabled == false) return;
+
+            healthCheckButton.Enabled = false;
+            string previousStatus = statusLabel.Text;
+            statusLabel.Text = T("Running Health Check...", "Выполняется Health Check...");
+            try
+            {
+                string report = await Task.Run(delegate { return HealthCheckRunner.Run(); });
+                using (DiagnosticsDialog dialog = new DiagnosticsDialog(report, russianUi))
+                {
+                    dialog.Text = T("Health Check", "Проверка компонентов");
+                    dialog.ShowDialog(this);
+                }
+                WriteLog("Health Check completed.");
+            }
+            catch (Exception ex)
+            {
+                WriteLog("Health Check failed: " + ex.Message);
+                MessageBox.Show(
+                    T("Health Check failed:\n", "Health Check не выполнен:\n") + ex.Message,
+                    "Health Check",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+            finally
+            {
+                statusLabel.Text = previousStatus;
+                healthCheckButton.Enabled = true;
+            }
+        }
+
         private void RemoveUnlocker()
         {
             string rootPath = InputDirectory(pathBox.Text.Trim());
@@ -204,10 +269,6 @@ namespace RpgmvpConverterWinForms
             {
                 statusLabel.Text = T("Preparing built-in runtime...", "Подготовка встроенного runtime...");
                 SetRuntimeStatus(T("Runtime: preparing silently...", "Runtime: подготовка в фоне..."), warningColor);
-                Task warmup;
-                lock (runtimeWarmupSync) warmup = runtimeWarmupTask;
-                if (warmup != null && !warmup.IsCompleted)
-                    warmup.Wait();
                 PortableRuntime.EnsureExtracted();
                 SetRuntimeStatus(T("Runtime: ready", "Runtime: готов"), successColor);
                 return true;
@@ -277,7 +338,9 @@ namespace RpgmvpConverterWinForms
         private void OnFormClosing(object sender, FormClosingEventArgs e)
         {
             closing = true;
+            CancelDryScan();
             if (currentRun != null) currentRun.Cancel();
+            if (localExtractionContext != null) localExtractionContext.Cancel();
             lock (processSync)
             {
                 try
@@ -291,46 +354,19 @@ namespace RpgmvpConverterWinForms
                 catch { }
             }
             svgPreviewRenderer.Cancel();
-            Task warmup;
-            lock (runtimeWarmupSync) warmup = runtimeWarmupTask;
-            if (warmup != null)
+            StopExternalOutputWatcher();
+            if (dryScanCancellation != null)
             {
-                try { warmup.Wait(); }
-                catch { }
+                dryScanCancellation.Dispose();
+                dryScanCancellation = null;
+            }
+            if (localExtractionContext != null)
+            {
+                localExtractionContext.Dispose();
+                localExtractionContext = null;
             }
             PortableRuntime.Cleanup();
             ToolRuntime.Cleanup();
-        }
-
-        private void WarmPortableRuntimeInBackground(GameEngine engine)
-        {
-            if (!UsesPortableRuntime(engine) || closing) return;
-            if (PortableRuntime.IsReady)
-            {
-                SetRuntimeStatus(T("Runtime: ready", "Runtime: готов"), successColor);
-                return;
-            }
-            lock (runtimeWarmupSync)
-            {
-                if (runtimeWarmupTask != null) return;
-                SetRuntimeStatus(T("Runtime: preparing silently...", "Runtime: подготовка в фоне..."), warningColor);
-                runtimeWarmupTask = Task.Run(delegate
-                {
-                    bool ready = false;
-                    try
-                    {
-                        PortableRuntime.EnsureExtracted();
-                        ready = true;
-                    }
-                    catch { }
-                    BeginUi(delegate
-                    {
-                        SetRuntimeStatus(
-                            ready ? T("Runtime: ready", "Runtime: готов") : T("Runtime: unavailable", "Runtime: недоступен"),
-                            ready ? successColor : dangerColor);
-                    });
-                });
-            }
         }
 
         private static bool UsesPortableRuntime(GameEngine engine)
@@ -435,24 +471,47 @@ namespace RpgmvpConverterWinForms
 
         private string UnityModeValue()
         {
-            switch (unityExtractModeBox.SelectedIndex)
-            {
-                case 0: return "textures";
-                case 1: return "videos";
-                case 2: return "audios";
-                case 3: return "meshes";
-                default: return "all";
-            }
+            return CurrentExtractionProfile().UnityMode(0);
         }
 
         private string JavaModeValue()
         {
-            switch (javaExtractModeBox.SelectedIndex)
-            {
-                case 0: return "images";
-                case 2: return "all";
-                default: return "images-svg";
-            }
+            return CurrentExtractionProfile().JavaMode(javaExtractModeBox == null ? 1 : javaExtractModeBox.SelectedIndex);
+        }
+
+        private bool IsImagesOnlyProfile()
+        {
+            return CurrentExtractionProfile().IsImagesOnly;
+        }
+
+        private bool IsImagesVideoProfile()
+        {
+            return CurrentExtractionProfile().IsImagesVideo;
+        }
+
+        private bool IsEverythingProfile()
+        {
+            return CurrentExtractionProfile().IsEverything;
+        }
+
+        private bool IsDiagnosticsOnlyProfile()
+        {
+            return CurrentExtractionProfile().IsDiagnosticsOnly;
+        }
+
+        private bool IsRecoveryProfile()
+        {
+            return CurrentExtractionProfile().IsRecovery;
+        }
+
+        private string ExtractionProfileName()
+        {
+            return CurrentExtractionProfile().DisplayName;
+        }
+
+        private ExtractionProfile CurrentExtractionProfile()
+        {
+            return ExtractionProfile.FromIndex(selectedExtractionProfileIndex, ExtractionProfileDisplayName(selectedExtractionProfileIndex));
         }
 
         private static string EngineName(GameEngine engine)
@@ -476,7 +535,11 @@ namespace RpgmvpConverterWinForms
                 case GameEngine.Rags: return "RAGS experimental";
                 case GameEngine.LegacyRpgMaker: return "RPG Maker XP/VX/VX Ace";
                 case GameEngine.GameMaker: return "GameMaker experimental";
+                case GameEngine.AndroidApk: return "Android APK recovery";
+                case GameEngine.SrpgStudio: return "SRPG Studio recovery";
+                case GameEngine.PixelGameMaker: return "Pixel Game Maker MV recovery";
                 case GameEngine.SpakDat: return "SPAK DAT experimental";
+                case GameEngine.PygamePyInstaller: return "Pygame / PyInstaller";
                 default: return "not detected";
             }
         }
@@ -502,7 +565,11 @@ namespace RpgmvpConverterWinForms
                 case GameEngine.Rags: return Color.FromArgb(190, 120, 210);
                 case GameEngine.LegacyRpgMaker: return Color.FromArgb(85, 190, 240);
                 case GameEngine.GameMaker: return Color.FromArgb(100, 200, 190);
+                case GameEngine.AndroidApk: return Color.FromArgb(120, 205, 100);
+                case GameEngine.SrpgStudio: return Color.FromArgb(210, 180, 90);
+                case GameEngine.PixelGameMaker: return Color.FromArgb(110, 185, 235);
                 case GameEngine.SpakDat: return Color.FromArgb(195, 150, 95);
+                case GameEngine.PygamePyInstaller: return Color.FromArgb(95, 190, 130);
                 default: return mutedColor;
             }
         }
@@ -546,7 +613,8 @@ namespace RpgmvpConverterWinForms
         {
             List<string> files = EnumerateFilesSafe(rootPath, "*.*").Where(delegate(string file)
             {
-                return !file.EndsWith("GameAssetTool-report.txt", StringComparison.OrdinalIgnoreCase);
+                return !file.EndsWith("GameAssetTool-report.html", StringComparison.OrdinalIgnoreCase)
+                    && !file.EndsWith("GameAssetTool-report.txt", StringComparison.OrdinalIgnoreCase);
             }).ToList();
             return new FileStats(files.Count, files.Sum(delegate(string file) { return SafeFileLength(file); }));
         }
@@ -663,154 +731,6 @@ namespace RpgmvpConverterWinForms
             public long Bytes { get; private set; }
             public int Renamed { get; private set; }
             public int Skipped { get; private set; }
-        }
-
-        private sealed class OperationResult
-        {
-            public OperationResult(string engine, string outputDir, int extracted, long bytes, int errors, int renamed, TimeSpan duration)
-                : this(engine, outputDir, extracted, bytes, errors, renamed, 0, duration)
-            {
-            }
-
-            public OperationResult(string engine, string outputDir, int extracted, long bytes, int errors, int renamed, int skipped, TimeSpan duration)
-            {
-                Engine = engine;
-                OutputDir = outputDir;
-                Extracted = extracted;
-                Bytes = bytes;
-                Errors = errors;
-                Renamed = renamed;
-                Skipped = skipped;
-                Duration = duration;
-            }
-
-            public string Engine { get; private set; }
-            public string OutputDir { get; private set; }
-            public int Extracted { get; private set; }
-            public long Bytes { get; private set; }
-            public int Errors { get; private set; }
-            public int Renamed { get; private set; }
-            public int Skipped { get; private set; }
-            public TimeSpan Duration { get; private set; }
-
-            public static OperationResult Failed(string engine, string outputDir, string message)
-            {
-                return new OperationResult(engine + " - " + message, outputDir, 0, 0, 1, 0, TimeSpan.Zero);
-            }
-
-            public string ToReport()
-            {
-                return string.Join(Environment.NewLine, new[]
-                {
-                    "Game Asset Tool v2.3.0 report",
-                    "Engine: " + Engine,
-                    "Extracted files: " + Extracted,
-                    "Extracted size: " + FormatBytes(Bytes),
-                    "Renamed conflicts: " + Renamed,
-                    "Skipped items: " + Skipped,
-                    "Errors: " + Errors,
-                    "Elapsed: " + FormatDuration(Duration.TotalSeconds),
-                    "Output: " + OutputDir,
-                    "Created: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
-                });
-            }
-        }
-
-        private sealed class ResultsDialog : Form
-        {
-            public ResultsDialog(OperationResult result, string reportPath, bool russian)
-            {
-                Text = russian ? "Результаты извлечения" : "Extraction Results";
-                StartPosition = FormStartPosition.CenterParent;
-                Size = new Size(620, 390);
-                MinimumSize = new Size(620, 390);
-                BackColor = Color.FromArgb(17, 19, 24);
-                ForeColor = Color.FromArgb(239, 243, 248);
-                ApplicationIcon.Apply(this);
-
-                Controls.Add(new Label
-                {
-                    Text = result.Errors == 0
-                        ? (russian ? "Извлечение завершено" : "Extraction complete")
-                        : (russian ? "Извлечение завершено с предупреждениями" : "Extraction complete with warnings"),
-                    Location = new Point(20, 18),
-                    Size = new Size(560, 30),
-                    Font = new Font("Segoe UI Semibold", 14f),
-                    ForeColor = result.Errors == 0 ? Color.FromArgb(70, 204, 120) : Color.FromArgb(255, 183, 77)
-                });
-
-                TextBox summary = new TextBox
-                {
-                    Location = new Point(20, 62),
-                    Size = new Size(560, 210),
-                    Multiline = true,
-                    ReadOnly = true,
-                    BackColor = Color.FromArgb(10, 12, 16),
-                    ForeColor = Color.FromArgb(239, 243, 248),
-                    BorderStyle = BorderStyle.FixedSingle,
-                    Font = new Font("Consolas", 10f),
-                    Text = result.ToReport() + Environment.NewLine + "Report: " + reportPath
-                };
-                Controls.Add(summary);
-
-                Button openButton = new Button
-                {
-                    Text = russian ? "Открыть результат" : "Open Output Folder",
-                    Location = new Point(20, 292),
-                    Size = new Size(165, 34),
-                    BackColor = Color.FromArgb(68, 197, 255),
-                    FlatStyle = FlatStyle.Flat
-                };
-                openButton.Click += delegate
-                {
-                    try { Process.Start(new ProcessStartInfo { FileName = result.OutputDir, UseShellExecute = true }); }
-                    catch { }
-                };
-                Controls.Add(openButton);
-
-                Button galleryButton = new Button
-                {
-                    Text = russian ? "Галерея файлов" : "Results Gallery",
-                    Location = new Point(195, 292),
-                    Size = new Size(135, 34),
-                    BackColor = Color.FromArgb(45, 50, 60),
-                    ForeColor = Color.White,
-                    FlatStyle = FlatStyle.Flat
-                };
-                galleryButton.Click += delegate
-                {
-                    using (ResultsGalleryForm gallery = new ResultsGalleryForm(result.OutputDir, russian))
-                        gallery.ShowDialog(this);
-                };
-                Controls.Add(galleryButton);
-
-                Button copyButton = new Button
-                {
-                    Text = russian ? "Копировать отчёт" : "Copy Summary",
-                    Location = new Point(340, 292),
-                    Size = new Size(130, 34),
-                    BackColor = Color.FromArgb(45, 50, 60),
-                    ForeColor = Color.White,
-                    FlatStyle = FlatStyle.Flat
-                };
-                copyButton.Click += delegate
-                {
-                    Clipboard.SetText(summary.Text);
-                };
-                Controls.Add(copyButton);
-
-                Button closeButton = new Button
-                {
-                    Text = russian ? "Закрыть" : "Close",
-                    Location = new Point(480, 292),
-                    Size = new Size(110, 34),
-                    BackColor = Color.FromArgb(45, 50, 60),
-                    ForeColor = Color.White,
-                    FlatStyle = FlatStyle.Flat
-                };
-                closeButton.Click += delegate { Close(); };
-                Controls.Add(closeButton);
-            }
         }
 
         private sealed class ReadableButton : Button

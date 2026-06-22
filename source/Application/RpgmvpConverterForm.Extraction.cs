@@ -18,6 +18,12 @@ namespace RpgmvpConverterWinForms
     {
         private async Task StartDetectedExtractionAsync()
         {
+            if (IsDiagnosticsOnlyProfile())
+            {
+                await RunDryScanAsync(true);
+                return;
+            }
+
             string inputPath = pathBox.Text.Trim();
             string rootPath = InputDirectory(inputPath);
             if (!Directory.Exists(rootPath))
@@ -26,7 +32,7 @@ namespace RpgmvpConverterWinForms
                 return;
             }
 
-            GameEngine engine = DetectEngine(inputPath);
+            GameEngine engine = EffectiveEngine(DetectEngine(inputPath));
             if (engine == GameEngine.Unity)
             {
                 await StartUnityExtractionAsync();
@@ -72,6 +78,21 @@ namespace RpgmvpConverterWinForms
                 await StartJavaExtractionAsync();
                 return;
             }
+            if (engine == GameEngine.AndroidApk)
+            {
+                await StartAndroidApkExtractionAsync();
+                return;
+            }
+            if (engine == GameEngine.SrpgStudio)
+            {
+                await StartSrpgStudioExtractionAsync();
+                return;
+            }
+            if (engine == GameEngine.PixelGameMaker)
+            {
+                await StartPixelGameMakerExtractionAsync();
+                return;
+            }
             if (engine == GameEngine.Flash)
             {
                 await StartFlashExtractionAsync();
@@ -112,6 +133,11 @@ namespace RpgmvpConverterWinForms
                 await StartSpakDatExtractionAsync();
                 return;
             }
+            if (engine == GameEngine.PygamePyInstaller)
+            {
+                await StartPygamePyInstallerExtractionAsync();
+                return;
+            }
             if (engine != GameEngine.RpgMaker)
             {
                 await StartSignatureRecoveryAsync();
@@ -145,6 +171,9 @@ namespace RpgmvpConverterWinForms
                 WriteLog("Invalid HEX key format.");
                 return;
             }
+
+            string outputDir = Path.Combine(rootPath, "extracted", "rpgm");
+            if (!TryResetExtractionRootForOutput(outputDir)) return;
 
             List<string> files = GetFilesToConvert(rootPath);
             if (files.Count == 0)
@@ -194,6 +223,7 @@ namespace RpgmvpConverterWinForms
 
             string outputDir = Path.Combine(rootPath, "extracted", "renpy");
             lastOutputDir = outputDir;
+            if (!TryResetExtractionRootForOutput(outputDir)) return;
             SetExternalRunningState(true, "Ren'Py");
             progressBar.Maximum = Math.Max(archives.Count, 1);
             progressBar.Value = 0;
@@ -251,6 +281,7 @@ namespace RpgmvpConverterWinForms
         {
             string outputDir = Path.Combine(rootPath, "extracted", "renpy", "loose");
             lastOutputDir = outputDir;
+            if (!TryResetExtractionRootForOutput(outputDir)) return;
             SetExternalRunningState(true, "Ren'Py loose files");
             WriteLog("Ren'Py resources are already open. Collecting loose files.");
             OperationResult result;
@@ -298,15 +329,17 @@ namespace RpgmvpConverterWinForms
             }
 
             string mode = UnityModeValue();
+            UnityExtractionConfig config = UnityExtractionConfig.Create(mode, includeBundles);
             string outputDir = Path.Combine(rootPath, "extracted", "unity");
             lastOutputDir = outputDir;
+            if (!TryResetExtractionRootForOutput(outputDir)) return;
             SetExternalRunningState(true, "Unity");
             WriteLog("Unity extraction started: " + mode + (includeBundles ? " with bundles" : " without bundles"));
 
             OperationResult result;
             try
             {
-                result = await Task.Run(delegate { return RunUnityExtraction(rootPath, outputDir, mode, includeBundles); });
+                result = await Task.Run(delegate { return RunUnityExtraction(rootPath, outputDir, config); });
             }
             catch (Exception ex)
             {
@@ -316,7 +349,7 @@ namespace RpgmvpConverterWinForms
             CompleteExternalOperation(result);
         }
 
-        private OperationResult RunUnityExtraction(string rootPath, string outputDir, string mode, bool includeBundles)
+        private OperationResult RunUnityExtraction(string rootPath, string outputDir, UnityExtractionConfig config)
         {
             DateTime start = DateTime.UtcNow;
             Directory.CreateDirectory(outputDir);
@@ -328,14 +361,11 @@ namespace RpgmvpConverterWinForms
             int errors = 0;
             int renamed = 0;
             int skipped = 0;
+            string unityPhase = "scan";
 
             ProcessStartInfo psi = CreatePythonProcessInfo();
             psi.Arguments = QuoteArg(scriptPath);
-            psi.EnvironmentVariables["GAME_PATH"] = rootPath;
-            psi.EnvironmentVariables["OUTPUT_PATH"] = outputDir;
-            psi.EnvironmentVariables["EXTRACT_MODE"] = mode;
-            psi.EnvironmentVariables["INCLUDE_BUNDLES"] = includeBundles ? "1" : "0";
-            psi.EnvironmentVariables["MAX_WORKERS"] = "4";
+            config.ApplyTo(psi, rootPath, outputDir);
 
             int exitCode = RunExternalProcess(psi, delegate(string line)
             {
@@ -346,7 +376,46 @@ namespace RpgmvpConverterWinForms
                     {
                         progressBar.Maximum = Math.Max(total, 1);
                         progressBar.Value = 0;
-                        statusLabel.Text = "Unity: found " + total + " archive(s)";
+                        statusLabel.Text = T("Unity: scan complete", "Unity: проверка завершена");
+                        statsLabel.Text = T("Archives found: ", "Архивов найдено: ") + total;
+                    });
+                }
+                else if (line.StartsWith("PHASE:", StringComparison.Ordinal))
+                {
+                    unityPhase = line.Substring("PHASE:".Length).Trim();
+                    BeginUi(delegate
+                    {
+                        if (unityPhase == "scan")
+                        {
+                            progressBar.Value = 0;
+                            statusLabel.Text = T("Unity: scanning files", "Unity: поиск файлов");
+                            statsLabel.Text = T("Looking for .assets, .bundle and direct media files...", "Поиск .assets, .bundle и открытых медиа...");
+                        }
+                        else if (unityPhase == "direct")
+                        {
+                            progressBar.Value = 0;
+                            statusLabel.Text = T("Unity: copying direct media", "Unity: копирование открытых медиа");
+                            statsLabel.Text = T("Copying files already present outside Unity archives...", "Копирование файлов, которые уже лежат вне Unity-архивов...");
+                        }
+                        else if (unityPhase == "archives")
+                        {
+                            progressBar.Value = 0;
+                            statusLabel.Text = T("Unity: extracting archives", "Unity: извлечение архивов");
+                            statsLabel.Text = T("Exporting textures/videos from Unity archives...", "Экспорт текстур/видео из Unity-архивов...");
+                        }
+                    });
+                }
+                else if (line.StartsWith("DIRECT_PROGRESS:", StringComparison.Ordinal))
+                {
+                    int processed = ParseInt(line, 1);
+                    int total = ParseInt(line, 2);
+                    long currentBytes = ParseLong(line, 3);
+                    BeginUi(delegate
+                    {
+                        progressBar.Maximum = Math.Max(total, 1);
+                        progressBar.Value = Math.Min(processed, progressBar.Maximum);
+                        statusLabel.Text = T("Unity direct media: ", "Unity открытые медиа: ") + processed + " / " + total;
+                        statsLabel.Text = T("Copied direct files: ", "Скопировано открытых файлов: ") + processed + " / " + total + T(" | Size: ", " | Размер: ") + FormatBytes(currentBytes);
                     });
                 }
                 else if (line.StartsWith("PROGRESS:", StringComparison.Ordinal))
@@ -358,8 +427,8 @@ namespace RpgmvpConverterWinForms
                     {
                         progressBar.Maximum = Math.Max(total, 1);
                         progressBar.Value = Math.Min(processed, progressBar.Maximum);
-                        statusLabel.Text = "Unity: " + processed + " / " + total;
-                        statsLabel.Text = "Archives: " + processed + " / " + total + " | Size: " + FormatBytes(currentBytes);
+                        statusLabel.Text = T("Unity archives: ", "Unity архивы: ") + processed + " / " + total;
+                        statsLabel.Text = T("Archives: ", "Архивы: ") + processed + " / " + total + T(" | Extracted size: ", " | Извлечено: ") + FormatBytes(currentBytes);
                     });
                 }
                 else if (line.StartsWith("RESULT:", StringComparison.Ordinal))
@@ -393,6 +462,7 @@ namespace RpgmvpConverterWinForms
 
             string outputDir = Path.Combine(rootPath, "extracted", "nwjs");
             lastOutputDir = outputDir;
+            if (!TryResetExtractionRootForOutput(outputDir)) return;
             localCopyCancellationRequested = false;
             SetExternalRunningState(true, "NWJS");
             WriteLog("NWJS file extraction started");
@@ -440,15 +510,14 @@ namespace RpgmvpConverterWinForms
                 ThrowIfLocalCopyCancelled();
                 try
                 {
-                    string relative = MakeRelativePath(rootPath, source);
+                    string originalRelative = MakeRelativePath(rootPath, source);
+                    string relative = HiddenMediaExtensions.NormalizeRelativePath(originalRelative, source);
+                    DeleteStaleRenamedOutput(outputDir, Path.Combine("loose", originalRelative), Path.Combine("loose", relative));
                     string destination = GetSafeOutputPath(outputDir, Path.Combine("loose", relative));
-                    bool collision;
-                    destination = GetUniqueFilePath(destination, out collision);
                     Directory.CreateDirectory(Path.GetDirectoryName(destination));
-                    File.Copy(source, destination);
+                    File.Copy(source, destination, true);
                     extracted++;
                     bytes += SafeFileLength(destination);
-                    if (collision) renamed++;
                 }
                 catch (Exception ex)
                 {
@@ -494,12 +563,18 @@ namespace RpgmvpConverterWinForms
 
         private void UpdateLocalProgress(string operation, int processed, int total, long bytes)
         {
+            ExtractionProgressEvent progress = new ExtractionProgressEvent(operation, processed, total, bytes);
+            OnExtractionProgress(progress);
+        }
+
+        private void OnExtractionProgress(ExtractionProgressEvent progress)
+        {
             BeginUi(delegate
             {
-                progressBar.Maximum = Math.Max(total, 1);
-                progressBar.Value = Math.Min(processed, progressBar.Maximum);
-                statusLabel.Text = operation + ": " + processed + " / " + total;
-                statsLabel.Text = T("Sources: ", "Источники: ") + processed + " / " + total + T(" | Size: ", " | Размер: ") + FormatBytes(bytes);
+                progressBar.Maximum = Math.Max(progress.Total, 1);
+                progressBar.Value = Math.Min(progress.Processed, progressBar.Maximum);
+                statusLabel.Text = progress.Operation + ": " + progress.Processed + " / " + progress.Total;
+                statsLabel.Text = T("Sources: ", "Источники: ") + progress.Processed + " / " + progress.Total + T(" | Size: ", " | Размер: ") + FormatBytes(progress.Bytes);
             });
         }
 
@@ -507,11 +582,19 @@ namespace RpgmvpConverterWinForms
         {
             if (localCopyCancellationRequested)
                 throw new OperationCanceledException();
+            if (localExtractionContext != null)
+                localExtractionContext.ThrowIfCancellationRequested();
+        }
+
+        private bool IsLocalCopyCancelled()
+        {
+            return localCopyCancellationRequested
+                || (localExtractionContext != null && localExtractionContext.IsCancellationRequested);
         }
 
         private NwjsCopyStats ExtractNwjsZipArchive(string archivePath, string outputDir)
         {
-            return ExtractZipArchive(archivePath, outputDir, Path.Combine("archives", Path.GetFileNameWithoutExtension(archivePath)));
+            return ExtractZipArchive(archivePath, outputDir, Path.Combine("archives", Path.GetFileNameWithoutExtension(archivePath)), null, null, true);
         }
 
         private async Task StartTyranoExtractionAsync()
@@ -599,6 +682,102 @@ namespace RpgmvpConverterWinForms
                 "RpgmvpConverterWinForms.scripts.extract_gamemaker.py");
         }
 
+        private async Task StartAndroidApkExtractionAsync()
+        {
+            await StartLocalExtractionAsync("Android APK recovery", "android-apk", RunAndroidApkExtraction);
+        }
+
+        private async Task StartSrpgStudioExtractionAsync()
+        {
+            await StartLocalExtractionAsync("SRPG Studio recovery", "srpg-studio", delegate(string inputPath, string outputDir)
+            {
+                return RunLooseAndSignatureRecovery("SRPG Studio recovery", inputPath, outputDir, GetSrpgStudioFiles(inputPath, outputDir));
+            });
+        }
+
+        private async Task StartPixelGameMakerExtractionAsync()
+        {
+            await StartLocalExtractionAsync("Pixel Game Maker MV recovery", "pixel-game-maker", delegate(string inputPath, string outputDir)
+            {
+                return RunLooseAndSignatureRecovery("Pixel Game Maker MV recovery", inputPath, outputDir, GetPixelGameMakerFiles(inputPath, outputDir));
+            });
+        }
+
+
+        private async Task StartPygamePyInstallerExtractionAsync()
+        {
+            await StartLocalExtractionAsync("Pygame / PyInstaller", "pygame", RunPygamePyInstallerExtraction);
+        }
+
+        private OperationResult RunPygamePyInstallerExtraction(string inputPath, string outputDir)
+        {
+            DateTime start = DateTime.UtcNow;
+            string root = InputDirectory(inputPath);
+            List<string> loose = AssetCollectors.GetLooseResourceFiles(root, outputDir);
+            CollectorResult copied = AssetCollectors.CopyFiles(root, loose, outputDir, "loose");
+            CollectorResult decoded = DecodePygameDatImages(root, Path.Combine(outputDir, "decoded-dat"));
+            return new OperationResult("Pygame / PyInstaller", outputDir, copied.Extracted + decoded.Extracted, copied.Bytes + decoded.Bytes, 0, copied.Renamed + decoded.Renamed, copied.Skipped + decoded.Skipped, DateTime.UtcNow - start);
+        }
+
+        private CollectorResult DecodePygameDatImages(string rootPath, string outputDir)
+        {
+            int extracted = 0, renamed = 0, skipped = 0;
+            long bytes = 0;
+            foreach (string file in Directory.EnumerateFiles(rootPath, "*.dat", SearchOption.AllDirectories))
+            {
+                if (file.IndexOf(Path.DirectorySeparatorChar + "extracted" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                byte[] data;
+                try { data = File.ReadAllBytes(file); } catch { skipped++; continue; }
+                if (data.Length < 8) { skipped++; continue; }
+                for (int i = 0; i < data.Length; i++) data[i] ^= 0x6A;
+                string ext = DetectDecodedImageExtension(data);
+                if (ext == null) { skipped++; continue; }
+                string relative = MakeRelativePathLocal(rootPath, file);
+                relative = Path.ChangeExtension(relative, ext);
+                string destination = Path.Combine(outputDir, relative);
+                destination = UniqueOutputPathLocal(destination, ref renamed);
+                Directory.CreateDirectory(Path.GetDirectoryName(destination));
+                File.WriteAllBytes(destination, data);
+                extracted++;
+                bytes += data.Length;
+            }
+            return new CollectorResult(extracted, bytes, renamed, skipped);
+        }
+
+
+        private static string MakeRelativePathLocal(string rootPath, string filePath)
+        {
+            Uri root = new Uri(AppendDirectorySeparator(Path.GetFullPath(rootPath)));
+            Uri file = new Uri(Path.GetFullPath(filePath));
+            return Uri.UnescapeDataString(root.MakeRelativeUri(file).ToString()).Replace('/', Path.DirectorySeparatorChar);
+        }
+
+        private static string UniqueOutputPathLocal(string path, ref int renamed)
+        {
+            if (!File.Exists(path)) return path;
+            string dir = Path.GetDirectoryName(path);
+            string stem = Path.GetFileNameWithoutExtension(path);
+            string ext = Path.GetExtension(path);
+            int suffix = 2;
+            while (true)
+            {
+                string candidate = Path.Combine(dir, stem + " (" + suffix + ")" + ext);
+                if (!File.Exists(candidate))
+                {
+                    renamed++;
+                    return candidate;
+                }
+                suffix++;
+            }
+        }
+        private static string DetectDecodedImageExtension(byte[] data)
+        {
+            if (data.Length >= 8 && data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47) return ".png";
+            if (data.Length >= 4 && data[0] == 0x52 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x46) return ".webp";
+            if (data.Length >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF) return ".jpg";
+            if (data.Length >= 4 && data[0] == 0x47 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x38) return ".gif";
+            return null;
+        }
         private async Task StartSpakDatExtractionAsync()
         {
             await StartPortableScriptExtractionAsync(
@@ -613,8 +792,28 @@ namespace RpgmvpConverterWinForms
             await StartLocalExtractionAsync("Loose resources", "loose-assets", delegate(string inputPath, string outputDir)
             {
                 List<string> files = AssetCollectors.GetLooseResourceFiles(inputPath, outputDir);
-                return RunCollectorExtraction("Loose resources", inputPath, outputDir, files);
+                files = FilterLooseCollectionFiles(files, LooseModeValue());
+                return RunCollectorExtraction("Loose resources (" + LooseModeValue() + ")", inputPath, outputDir, files);
             });
+        }
+
+        private string LooseModeValue()
+        {
+            return CurrentExtractionProfile().LooseMode(selectedLooseModeIndex);
+        }
+
+        private static List<string> FilterLooseCollectionFiles(IEnumerable<string> files, string mode)
+        {
+            if (string.Equals(mode, "all", StringComparison.OrdinalIgnoreCase))
+                return files.ToList();
+
+            bool imagesOnly = string.Equals(mode, "images", StringComparison.OrdinalIgnoreCase);
+            return files.Where(delegate(string path)
+            {
+                string extension = Path.GetExtension(path);
+                if (MediaTypeRegistry.IsImageLike(extension)) return true;
+                return !imagesOnly && MediaTypeRegistry.IsVideo(extension);
+            }).ToList();
         }
 
         private async Task StartSignatureRecoveryAsync()
@@ -622,7 +821,7 @@ namespace RpgmvpConverterWinForms
             await StartLocalExtractionAsync("Signature recovery", "signature-recovery", delegate(string inputPath, string outputDir)
             {
                 DateTime start = DateTime.UtcNow;
-                CollectorResult extracted = SignatureAssetExtractor.Extract(inputPath, outputDir);
+                CollectorResult extracted = SignatureAssetExtractor.Extract(inputPath, outputDir, IsLocalCopyCancelled);
                 string report = AssetCollectors.WriteDiagnostics(inputPath, outputDir);
                 SafeLog("Unknown-engine diagnostics: " + report);
                 return new OperationResult("Unknown format signature recovery", outputDir, extracted.Extracted, extracted.Bytes, 0, extracted.Renamed, extracted.Skipped, DateTime.UtcNow - start);
@@ -633,7 +832,7 @@ namespace RpgmvpConverterWinForms
         {
             DateTime start = DateTime.UtcNow;
             string rootPath = InputDirectory(inputPath);
-            CollectorResult copied = AssetCollectors.CopyFiles(rootPath, files, outputDir, "");
+            NwjsCopyStats copied = CopyLooseFiles(rootPath, files, outputDir, "");
             return new OperationResult(engineName, outputDir, copied.Extracted, copied.Bytes, 0, copied.Renamed, copied.Skipped, DateTime.UtcNow - start);
         }
 
@@ -690,7 +889,14 @@ namespace RpgmvpConverterWinForms
 
             string outputDir = Path.Combine(rootPath, "extracted", outputFolder);
             lastOutputDir = outputDir;
+            if (!TryResetExtractionRootForOutput(outputDir)) return;
             localCopyCancellationRequested = false;
+            if (localExtractionContext != null)
+            {
+                localExtractionContext.Dispose();
+                localExtractionContext = null;
+            }
+            localExtractionContext = new ExtractionRunContext(engineName);
             SetExternalRunningState(true, engineName);
             WriteLog(engineName + " extraction started");
 
@@ -709,6 +915,11 @@ namespace RpgmvpConverterWinForms
             }
             SetExternalRunningState(false, engineName);
             CompleteExternalOperation(result);
+            if (localExtractionContext != null)
+            {
+                localExtractionContext.Dispose();
+                localExtractionContext = null;
+            }
         }
 
         private OperationResult RunTyranoExtraction(string rootPath, string outputDir)
@@ -792,6 +1003,45 @@ namespace RpgmvpConverterWinForms
             return new OperationResult("Java game / JAR (" + mode + ")", outputDir, extracted, bytes, errors, renamed, skipped, DateTime.UtcNow - start);
         }
 
+        private OperationResult RunAndroidApkExtraction(string inputPath, string outputDir)
+        {
+            AndroidApkExtractorService service = new AndroidApkExtractorService(
+                IsLocalCopyCancelled,
+                SafeLog,
+                delegate(int processed, int total, long bytes)
+                {
+                    UpdateLocalProgress("Android APK", processed, total, bytes);
+                });
+            ApkExtractionResult result = service.Extract(inputPath, outputDir);
+            return new OperationResult(
+                "Android APK recovery",
+                outputDir,
+                result.Extracted,
+                result.Bytes,
+                result.Errors,
+                result.Renamed,
+                result.Skipped,
+                result.Duration);
+        }
+
+        private OperationResult RunLooseAndSignatureRecovery(string engineName, string inputPath, string outputDir, List<string> files)
+        {
+            DateTime start = DateTime.UtcNow;
+            string rootPath = InputDirectory(inputPath);
+            Directory.CreateDirectory(outputDir);
+            NwjsCopyStats loose = CopyLooseFiles(rootPath, files, outputDir, "loose", null, true);
+            CollectorResult carved = SignatureAssetExtractor.Extract(inputPath, Path.Combine(outputDir, "signature-recovery"), IsLocalCopyCancelled);
+            return new OperationResult(
+                engineName,
+                outputDir,
+                loose.Extracted + carved.Extracted,
+                loose.Bytes + carved.Bytes,
+                0,
+                loose.Renamed + carved.Renamed,
+                loose.Skipped + carved.Skipped,
+                DateTime.UtcNow - start);
+        }
+
         private OperationResult RunFlashExtraction(string rootPath, string outputDir)
         {
             DateTime start = DateTime.UtcNow;
@@ -868,7 +1118,33 @@ namespace RpgmvpConverterWinForms
                 }
             }
 
+            WriteWolfDiagnostics(rootPath, outputDir, archives, looseFiles, errors, skipped);
             return new OperationResult("WOLF RPG", outputDir, extracted, bytes, errors, renamed, skipped, DateTime.UtcNow - start);
+        }
+
+        private static void WriteWolfDiagnostics(string rootPath, string outputDir, List<string> archives, List<string> looseFiles, int errors, int skipped)
+        {
+            try
+            {
+                StringBuilder report = new StringBuilder();
+                report.AppendLine("Game Asset Tool WOLF RPG diagnostics");
+                report.AppendLine("Root: " + rootPath);
+                report.AppendLine("Archives: " + archives.Count);
+                report.AppendLine("Loose Data files: " + looseFiles.Count);
+                report.AppendLine("Errors: " + errors);
+                report.AppendLine("Skipped: " + skipped);
+                report.AppendLine();
+                report.AppendLine("Archive candidates:");
+                foreach (string archive in archives.Take(80))
+                    report.AppendLine("- " + MakeRelativePath(rootPath, archive) + " | " + FormatBytes(SafeFileLength(archive)));
+                if (archives.Count > 80) report.AppendLine("- ...");
+                report.AppendLine();
+                report.AppendLine("Notes:");
+                report.AppendLine("- Embedded UberWolf CLI is used for supported DxLib/WOLF archives.");
+                report.AppendLine("- If an archive stays protected, try signature recovery or provide a sample for format-specific support.");
+                File.WriteAllText(Path.Combine(outputDir, "GameAssetTool-wolf-diagnostics.txt"), report.ToString(), new UTF8Encoding(false));
+            }
+            catch { }
         }
 
         private static List<string> StageWolfFiles(string rootPath, IEnumerable<string> archives, string staging)
@@ -923,8 +1199,12 @@ namespace RpgmvpConverterWinForms
                 ThrowIfLocalCopyCancelled();
                 try
                 {
-                    string relative = MakeRelativePath(relativeRoot, source);
-                    string destination = GetSafeOutputPath(outputDir, string.IsNullOrWhiteSpace(prefix) ? relative : Path.Combine(prefix, relative));
+                    string originalRelative = MakeRelativePath(relativeRoot, source);
+                    string relative = HiddenMediaExtensions.NormalizeRelativePath(originalRelative, source);
+                    string originalOutputRelative = string.IsNullOrWhiteSpace(prefix) ? originalRelative : Path.Combine(prefix, originalRelative);
+                    string outputRelative = string.IsNullOrWhiteSpace(prefix) ? relative : Path.Combine(prefix, relative);
+                    DeleteStaleRenamedOutput(outputDir, originalOutputRelative, outputRelative);
+                    string destination = GetSafeOutputPath(outputDir, outputRelative);
                     bool collision = false;
                     if (!overwriteExisting)
                         destination = GetUniqueFilePath(destination, out collision);
@@ -960,6 +1240,7 @@ namespace RpgmvpConverterWinForms
             long bytes = 0;
             int renamed = 0;
             int skipped = 0;
+            List<string> diagnostics = new List<string>();
             using (FileStream stream = File.OpenRead(archivePath))
             using (ZipArchive archive = new ZipArchive(stream, ZipArchiveMode.Read))
             {
@@ -970,6 +1251,7 @@ namespace RpgmvpConverterWinForms
                     if (string.IsNullOrEmpty(entry.Name))
                     {
                         skipped++;
+                        diagnostics.Add(DiagnosticZipLine(archivePath, entry.FullName, "directory entry skipped"));
                         continue;
                     }
                     if (includeFile != null && !includeFile(entry.FullName))
@@ -984,23 +1266,68 @@ namespace RpgmvpConverterWinForms
                     {
                         skipped++;
                         SafeLog("Archive entry skipped: " + entry.FullName + ": " + ex.Message);
+                        diagnostics.Add(DiagnosticZipLine(archivePath, entry.FullName, ex.Message));
                         continue;
                     }
-                    string destination = GetSafeOutputPath(outputDir, Path.Combine(prefix, normalized));
+                    string outputRelative = HiddenMediaExtensions.NormalizeRelativePath(normalized, entry);
+                    DeleteStaleRenamedOutput(outputDir, Path.Combine(prefix, normalized), Path.Combine(prefix, outputRelative));
+                    string destination = GetSafeOutputPath(outputDir, Path.Combine(prefix, outputRelative));
                     bool collision = false;
                     if (!overwriteExisting)
                         destination = GetUniqueFilePath(destination, out collision);
                     Directory.CreateDirectory(Path.GetDirectoryName(destination));
-                    using (Stream input = entry.Open())
-                    using (FileStream output = File.Create(destination))
-                        ArchiveSafetyPolicy.CopyLimited(input, output, entry.Length);
-                    extracted++;
-                    bytes += SafeFileLength(destination);
-                    if (collision) renamed++;
-                    if (extractedPaths != null) extractedPaths.Add(destination);
+                    try
+                    {
+                        using (Stream input = entry.Open())
+                        using (FileStream output = File.Create(destination))
+                            ArchiveSafetyPolicy.CopyLimited(input, output, entry.Length);
+                        extracted++;
+                        bytes += SafeFileLength(destination);
+                        if (collision) renamed++;
+                        if (extractedPaths != null) extractedPaths.Add(destination);
+                    }
+                    catch (Exception ex)
+                    {
+                        skipped++;
+                        diagnostics.Add(DiagnosticZipLine(archivePath, entry.FullName, ex.Message));
+                        SafeLog("Archive entry skipped: " + entry.FullName + ": " + ex.Message);
+                        try { if (File.Exists(destination)) File.Delete(destination); } catch { }
+                    }
                 }
             }
+            WriteZipDiagnostics(outputDir, diagnostics);
             return new NwjsCopyStats(extracted, bytes, renamed, skipped);
+        }
+
+        private static string DiagnosticZipLine(string archivePath, string entry, string message)
+        {
+            return archivePath + "\t" + entry + "\t" + (message ?? "").Replace("\r", " ").Replace("\n", " ");
+        }
+
+        private static void WriteZipDiagnostics(string outputDir, List<string> diagnostics)
+        {
+            if (diagnostics == null || diagnostics.Count == 0) return;
+            try
+            {
+                string path = Path.Combine(outputDir, "GameAssetTool-zip-diagnostics.tsv");
+                List<string> lines = new List<string>();
+                if (File.Exists(path)) lines.AddRange(File.ReadAllLines(path, Encoding.UTF8));
+                else lines.Add("archive\tentry\tmessage");
+                lines.AddRange(diagnostics);
+                File.WriteAllLines(path, lines.ToArray(), new UTF8Encoding(false));
+            }
+            catch { }
+        }
+
+        private static void DeleteStaleRenamedOutput(string outputDir, string originalRelative, string normalizedRelative)
+        {
+            if (string.Equals(originalRelative, normalizedRelative, StringComparison.OrdinalIgnoreCase)) return;
+            try
+            {
+                string stale = GetSafeOutputPath(outputDir, originalRelative);
+                if (File.Exists(stale)) File.Delete(stale);
+            }
+            catch { }
         }
 
         private async Task StartPortableScriptExtractionAsync(string engineName, string outputFolder, string scriptFile, string resourceName)
@@ -1017,6 +1344,7 @@ namespace RpgmvpConverterWinForms
 
             string outputDir = Path.Combine(rootPath, "extracted", outputFolder);
             lastOutputDir = outputDir;
+            if (!TryResetExtractionRootForOutput(outputDir)) return;
             SetExternalRunningState(true, engineName);
             WriteLog(engineName + " extraction started");
 
@@ -1120,6 +1448,7 @@ namespace RpgmvpConverterWinForms
         private void CancelOperation()
         {
             localCopyCancellationRequested = true;
+            if (localExtractionContext != null) localExtractionContext.Cancel();
             if (currentRun != null) currentRun.Cancel();
             lock (processSync)
             {
@@ -1140,7 +1469,11 @@ namespace RpgmvpConverterWinForms
 
         private void UpdateUiFromRun()
         {
-            if (currentRun == null) return;
+            if (currentRun == null)
+            {
+                if (externalRunning) UpdateExternalOperationUi();
+                return;
+            }
             int processed = Math.Min(currentRun.ProcessedCount, currentRun.TotalCount);
             progressBar.Maximum = Math.Max(currentRun.TotalCount, 1);
             progressBar.Value = Math.Min(processed, progressBar.Maximum);
@@ -1151,6 +1484,101 @@ namespace RpgmvpConverterWinForms
             statsLabel.Text = T("Processed: ", "Обработано: ") + processed + " / " + currentRun.TotalCount
                 + T(" | Size: ", " | Размер: ") + FormatBytes(currentRun.TotalBytes)
                 + T(" | ETA: ", " | Осталось: ") + eta;
+        }
+
+        private void UpdateExternalOperationUi()
+        {
+            if (!externalRunning) return;
+
+            DateTime now = DateTime.UtcNow;
+            int outputFiles;
+            long outputBytes;
+            string lastFile;
+            lock (externalOutputSync)
+            {
+                outputFiles = externalOutputFiles;
+                outputBytes = externalOutputBytes;
+                lastFile = externalLastFile;
+            }
+            double elapsedSeconds = Math.Max((now - externalStartUtc).TotalSeconds, 0);
+            string progressText = progressBar.Maximum > 1
+                ? progressBar.Value + " / " + progressBar.Maximum
+                : T("working", "работает");
+            statusLabel.Text = externalOperationName + ": " + progressText
+                + T(" | Elapsed: ", " | Время: ") + FormatDuration(elapsedSeconds);
+
+            string outputText = T("Output: ", "Результат: ")
+                + outputFiles + T(" file(s), ", " файл(ов), ")
+                + FormatBytes(outputBytes);
+            if (!string.IsNullOrWhiteSpace(lastFile))
+                outputText += T(" | Last: ", " | Последний: ") + lastFile;
+            statsLabel.Text = outputText;
+        }
+
+        private void StartExternalOutputWatcher()
+        {
+            StopExternalOutputWatcher();
+            lock (externalOutputSync)
+            {
+                externalOutputFileSizes.Clear();
+                externalOutputFiles = 0;
+                externalOutputBytes = 0;
+                externalLastFile = "";
+            }
+
+            if (string.IsNullOrWhiteSpace(lastOutputDir)) return;
+            try
+            {
+                Directory.CreateDirectory(lastOutputDir);
+                FileSystemWatcher watcher = new FileSystemWatcher(lastOutputDir)
+                {
+                    IncludeSubdirectories = true,
+                    NotifyFilter = NotifyFilters.FileName | NotifyFilters.Size | NotifyFilters.LastWrite
+                };
+                watcher.Created += delegate(object sender, FileSystemEventArgs e) { TrackExternalOutputFile(e.FullPath); };
+                watcher.Changed += delegate(object sender, FileSystemEventArgs e) { TrackExternalOutputFile(e.FullPath); };
+                watcher.Renamed += delegate(object sender, RenamedEventArgs e) { TrackExternalOutputFile(e.FullPath); };
+                watcher.EnableRaisingEvents = true;
+                externalOutputWatcher = watcher;
+            }
+            catch { }
+        }
+
+        private void StopExternalOutputWatcher()
+        {
+            FileSystemWatcher watcher = externalOutputWatcher;
+            externalOutputWatcher = null;
+            if (watcher == null) return;
+            try { watcher.EnableRaisingEvents = false; }
+            catch { }
+            watcher.Dispose();
+        }
+
+        private void TrackExternalOutputFile(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || Directory.Exists(path)) return;
+            try
+            {
+                FileInfo info = new FileInfo(path);
+                if (!info.Exists) return;
+                lock (externalOutputSync)
+                {
+                    long previous;
+                    if (externalOutputFileSizes.TryGetValue(path, out previous))
+                    {
+                        externalOutputBytes += info.Length - previous;
+                        externalOutputFileSizes[path] = info.Length;
+                    }
+                    else
+                    {
+                        externalOutputFileSizes[path] = info.Length;
+                        externalOutputFiles++;
+                        externalOutputBytes += info.Length;
+                    }
+                    externalLastFile = info.Name;
+                }
+            }
+            catch { }
         }
 
         private void FinishRpgmExtraction(ConversionRun finished)
@@ -1170,6 +1598,124 @@ namespace RpgmvpConverterWinForms
             CompleteExternalOperation(result);
         }
 
+        private bool TryResetExtractionRootForOutput(string outputDir)
+        {
+            try
+            {
+                string fullOutput = Path.GetFullPath(outputDir);
+                DirectoryInfo output = new DirectoryInfo(fullOutput);
+                DirectoryInfo extractedRoot = output;
+                while (extractedRoot != null && !extractedRoot.Name.Equals("extracted", StringComparison.OrdinalIgnoreCase))
+                    extractedRoot = extractedRoot.Parent;
+
+                if (extractedRoot == null || extractedRoot.Parent == null)
+                {
+                    if (Directory.Exists(fullOutput))
+                        Directory.Delete(fullOutput, true);
+                    Directory.CreateDirectory(fullOutput);
+                    return true;
+                }
+
+                if (extractedRoot.Exists)
+                {
+                    DialogResult answer = MessageBox.Show(
+                        "Existing extracted folder will be deleted before extraction:\n\n"
+                        + extractedRoot.FullName
+                        + "\n\nContinue?",
+                        "Clean extracted",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Warning,
+                        MessageBoxDefaultButton.Button2);
+                    if (answer != DialogResult.Yes)
+                    {
+                        WriteLog("Extraction cancelled before clearing extracted folder.");
+                        return false;
+                    }
+
+                    WriteLog("Clearing previous extracted folder: " + extractedRoot.FullName);
+                    try
+                    {
+                        DeleteDirectoryRobust(extractedRoot.FullName);
+                    }
+                    catch (Exception deleteError)
+                    {
+                        List<string> lockedFiles = FindLockedFiles(extractedRoot.FullName, 8);
+                        string details = lockedFiles.Count > 0
+                            ? "\n\nPossible locked files:\n" + string.Join("\n", lockedFiles.ToArray()) + (lockedFiles.Count >= 8 ? "\n..." : "")
+                            : "";
+                        MessageBox.Show(
+                            "Could not clear existing extracted folder:\n"
+                            + deleteError.Message
+                            + details,
+                            "Extraction",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning);
+                        WriteLog("Could not clear extracted folder: " + deleteError.Message);
+                        return false;
+                    }
+                }
+
+                Directory.CreateDirectory(fullOutput);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                WriteLog("Could not clear extracted folder: " + ex.Message);
+                MessageBox.Show(
+                    "Could not clear existing extracted folder:\n" + ex.Message,
+                    "Extraction",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return false;
+            }
+        }
+
+        private static void DeleteDirectoryRobust(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path)) return;
+            foreach (string entry in Directory.EnumerateFileSystemEntries(path, "*", SearchOption.AllDirectories))
+            {
+                try { File.SetAttributes(entry, FileAttributes.Normal); } catch { }
+            }
+            Directory.Delete(ToLongPath(path), true);
+        }
+
+        private static string ToLongPath(string path)
+        {
+            string full = Path.GetFullPath(path);
+            if (full.StartsWith(@"\\?\", StringComparison.Ordinal)) return full;
+            if (full.StartsWith(@"\\", StringComparison.Ordinal)) return @"\\?\UNC\" + full.Substring(2);
+            return @"\\?\" + full;
+        }
+        private static List<string> FindLockedFiles(string folder, int limit)
+        {
+            List<string> locked = new List<string>();
+            if (!Directory.Exists(folder)) return locked;
+            IEnumerable<string> files;
+            try { files = Directory.EnumerateFiles(folder, "*.*", SearchOption.AllDirectories); }
+            catch { return locked; }
+
+            foreach (string file in files)
+            {
+                if (locked.Count >= limit) break;
+                try
+                {
+                    using (FileStream stream = new FileStream(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                    {
+                    }
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    locked.Add(file);
+                }
+                catch (IOException)
+                {
+                    locked.Add(file);
+                }
+            }
+            return locked;
+        }
+
         private void CompleteExternalOperation(OperationResult result)
         {
             lastOutputDir = result.OutputDir;
@@ -1181,18 +1727,85 @@ namespace RpgmvpConverterWinForms
                 + T(" | Errors: ", " | Ошибки: ") + result.Errors
                 + (result.Skipped > 0 ? T(" | Skipped: ", " | Пропущено: ") + result.Skipped : "");
             UpdateActionTooltips();
-            string reportPath = SaveReport(result);
-            WriteLog("Report: " + reportPath);
-            using (ResultsDialog dialog = new ResultsDialog(result, reportPath, russianUi))
+            string reportText = result.ToReport();
+            string htmlReportPath = SaveHtmlReport(result, reportText);
+            lastOperationResult = result;
+            lastReportText = reportText;
+            lastReportPath = htmlReportPath;
+            lastResultButton.Enabled = File.Exists(lastReportPath);
+            UpdateActionTooltips();
+            if (!string.IsNullOrWhiteSpace(htmlReportPath))
+                WriteLog("HTML report: " + htmlReportPath);
+            int galleryFiles = ResultsGalleryForm.PrepareIndexCache(result.OutputDir);
+            if (galleryFiles > 0) WriteLog("Gallery index: " + galleryFiles + " file(s)");
+            using (ResultsDialog dialog = new ResultsDialog(result, htmlReportPath, reportText, russianUi, RunApkFollowup))
                 dialog.ShowDialog(this);
         }
 
-        private static string SaveReport(OperationResult result)
+        private void RunApkFollowup(ApkFollowupAction action)
         {
-            Directory.CreateDirectory(result.OutputDir);
-            string reportPath = Path.Combine(result.OutputDir, "GameAssetTool-report.txt");
-            File.WriteAllText(reportPath, result.ToReport(), new UTF8Encoding(false));
-            return reportPath;
+            if (action == null || string.IsNullOrWhiteSpace(action.TargetPath))
+                return;
+            if (!Directory.Exists(action.TargetPath) && !File.Exists(action.TargetPath))
+            {
+                MessageBox.Show(
+                    "Suggested APK follow-up path was not found:\n" + action.TargetPath,
+                    "APK follow-up",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
+            selectedExtractionProfileIndex = 0;
+            BuildModeMenus();
+            UpdateModeButtonTexts();
+
+            pathBox.Text = action.TargetPath;
+            WriteLog("APK follow-up: " + action.EngineKey + " -> " + action.TargetPath);
+            BeginInvoke((MethodInvoker)async delegate { await StartDetectedExtractionAsync(); });
+        }
+
+        private static void DeleteTextReport(string outputDir)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(outputDir)) return;
+                string path = Path.Combine(outputDir, "GameAssetTool-report.txt");
+                if (File.Exists(path)) File.Delete(path);
+            }
+            catch
+            {
+            }
+        }
+
+        private static void DeleteUnityDiagnosticsText(string outputDir)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(outputDir)) return;
+                string path = Path.Combine(outputDir, "GameAssetTool-unity-diagnostics.txt");
+                if (File.Exists(path)) File.Delete(path);
+            }
+            catch
+            {
+            }
+        }
+        private static string SaveHtmlReport(OperationResult result, string reportText)
+        {
+            try
+            {
+                Directory.CreateDirectory(result.OutputDir);
+                string htmlPath = Path.Combine(result.OutputDir, "GameAssetTool-report.html");
+                string text = string.IsNullOrWhiteSpace(reportText) ? result.ToReport() : reportText;
+                File.WriteAllText(htmlPath, ExtractionReportBuilder.BuildHtml(text, result.OutputDir), new UTF8Encoding(false));
+                DeleteTextReport(result.OutputDir);
+                DeleteUnityDiagnosticsText(result.OutputDir);
+                return htmlPath;
+            }
+            catch
+            {
+                return "";
+            }
         }
 
     }

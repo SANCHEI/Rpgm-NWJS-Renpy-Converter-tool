@@ -57,6 +57,7 @@ internal static class ReleaseInspector
             string unityEngine = DetectEngine(detectEngine, Path.Combine(temp, "unity"), delegate(string path)
             {
                 Directory.CreateDirectory(Path.Combine(path, "Sample_Data"));
+                File.WriteAllBytes(Path.Combine(path, "Sample_Data", "globalgamemanagers"), new byte[] { 0 });
             });
             string renpyEngine = DetectEngine(detectEngine, Path.Combine(temp, "renpy"), delegate(string path)
             {
@@ -156,6 +157,31 @@ internal static class ReleaseInspector
                 Directory.CreateDirectory(path);
                 WriteMinimalDataWin(Path.Combine(path, "data.win"));
             });
+            string gameMakerUnityConflictEngine = DetectEngine(detectEngine, Path.Combine(temp, "gamemaker-unity-conflict"), delegate(string path)
+            {
+                Directory.CreateDirectory(Path.Combine(path, "Sample_Data"));
+                WriteMinimalDataWin(Path.Combine(path, "data.win"));
+                File.WriteAllBytes(Path.Combine(path, "Sample_Data", "globalgamemanagers"), new byte[] { 0 });
+            });
+            string nwjsWithGameFolderEngine = DetectEngine(detectEngine, Path.Combine(temp, "nwjs-with-game-folder"), delegate(string path)
+            {
+                Directory.CreateDirectory(Path.Combine(path, "game"));
+                Directory.CreateDirectory(Path.Combine(path, "www"));
+                File.WriteAllText(Path.Combine(path, "package.json"), "{}");
+            });
+            string androidApkPath = Path.Combine(temp, "sample.apk");
+            File.WriteAllBytes(androidApkPath, new byte[] { 0x50, 0x4b, 3, 4 });
+            string androidApkEngine = DetectExistingEngine(detectEngine, androidApkPath);
+            string srpgEngine = DetectEngine(detectEngine, Path.Combine(temp, "srpg-studio"), delegate(string path)
+            {
+                Directory.CreateDirectory(path);
+                File.WriteAllText(Path.Combine(path, "runtime.rts"), "srpg");
+            });
+            string pixelGameMakerEngine = DetectEngine(detectEngine, Path.Combine(temp, "pixel-game-maker"), delegate(string path)
+            {
+                Directory.CreateDirectory(Path.Combine(path, "Resources"));
+                File.WriteAllBytes(Path.Combine(path, "player.exe"), new byte[] { 0 });
+            });
             string spakDatEngine = DetectEngine(detectEngine, Path.Combine(temp, "spak-dat"), delegate(string path)
             {
                 Directory.CreateDirectory(path);
@@ -189,6 +215,11 @@ internal static class ReleaseInspector
                 && DetectExistingEngine(detectEngineFast, ragsPath) == "Rags"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "legacy-rpg-maker")) == "LegacyRpgMaker"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "gamemaker")) == "GameMaker"
+                && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "gamemaker-unity-conflict")) == "GameMaker"
+                && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "nwjs-with-game-folder")) == "Nwjs"
+                && DetectExistingEngine(detectEngineFast, androidApkPath) == "AndroidApk"
+                && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "srpg-studio")) == "SrpgStudio"
+                && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "pixel-game-maker")) == "PixelGameMaker"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "spak-dat")) == "SpakDat"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "flash", "game.swf")) == "Flash"
                 && DetectExistingEngine(detectEngineFast, Path.Combine(temp, "electron", "resources", "app.asar")) == "Electron"
@@ -199,7 +230,23 @@ internal static class ReleaseInspector
             Directory.CreateDirectory(nestedLookup);
             File.WriteAllBytes(Path.Combine(rootLookup, "data.xp3"), new byte[] { 0 });
             string foundRoot = (string)tryFindGameRoot.Invoke(null, new object[] { nestedLookup });
-            bool fastRootLookup = string.Equals(foundRoot, rootLookup, StringComparison.OrdinalIgnoreCase);
+            string parentWithGames = Path.Combine(temp, "games to test");
+            string specialRoot = Path.Combine(parentWithGames, "(unknown) SPITE тест");
+            string specialNested = Path.Combine(specialRoot, "external", "data");
+            Directory.CreateDirectory(specialNested);
+            WriteMinimalSpak(Path.Combine(specialRoot, "media.dat"));
+            string foundSpecialRoot = (string)tryFindGameRoot.Invoke(null, new object[] { specialNested });
+            string foundSpecialFileRoot = (string)tryFindGameRoot.Invoke(null, new object[] { Path.Combine(specialRoot, "media.dat") });
+            string nwjsSpecialRoot = Path.Combine(parentWithGames, "A Simple Life (NWJS)");
+            string nwjsSpecialFile = Path.Combine(nwjsSpecialRoot, "www", "img", "hero.png");
+            Directory.CreateDirectory(Path.GetDirectoryName(nwjsSpecialFile));
+            File.WriteAllText(Path.Combine(nwjsSpecialRoot, "package.json"), "{}");
+            File.WriteAllText(nwjsSpecialFile, "png");
+            string foundNwjsSpecialRoot = (string)tryFindGameRoot.Invoke(null, new object[] { nwjsSpecialFile });
+            bool fastRootLookup = string.Equals(foundRoot, rootLookup, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(foundSpecialRoot, specialRoot, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(foundSpecialFileRoot, specialRoot, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(foundNwjsSpecialRoot, nwjsSpecialRoot, StringComparison.OrdinalIgnoreCase);
             bool contextualGui = VerifyContextualGui(formType);
             bool nwjsExtraction = VerifyNwjsExtraction(formType, temp);
             bool localEngineExtraction = VerifyLocalEngineExtraction(formType, temp);
@@ -316,6 +363,11 @@ internal static class ReleaseInspector
             Console.WriteLine("DetectRags=" + ragsEngine);
             Console.WriteLine("DetectLegacyRpgMaker=" + legacyRpgMakerEngine);
             Console.WriteLine("DetectGameMaker=" + gameMakerEngine);
+            Console.WriteLine("DetectGameMakerUnityConflict=" + gameMakerUnityConflictEngine);
+            Console.WriteLine("DetectNwjsWithGameFolder=" + nwjsWithGameFolderEngine);
+            Console.WriteLine("DetectAndroidApk=" + androidApkEngine);
+            Console.WriteLine("DetectSrpgStudio=" + srpgEngine);
+            Console.WriteLine("DetectPixelGameMaker=" + pixelGameMakerEngine);
             Console.WriteLine("DetectDirectFlash=" + directFlashEngine);
             Console.WriteLine("DetectDirectElectron=" + directElectronEngine);
             Console.WriteLine("DetectGenericGameFolder=" + genericGameFolderEngine);
@@ -374,6 +426,11 @@ internal static class ReleaseInspector
                 && ragsEngine == "Rags"
                 && legacyRpgMakerEngine == "LegacyRpgMaker"
                 && gameMakerEngine == "GameMaker"
+                && gameMakerUnityConflictEngine == "GameMaker"
+                && nwjsWithGameFolderEngine == "Nwjs"
+                && androidApkEngine == "AndroidApk"
+                && srpgEngine == "SrpgStudio"
+                && pixelGameMakerEngine == "PixelGameMaker"
                 && directFlashEngine == "Flash"
                 && directElectronEngine == "Electron"
                 && genericGameFolderEngine == "Unknown"
@@ -435,7 +492,6 @@ internal static class ReleaseInspector
             object unityDecensorButton = GetField(formType, form, "unityDecensorButton");
             object keyBox = GetField(formType, form, "keyBox");
             object keyLabel = GetField(formType, form, "keyLabel");
-            object unityMode = GetField(formType, form, "unityExtractModeBox");
             object javaMode = GetField(formType, form, "javaExtractModeBox");
             object extractionHint = GetField(formType, form, "extractionHintLabel");
             object unlockerButton = GetField(formType, form, "unlockerButton");
@@ -454,7 +510,6 @@ internal static class ReleaseInspector
 
             bool initial = !GetBool(startButton, "Enabled")
                 && !GetLocalVisible(keyBox)
-                && !GetLocalVisible(unityMode)
                 && !GetLocalVisible(javaMode)
                 && !GetLocalVisible(logPanel)
                 && !GetLocalVisible(unlockerSection)
@@ -462,7 +517,6 @@ internal static class ReleaseInspector
 
             updateContext.Invoke(form, new[] { Enum.Parse(engineType, "Unity") });
             bool unity = GetBool(startButton, "Enabled")
-                && GetLocalVisible(unityMode)
                 && GetLocalVisible(unityDecensorButton)
                 && !GetLocalVisible(keyBox)
                 && !GetLocalVisible(unlockerSection);
@@ -476,7 +530,6 @@ internal static class ReleaseInspector
             updateContext.Invoke(form, new[] { Enum.Parse(engineType, "RpgMaker") });
             bool rpgm = GetBool(startButton, "Enabled")
                 && GetLocalVisible(keyBox)
-                && !GetLocalVisible(unityMode)
                 && GetString(keyLabel, "Text") == "RPGM HEX key";
 
             updateContext.Invoke(form, new[] { Enum.Parse(engineType, "Godot") });
@@ -487,7 +540,6 @@ internal static class ReleaseInspector
             updateContext.Invoke(form, new[] { Enum.Parse(engineType, "Unreal") });
             bool unreal = GetBool(startButton, "Enabled")
                 && GetLocalVisible(keyBox)
-                && !GetLocalVisible(unityMode)
                 && GetString(keyLabel, "Text") == "Unreal AES key";
 
             updateContext.Invoke(form, new[] { Enum.Parse(engineType, "Nwjs") });
@@ -505,8 +557,7 @@ internal static class ReleaseInspector
 
             updateContext.Invoke(form, new[] { Enum.Parse(engineType, "JavaJar") });
             bool java = GetBool(startButton, "Enabled")
-                && GetLocalVisible(javaMode)
-                && !GetLocalVisible(unityMode);
+                && GetLocalVisible(javaMode);
 
             updateContext.Invoke(form, new[] { Enum.Parse(engineType, "Flash") });
             bool flash = GetBool(startButton, "Enabled")
@@ -531,7 +582,7 @@ internal static class ReleaseInspector
                 && GetString(extractionHint, "Text").IndexOf("data.win", StringComparison.OrdinalIgnoreCase) >= 0;
             updateContext.Invoke(form, new[] { Enum.Parse(engineType, "Unknown") });
             bool unknown = !GetBool(startButton, "Enabled")
-                && GetString(startButton, "Text") == "Recover Embedded Assets";
+                && GetString(startButton, "Text").StartsWith("Recover:", StringComparison.Ordinal);
             bool readableDisabledButtons = HasReadableDisabledContrast(startButton)
                 && HasReadableDisabledContrast(collectLooseButton)
                 && HasReadableDisabledContrast(unityDecensorButton)
@@ -549,7 +600,7 @@ internal static class ReleaseInspector
                 && (int)scaleLogicalHeightForDpi.Invoke(null, new object[] { 570, 144f }) == 855;
             language.GetType().GetProperty("SelectedIndex").SetValue(language, 1, null);
             updateContext.Invoke(form, new[] { Enum.Parse(engineType, "RpgMaker") });
-            bool russian = GetString(startButton, "Text") == "Извлечь ресурсы"
+            bool russian = GetString(startButton, "Text").StartsWith("Извлечь:", StringComparison.Ordinal)
                 && GetString(keyLabel, "Text") == "HEX-ключ RPGM";
             language.GetType().GetProperty("SelectedIndex").SetValue(language, 0, null);
             setDragHighlight.Invoke(form, new object[] { true });
@@ -582,7 +633,11 @@ internal static class ReleaseInspector
         string www = Path.Combine(game, "www");
         string output = Path.Combine(game, "extracted", "nwjs");
         Directory.CreateDirectory(www);
+        Directory.CreateDirectory(Path.Combine(www, "movies"));
         File.WriteAllText(Path.Combine(www, "index.html"), "<html></html>");
+        File.WriteAllBytes(Path.Combine(www, "movies", "hidden-video.nlch"), MinimalWebmHeader());
+        Directory.CreateDirectory(Path.Combine(output, "loose", "www", "movies"));
+        File.WriteAllText(Path.Combine(output, "loose", "www", "movies", "hidden-video.nlch"), "stale previous output");
         using (FileStream stream = File.Create(Path.Combine(game, "package.nw")))
         using (ZipArchive archive = new ZipArchive(stream, ZipArchiveMode.Create))
         {
@@ -599,9 +654,11 @@ internal static class ReleaseInspector
             object result = extract.Invoke(form, new object[] { game, output });
             int extracted = (int)result.GetType().GetProperty("Extracted").GetValue(result, null);
             int errors = (int)result.GetType().GetProperty("Errors").GetValue(result, null);
-            return extracted == 2
+            return extracted == 3
                 && errors == 0
                 && File.Exists(Path.Combine(output, "loose", "www", "index.html"))
+                && File.Exists(Path.Combine(output, "loose", "www", "movies", "hidden-video.webm"))
+                && !File.Exists(Path.Combine(output, "loose", "www", "movies", "hidden-video.nlch"))
                 && File.Exists(Path.Combine(output, "archives", "package", "scripts", "app.js"))
                 && !File.Exists(Path.Combine(game, "extracted", "outside.txt"));
         }
@@ -610,6 +667,17 @@ internal static class ReleaseInspector
             MethodInfo dispose = formType.GetMethod("Dispose", BindingFlags.Public | BindingFlags.Instance);
             dispose.Invoke(form, null);
         }
+    }
+
+    private static byte[] MinimalWebmHeader()
+    {
+        return new byte[]
+        {
+            0x1A, 0x45, 0xDF, 0xA3, 0x9F, 0x42, 0x86, 0x81,
+            0x01, 0x42, 0xF7, 0x81, 0x01, 0x42, 0xF2, 0x81,
+            0x04, 0x42, 0xF3, 0x81, 0x08, 0x42, 0x82, 0x84,
+            0x77, 0x65, 0x62, 0x6D
+        };
     }
 
     private static bool VerifyLocalEngineExtraction(Type formType, string temp)
@@ -670,21 +738,27 @@ internal static class ReleaseInspector
             object flashResult = InvokeExtraction(formType, form, "RunFlashExtraction", flash, Path.Combine(flash, "extracted", "flash"));
             object electronResult = InvokeExtraction(formType, form, "RunElectronExtraction", electron, Path.Combine(electron, "extracted", "electron"));
             object wolfResult = InvokeExtraction(formType, form, "RunWolfExtraction", wolf, Path.Combine(wolf, "extracted", "wolf"));
-            return GetInt(tyranoResult, "Extracted") == 1
-                && File.Exists(Path.Combine(tyrano, "extracted", "tyrano", "data", "scenario", "first.ks"))
-                && GetInt(javaResult, "Extracted") == 6
+            bool javaSvgPreviewAvailable = GetInt(javaResult, "Extracted") == 6
                 && GetInt(javaResult, "Errors") == 0
-                && File.Exists(Path.Combine(java, "extracted", "java", "loose", "res", "images", "hero.png"))
-                && File.Exists(Path.Combine(java, "extracted", "java", "loose", "res", "images", "vector.svg"))
                 && IsPng(Path.Combine(java, "extracted", "java", "loose", "res", "images", "vector.png"))
-                && !File.Exists(Path.Combine(java, "extracted", "java", "loose", "res", "images", "metadata.xml"))
-                && File.Exists(Path.Combine(java, "extracted", "java", "archives", "game", "assets", "picture.png"))
-                && File.Exists(Path.Combine(java, "extracted", "java", "archives", "game", "assets", "vector.svg"))
                 && IsPng(Path.Combine(java, "extracted", "java", "archives", "game", "assets", "vector.png"))
                 && File.Exists(Path.Combine(javaOutput, "svg-preview-cache.tsv"))
                 && GetInt(javaCachedResult, "Skipped") >= 2
+                && Directory.GetFiles(javaOutput, "vector*.png", SearchOption.AllDirectories).Length == 2;
+            bool javaSvgPreviewBlocked = GetInt(javaResult, "Extracted") == 4
+                && GetInt(javaResult, "Errors") >= 1
+                && GetInt(javaResult, "Skipped") >= 2
+                && !File.Exists(Path.Combine(java, "extracted", "java", "loose", "res", "images", "vector.png"))
+                && !File.Exists(Path.Combine(java, "extracted", "java", "archives", "game", "assets", "vector.png"));
+            return GetInt(tyranoResult, "Extracted") == 1
+                && File.Exists(Path.Combine(tyrano, "extracted", "tyrano", "data", "scenario", "first.ks"))
+                && (javaSvgPreviewAvailable || javaSvgPreviewBlocked)
+                && File.Exists(Path.Combine(java, "extracted", "java", "loose", "res", "images", "hero.png"))
+                && File.Exists(Path.Combine(java, "extracted", "java", "loose", "res", "images", "vector.svg"))
+                && !File.Exists(Path.Combine(java, "extracted", "java", "loose", "res", "images", "metadata.xml"))
+                && File.Exists(Path.Combine(java, "extracted", "java", "archives", "game", "assets", "picture.png"))
+                && File.Exists(Path.Combine(java, "extracted", "java", "archives", "game", "assets", "vector.svg"))
                 && Directory.GetFiles(javaOutput, "vector*.svg", SearchOption.AllDirectories).Length == 2
-                && Directory.GetFiles(javaOutput, "vector*.png", SearchOption.AllDirectories).Length == 2
                 && GetInt(javaImagesResult, "Errors") == 0
                 && !File.Exists(Path.Combine(javaImagesOutput, "loose", "res", "images", "vector.png"))
                 && GetInt(javaAllResult, "Errors") == 0
@@ -994,10 +1068,13 @@ internal static class ReleaseInspector
         string unknown = Path.Combine(root, "unknown");
         Directory.CreateDirectory(unknown);
         WriteMinimalDataWin(Path.Combine(unknown, "archive.bin"));
+        WriteMinimalDataWin(Path.Combine(unknown, "archive-copy.bin"));
+        WriteMinimalGpuContainers(Path.Combine(unknown, "gpu.bin"));
         string diagnosticsOutput = Path.Combine(root, "diagnostics");
         string report = (string)writeDiagnostics.Invoke(null, new object[] { unknown, diagnosticsOutput });
         string signaturesOutput = Path.Combine(root, "signature-output");
         object signatureResult = extractSignatures.Invoke(null, new object[] { unknown, signaturesOutput });
+        string signaturesManifest = Path.Combine(signaturesOutput, "GameAssetTool-signatures.tsv");
 
         string spak = Path.Combine(root, "spak");
         Directory.CreateDirectory(Path.Combine(spak, "data"));
@@ -1020,8 +1097,12 @@ internal static class ReleaseInspector
             && galleryNoHardCap
             && File.Exists(report)
             && File.ReadAllText(report).Contains("archive.bin | 46-4F-52-4D")
-            && GetInt(signatureResult, "Extracted") == 1
-            && IsPng(Path.Combine(signaturesOutput, "embedded", "archive", "asset-0001.png"))
+            && GetInt(signatureResult, "Extracted") == 3
+            && Directory.GetFiles(signaturesOutput, "asset-*-0x*.png", SearchOption.AllDirectories).Any(IsPng)
+            && Directory.GetFiles(signaturesOutput, "asset-*-0x*.dds", SearchOption.AllDirectories).Any()
+            && Directory.GetFiles(signaturesOutput, "asset-*-0x*.qoi", SearchOption.AllDirectories).Any()
+            && File.Exists(signaturesManifest)
+            && File.ReadAllText(signaturesManifest).Contains("\tsha256\t")
             && GetInt(spakResult, "Extracted") == 2
             && IsPng(Path.Combine(spakOutput, "archives", "media", "feedfacecafebeef.png"))
             && File.Exists(Path.Combine(spakOutput, "external", "data", "protected.dat"))
@@ -1214,6 +1295,36 @@ internal static class ReleaseInspector
         };
         byte[] prefix = { (byte)'F', (byte)'O', (byte)'R', (byte)'M', 0, 0, 0, 0 };
         File.WriteAllBytes(path, prefix.Concat(png).Concat(new byte[] { 0, 1, 2 }).ToArray());
+    }
+
+    private static void WriteMinimalGpuContainers(string path)
+    {
+        byte[] dds = new byte[136];
+        dds[0] = (byte)'D'; dds[1] = (byte)'D'; dds[2] = (byte)'S'; dds[3] = (byte)' ';
+        WriteLe32(dds, 4, 124);
+        WriteLe32(dds, 12, 4);
+        WriteLe32(dds, 16, 4);
+        WriteLe32(dds, 76, 32);
+        dds[84] = (byte)'D'; dds[85] = (byte)'X'; dds[86] = (byte)'T'; dds[87] = (byte)'1';
+
+        byte[] qoi = new byte[]
+        {
+            (byte)'q', (byte)'o', (byte)'i', (byte)'f',
+            0, 0, 0, 1,
+            0, 0, 0, 1,
+            4, 0,
+            0xff, 0, 0, 0, 0xff,
+            0, 0, 0, 0, 0, 0, 0, 1
+        };
+        File.WriteAllBytes(path, dds.Concat(new byte[] { 1, 2, 3, 4 }).Concat(qoi).ToArray());
+    }
+
+    private static void WriteLe32(byte[] data, int offset, int value)
+    {
+        data[offset] = (byte)value;
+        data[offset + 1] = (byte)(value >> 8);
+        data[offset + 2] = (byte)(value >> 16);
+        data[offset + 3] = (byte)(value >> 24);
     }
 
     private static void WriteMinimalRgssVersion1(string path, string name, string content)

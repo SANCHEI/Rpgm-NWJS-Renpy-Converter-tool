@@ -22,6 +22,7 @@ namespace RpgmvpConverterWinForms
             if (direct != GameEngine.Unknown) return direct;
             string rootPath = InputDirectory(inputPath);
             if (!Directory.Exists(rootPath)) return GameEngine.Unknown;
+            if (AssetCollectors.IsGameMakerInput(rootPath)) return GameEngine.GameMaker;
             if (IsUnityGame(rootPath)) return GameEngine.Unity;
             if (IsRenpyGame(rootPath)) return GameEngine.Renpy;
             if (IsLegacyRpgMakerGame(rootPath)) return GameEngine.LegacyRpgMaker;
@@ -33,10 +34,12 @@ namespace RpgmvpConverterWinForms
             if (IsUnrealGame(rootPath)) return GameEngine.Unreal;
             if (IsElectronGame(rootPath)) return GameEngine.Electron;
             if (IsNwjsGame(rootPath)) return GameEngine.Nwjs;
+            if (IsSrpgStudioGame(rootPath)) return GameEngine.SrpgStudio;
+            if (IsPixelGameMakerGame(rootPath)) return GameEngine.PixelGameMaker;
             if (IsJavaJarGame(rootPath)) return GameEngine.JavaJar;
             if (IsFlashGame(rootPath)) return GameEngine.Flash;
-            if (AssetCollectors.IsGameMakerInput(rootPath)) return GameEngine.GameMaker;
             if (IsSpakDatGame(rootPath)) return GameEngine.SpakDat;
+            if (IsPygamePyInstallerGame(rootPath)) return GameEngine.PygamePyInstaller;
             if (AssetCollectors.IsHtmlGame(rootPath)) return GameEngine.Html;
             if (AssetCollectors.IsQspGame(rootPath)) return GameEngine.Qsp;
             if (AssetCollectors.IsRagsInput(rootPath)) return GameEngine.Rags;
@@ -49,6 +52,7 @@ namespace RpgmvpConverterWinForms
             if (direct != GameEngine.Unknown) return direct;
             string rootPath = InputDirectory(inputPath);
             if (!Directory.Exists(rootPath)) return GameEngine.Unknown;
+            if (AssetCollectors.IsGameMakerInput(rootPath)) return GameEngine.GameMaker;
             if (IsUnityGame(rootPath)) return GameEngine.Unity;
             if (IsRenpyGameFast(rootPath)) return GameEngine.Renpy;
             if (IsLegacyRpgMakerGame(rootPath)) return GameEngine.LegacyRpgMaker;
@@ -60,10 +64,12 @@ namespace RpgmvpConverterWinForms
             if (IsUnrealGameFast(rootPath)) return GameEngine.Unreal;
             if (IsElectronGame(rootPath)) return GameEngine.Electron;
             if (IsNwjsGame(rootPath)) return GameEngine.Nwjs;
+            if (IsSrpgStudioGame(rootPath)) return GameEngine.SrpgStudio;
+            if (IsPixelGameMakerGame(rootPath)) return GameEngine.PixelGameMaker;
             if (IsJavaJarGame(rootPath)) return GameEngine.JavaJar;
             if (IsFlashGame(rootPath)) return GameEngine.Flash;
-            if (AssetCollectors.IsGameMakerInput(rootPath)) return GameEngine.GameMaker;
             if (IsSpakDatGame(rootPath)) return GameEngine.SpakDat;
+            if (IsPygamePyInstallerGame(rootPath)) return GameEngine.PygamePyInstaller;
             if (AssetCollectors.IsHtmlGame(rootPath)) return GameEngine.Html;
             if (AssetCollectors.IsQspGame(rootPath)) return GameEngine.Qsp;
             if (AssetCollectors.IsRagsInput(rootPath)) return GameEngine.Rags;
@@ -77,6 +83,7 @@ namespace RpgmvpConverterWinForms
             switch (extension)
             {
                 case ".rpa": return GameEngine.Renpy;
+                case ".apk": return GameEngine.AndroidApk;
                 case ".pck": return GameEngine.Godot;
                 case ".xp3": return GameEngine.Kirikiri;
                 case ".pak":
@@ -86,6 +93,12 @@ namespace RpgmvpConverterWinForms
                 case ".asar": return GameEngine.Electron;
                 case ".qsp": return GameEngine.Qsp;
                 case ".rag": return GameEngine.Rags;
+                case ".rts":
+                case ".dts":
+                case ".srk":
+                case ".srpgs": return GameEngine.SrpgStudio;
+                case ".pgmproject":
+                case ".pgmexport": return GameEngine.PixelGameMaker;
                 case ".rgssad":
                 case ".rgss2a":
                 case ".rgss3a": return GameEngine.LegacyRpgMaker;
@@ -94,12 +107,35 @@ namespace RpgmvpConverterWinForms
             }
         }
 
+
+        private static bool IsPygamePyInstallerGame(string rootPath)
+        {
+            string internalDir = Path.Combine(rootPath, "_internal");
+            return Directory.Exists(Path.Combine(internalDir, "pygame"))
+                && (Directory.Exists(Path.Combine(internalDir, "assets")) || File.Exists(Path.Combine(internalDir, "base_library.zip")));
+        }
         private static bool IsUnityGame(string rootPath)
         {
             try
             {
-                bool hasDataFolder = Directory.EnumerateDirectories(rootPath, "*_Data", SearchOption.TopDirectoryOnly).Any();
-                return hasDataFolder || File.Exists(Path.Combine(rootPath, "UnityPlayer.dll"));
+                if (File.Exists(Path.Combine(rootPath, "UnityPlayer.dll"))) return true;
+                foreach (string exe in EnumerateFilesTopLevelSafe(rootPath, "*.exe"))
+                {
+                    string name = Path.GetFileNameWithoutExtension(exe);
+                    if (name.StartsWith("GameAssetTool", StringComparison.OrdinalIgnoreCase)
+                        || name.StartsWith("UnityCrashHandler", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    string dataFolder = Path.Combine(rootPath, name + "_Data");
+                    if (Directory.Exists(dataFolder)) return true;
+                }
+                foreach (string dataFolder in Directory.EnumerateDirectories(rootPath, "*_Data", SearchOption.TopDirectoryOnly))
+                {
+                    if (File.Exists(Path.Combine(dataFolder, "globalgamemanagers"))
+                        || Directory.Exists(Path.Combine(dataFolder, "Managed"))
+                        || Directory.Exists(Path.Combine(dataFolder, "Resources")))
+                        return true;
+                }
+                return false;
             }
             catch { return false; }
         }
@@ -164,6 +200,31 @@ namespace RpgmvpConverterWinForms
         private static bool IsJavaJarGame(string rootPath)
         {
             return EnumerateFilesTopLevelSafe(rootPath, "*.jar").Any() || IsJavaLooseResourceGame(rootPath);
+        }
+
+        private static bool IsSrpgStudioGame(string rootPath)
+        {
+            if (!Directory.Exists(rootPath)) return false;
+            return File.Exists(Path.Combine(rootPath, "runtime.rts"))
+                || EnumerateFilesTopLevelSafe(rootPath, "*.rts").Any()
+                || EnumerateFilesTopLevelSafe(rootPath, "*.dts").Any()
+                || EnumerateFilesTopLevelSafe(rootPath, "*.srk").Any()
+                || File.Exists(Path.Combine(rootPath, "Script", "base", "base-listcommand.js"));
+        }
+
+        private static bool IsPixelGameMakerGame(string rootPath)
+        {
+            if (!Directory.Exists(rootPath)) return false;
+            if (EnumerateFilesTopLevelSafe(rootPath, "*.pgmproject").Any()
+                || EnumerateFilesTopLevelSafe(rootPath, "*.pgmexport").Any())
+                return true;
+            bool hasPlayer = File.Exists(Path.Combine(rootPath, "player.exe"))
+                || File.Exists(Path.Combine(rootPath, "Player.exe"));
+            bool hasPgmmvMarkers = Directory.Exists(Path.Combine(rootPath, "Resources"))
+                || Directory.Exists(Path.Combine(rootPath, "resources"))
+                || Directory.Exists(Path.Combine(rootPath, "fonts"))
+                || EnumerateFilesSafe(rootPath, "*.sspj").Any();
+            return hasPlayer && hasPgmmvMarkers;
         }
 
         private static bool IsFlashGame(string rootPath)
@@ -273,10 +334,17 @@ namespace RpgmvpConverterWinForms
 
         private static ScanSummary BuildScanSummary(string inputPath)
         {
+            return BuildScanSummaryCore(inputPath, CancellationToken.None);
+        }
+
+        private static ScanSummary BuildScanSummaryCore(string inputPath, CancellationToken cancellationToken)
+        {
             string rootPath = InputDirectory(inputPath);
+            cancellationToken.ThrowIfCancellationRequested();
             GameEngine engine = DetectEngine(inputPath);
             IEnumerable<string> files;
             int archives;
+            string routeHints = "";
             if (engine == GameEngine.Unity)
             {
                 files = EnumerateFilesSafe(rootPath, "*.*").Where(delegate(string path)
@@ -347,6 +415,35 @@ namespace RpgmvpConverterWinForms
                     .ToList();
                 archives = javaArchives.Count;
             }
+            else if (engine == GameEngine.AndroidApk)
+            {
+                List<string> apkArchives = FindApkFiles(inputPath);
+                files = apkArchives;
+                archives = apkArchives.Count;
+                cancellationToken.ThrowIfCancellationRequested();
+                routeHints = ApkDiagnosticBuilder.BuildDryRunSummary(apkArchives, 3);
+            }
+            else if (engine == GameEngine.SrpgStudio)
+            {
+                files = GetSrpgStudioFiles(inputPath, Path.Combine(rootPath, "extracted", "srpg-studio"));
+                archives = files.Count(delegate(string path)
+                {
+                    string ext = Path.GetExtension(path);
+                    return ext.Equals(".rts", StringComparison.OrdinalIgnoreCase)
+                        || ext.Equals(".dts", StringComparison.OrdinalIgnoreCase)
+                        || ext.Equals(".srk", StringComparison.OrdinalIgnoreCase);
+                });
+            }
+            else if (engine == GameEngine.PixelGameMaker)
+            {
+                files = GetPixelGameMakerFiles(inputPath, Path.Combine(rootPath, "extracted", "pixel-game-maker"));
+                archives = files.Count(delegate(string path)
+                {
+                    string ext = Path.GetExtension(path);
+                    return ext.Equals(".pgmexport", StringComparison.OrdinalIgnoreCase)
+                        || ext.Equals(".pgmproject", StringComparison.OrdinalIgnoreCase);
+                });
+            }
             else if (engine == GameEngine.Flash)
             {
                 files = FindFlashFiles(inputPath);
@@ -392,8 +489,44 @@ namespace RpgmvpConverterWinForms
                 files = GetFilesToConvert(rootPath);
                 archives = 0;
             }
-            long bytes = files.Sum(delegate(string path) { return SafeFileLength(path); });
-            return new ScanSummary(engine, files.Count(), archives, bytes);
+            cancellationToken.ThrowIfCancellationRequested();
+            List<string> fileList = files.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            long bytes = 0;
+            foreach (string path in fileList)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                bytes += SafeFileLength(path);
+            }
+            string unknownExtensions = BuildUnknownExtensionSummary(fileList);
+            cancellationToken.ThrowIfCancellationRequested();
+            string topExtensions = ExtractionReportBuilder.BuildFileExtensionSummary(fileList, 6);
+            string largestFiles = ExtractionReportBuilder.BuildLargestFileSummary(rootPath, fileList, 3);
+            return new ScanSummary(engine, fileList.Count, archives, bytes, unknownExtensions, topExtensions, largestFiles, routeHints);
+        }
+
+        private static string BuildUnknownExtensionSummary(IEnumerable<string> files)
+        {
+            List<string> unknown = files
+                .Select(delegate(string path)
+                {
+                    string extension = Path.GetExtension(path);
+                    return string.IsNullOrWhiteSpace(extension) ? "<no extension>" : extension.ToLowerInvariant();
+                })
+                .Where(delegate(string extension)
+                {
+                    return extension.Equals("<no extension>", StringComparison.OrdinalIgnoreCase)
+                        || !MediaTypeRegistry.IsKnownDryRunExtension(extension);
+                })
+                .ToList();
+
+            if (unknown.Count == 0) return "";
+            return string.Join(", ", unknown
+                .GroupBy(delegate(string extension) { return extension; }, StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(delegate(IGrouping<string, string> group) { return group.Count(); })
+                .ThenBy(delegate(IGrouping<string, string> group) { return group.Key; }, StringComparer.OrdinalIgnoreCase)
+                .Take(8)
+                .Select(delegate(IGrouping<string, string> group) { return group.Key + " x" + group.Count(); })
+                .ToArray());
         }
 
         private static List<string> GetFilesToConvert(string rootPath)
@@ -491,6 +624,32 @@ namespace RpgmvpConverterWinForms
                 .ToList();
         }
 
+        private static List<string> FindApkFiles(string inputPath)
+        {
+            return AssetCollectors.FindInputFiles(inputPath, ".apk")
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private static List<string> GetSrpgStudioFiles(string inputPath, string outputDir)
+        {
+            return AssetCollectors.GetLooseResourceFiles(inputPath, outputDir)
+                .Concat(AssetCollectors.FindInputFiles(inputPath, ".rts"))
+                .Concat(AssetCollectors.FindInputFiles(inputPath, ".dts"))
+                .Concat(AssetCollectors.FindInputFiles(inputPath, ".srk"))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private static List<string> GetPixelGameMakerFiles(string inputPath, string outputDir)
+        {
+            return AssetCollectors.GetLooseResourceFiles(inputPath, outputDir)
+                .Concat(AssetCollectors.FindInputFiles(inputPath, ".pgmproject"))
+                .Concat(AssetCollectors.FindInputFiles(inputPath, ".pgmexport"))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
         private static bool IsLegacyRpgMakerGame(string rootPath)
         {
             return FindLegacyRpgMakerArchives(rootPath).Count > 0;
@@ -533,7 +692,7 @@ namespace RpgmvpConverterWinForms
 
         private static bool IsJavaImageFile(string path)
         {
-            return JavaImageExtensions.Contains(Path.GetExtension(path));
+            return MediaTypeRegistry.IsImageLike(Path.GetExtension(path));
         }
 
         private static List<string> FindFlashFiles(string rootPath)
@@ -657,23 +816,35 @@ namespace RpgmvpConverterWinForms
             Rags,
             LegacyRpgMaker,
             GameMaker,
-            SpakDat
+            AndroidApk,
+            SrpgStudio,
+            PixelGameMaker,
+            SpakDat,
+            PygamePyInstaller
         }
 
         private sealed class ScanSummary
         {
-            public ScanSummary(GameEngine engine, int fileCount, int archiveCount, long totalBytes)
+            public ScanSummary(GameEngine engine, int fileCount, int archiveCount, long totalBytes, string unknownExtensions, string topExtensions, string largestFiles, string routeHints)
             {
                 Engine = engine;
                 FileCount = fileCount;
                 ArchiveCount = archiveCount;
                 TotalBytes = totalBytes;
+                UnknownExtensions = unknownExtensions ?? "";
+                TopExtensions = topExtensions ?? "";
+                LargestFiles = largestFiles ?? "";
+                RouteHints = routeHints ?? "";
             }
 
             public GameEngine Engine { get; private set; }
             public int FileCount { get; private set; }
             public int ArchiveCount { get; private set; }
             public long TotalBytes { get; private set; }
+            public string UnknownExtensions { get; private set; }
+            public string TopExtensions { get; private set; }
+            public string LargestFiles { get; private set; }
+            public string RouteHints { get; private set; }
         }
 
     }

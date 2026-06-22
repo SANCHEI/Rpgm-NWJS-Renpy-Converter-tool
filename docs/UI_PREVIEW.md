@@ -1,4 +1,4 @@
-# Game Asset Tool v2.3.0 UI Preview
+# Game Asset Tool v2.4.1 UI Preview
 
 ## Main Window
 
@@ -13,7 +13,7 @@ The default window is compact. Only settings relevant to the detected engine are
 | [ D:\Games\Example Game                                      ] [Browse] |
 |                                                                          |
 | Engine: Unity                                  [ Dry Run / Scan ]        |
-| 24 archive(s), 731 candidate file(s), input size 1.84 GB                 |
+| 24 archive(s), 731 candidate file(s), input size 1.84 GB | Top: .assets  |
 |                                                                          |
 | Extract Assets                                                           |
 | Choose the Unity asset types to export.                                  |
@@ -57,7 +57,7 @@ The **Show Log** button expands the same fixed-width window vertically.
 ! Archive warning
 Some files were skipped for safety.
 Reason: entry path escapes the extraction folder: ../outside.txt
-Action: extracted safe files were kept. Review GameAssetTool-report.txt.
+Action: extracted safe files were kept. Review GameAssetTool-report.html.
 ```
 
 The same panel can later be used for encrypted archives, a missing Unreal Oodle DLL or formats that require a HEX key.
@@ -73,7 +73,7 @@ The header includes an `EN` / `RU` language switch. Dropping a folder or support
 
 ## Results Dialog
 
-Results are shown after extraction and saved as `GameAssetTool-report.txt` in the extractor output folder. **Copy Summary** copies the same text to the clipboard for bug reports or support messages. The **Results Gallery** button opens a searchable thumbnail grid with image, SVG, audio and video filters. Files are indexed in the background, loaded in batches while scrolling and shown in a larger preview panel when selected.
+Results are shown after extraction and saved as `GameAssetTool-report.html` in the extractor output folder. The result window keeps only the short summary, while detailed skipped/error diagnostics live in the HTML report. APK outputs can also show a concrete follow-up extractor button to continue with the detected inner engine path. The report includes file-type counts, skipped details, health snapshot and duplicate candidates when available. The **Results Gallery** button opens a searchable thumbnail grid with image, SVG, audio and video filters. Files are indexed in the background, loaded in batches while scrolling and can be sorted without building thousands of WinForms controls.
 
 ```text
 ------------------------------------------------------------------+
@@ -88,6 +88,6 @@ Results are shown after extraction and saved as `GameAssetTool-report.txt` in th
 | MD5 validation. The key is likely wrong or the archive uses an    |
 | unsupported encryption variant.                                  |
 |                                                                  |
-| [ Open Output ] [ Results Gallery ] [ Copy Summary ] [ Close ]   |
+| [ Open Output ] [ HTML Report ] [ Results Gallery ] [ Close ]   |
 +------------------------------------------------------------------+
 ```

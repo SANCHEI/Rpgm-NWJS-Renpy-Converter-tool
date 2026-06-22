@@ -4,7 +4,7 @@
 
 Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **RPG Maker XP/VX/VX Ace**, **Ren'Py**, **NWJS**, **Electron**, **Unity**, **Godot**, **KiriKiri**, **WOLF RPG**, **TyranoScript**, **Java**, **HTML** and **QSP** games. Experimental Unreal `.pak`, Flash `.swf`, RAGS `.rag`, GameMaker `data.win` and SPAK `.dat` recovery is included.
 
-![Version](https://img.shields.io/badge/version-2.3.0-blue)
+![Version](https://img.shields.io/badge/version-2.4.1-blue)
 ![.NET](https://img.shields.io/badge/.NET_Framework-4.7.2-blue)
 ![Runtime](https://img.shields.io/badge/runtime-built--in-green)
 
@@ -14,7 +14,7 @@ Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **RP
 - Supports drag-and-drop for game folders and individual supported files.
 - Opens with a selected path when you drop a game folder or supported file directly onto `GameAssetTool.exe`.
 - Includes an `EN` / `RU` interface switch.
-- Provides a **Dry Run / Scan** before extraction with archive count, candidate file count and input size.
+- Provides a cancellable background **Dry Run / Scan** with archive count, candidate file count, input size, top extensions, largest inputs and APK route hints.
 - Shows only the extraction settings relevant to the detected engine.
 - Uses one primary **Extract Assets** button and a collapsible log panel.
 - Shows action tooltips, highlights folder drag-and-drop and scales for common Windows DPI settings.
@@ -33,9 +33,11 @@ Windows tool for converting and extracting assets from **RPG Maker MV/MZ**, **RP
 - Splits SPAK `.dat` containers and decodes recoverable SPITE ChaCha20 media paths from embedded Tauri frontend bundles.
 - Provides **Collect Loose Files** and unknown-format signature recovery fallback actions.
 - Preserves relative paths and renames collisions with suffixes such as `image (2).png`.
-- Opens a searchable results gallery with background indexing, lazy thumbnail batches, enlarged image previews and SVG, audio and video filters.
+- Opens a searchable results gallery with background indexing, cached lazy thumbnails, asset-class filters, sorting, SVG/audio/video filters and a lightweight sprite-sheet frame exporter.
 - Shows the Ren'Py gallery unlocker only for relevant folders or when installed files can be removed.
-- Writes an extraction summary to the results dialog, lets you copy it to the clipboard and saves `GameAssetTool-report.txt`.
+- Writes an HTML extraction report with file-type counts, skipped/error details, diagnostics, duplicate candidates, performance statistics and a health snapshot.
+- APK results can offer **Run Suggested** to continue with the detected inner Unity, Godot, GameMaker, HTML/NWJS or Java route.
+- Unexpected crashes are logged to `%LOCALAPPDATA%\GameAssetTool\GameAssetTool-last-error.log`.
 
 ## Usage
 
@@ -71,7 +73,7 @@ extracted/
   signature-recovery/
 ```
 
-Each extractor writes `GameAssetTool-report.txt` into its own output folder.
+Each extractor writes `GameAssetTool-report.html` into its own output folder. The old TXT report is no longer created because the same summary is included in the HTML report.
 
 ## Ren'Py
 
@@ -83,7 +85,7 @@ When a Ren'Py game contains loose resources instead of `.rpa` archives, the appl
 
 ## NWJS
 
-NWJS extraction copies loose files from `www`, `package.nw` and `app.nw` folders while preserving their relative paths. ZIP-compatible `package.nw` and `app.nw` archives are unpacked safely. Non-ZIP package formats are reported and skipped.
+NWJS extraction copies loose files from `www`, `package.nw` and `app.nw` folders while preserving their relative paths. ZIP-compatible `package.nw` and `app.nw` archives are unpacked safely. `.nlch` files that contain WebM video data are saved as `.webm` so they can be opened by ordinary media players. Non-ZIP package formats are reported and skipped.
 
 The bundled gallery unlocker is not used for NWJS games: gallery state is usually stored in game-specific save data.
 
@@ -215,7 +217,7 @@ powershell -ExecutionPolicy Bypass -File .\build_release.ps1
 Release output:
 
 ```text
-release/GameAssetTool-v2.3.0.exe
+release/GameAssetTool-v2.4.1.exe
 ```
 
 The release contains one supported executable. Users do not need any neighboring files.

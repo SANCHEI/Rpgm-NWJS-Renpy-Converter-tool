@@ -12,6 +12,8 @@ namespace RpgmvpConverterWinForms
 {
     internal sealed class JavaSvgPreviewRenderer
     {
+        private const int RendererPreflightTimeoutMs = 5000;
+        private const int RendererFileTimeoutMs = 20000;
         private readonly Func<bool> cancellationRequested;
         private readonly Action throwIfCancelled;
         private readonly Action<string> log;
@@ -39,7 +41,21 @@ namespace RpgmvpConverterWinForms
                 .ToList();
             if (svgFiles.Count == 0) return new SvgPreviewResult(0, 0, 0, 0, 0);
 
-            string renderer = ToolRuntime.EnsureResvgExtracted();
+            string renderer;
+            try
+            {
+                renderer = ToolRuntime.EnsureResvgExtracted();
+                if (!CanRunRenderer(renderer))
+                {
+                    log("WARN:SVG preview: embedded resvg.exe is unavailable or blocked by Windows security policy. SVG originals will be kept without PNG previews.");
+                    return new SvgPreviewResult(0, 0, 1, 0, svgFiles.Count);
+                }
+            }
+            catch (Exception ex)
+            {
+                log("WARN:SVG preview: embedded resvg.exe could not be prepared: " + ex.Message + ". SVG originals will be kept without PNG previews.");
+                return new SvgPreviewResult(0, 0, 1, 0, svgFiles.Count);
+            }
             int converted = 0;
             long bytes = 0;
             int errors = 0;
@@ -143,8 +159,49 @@ namespace RpgmvpConverterWinForms
                     process.Start();
                     process.BeginOutputReadLine();
                     process.BeginErrorReadLine();
-                    process.WaitForExit();
+                    if (!process.WaitForExit(RendererFileTimeoutMs))
+                    {
+                        try { process.Kill(); } catch { }
+                        throw new TimeoutException("resvg did not finish within " + (RendererFileTimeoutMs / 1000) + " seconds.");
+                    }
                     return process.ExitCode;
+                }
+                finally
+                {
+                    lock (processSync) activeProcesses.Remove(process);
+                }
+            }
+        }
+
+        private bool CanRunRenderer(string renderer)
+        {
+            ProcessStartInfo psi = new ProcessStartInfo
+            {
+                FileName = renderer,
+                Arguments = "--version",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            using (Process process = new Process { StartInfo = psi })
+            {
+                throwIfCancelled();
+                lock (processSync) activeProcesses.Add(process);
+                try
+                {
+                    process.Start();
+                    if (!process.WaitForExit(RendererPreflightTimeoutMs))
+                    {
+                        try { process.Kill(); } catch { }
+                        return false;
+                    }
+                    return process.ExitCode == 0;
+                }
+                catch (Exception ex)
+                {
+                    log("WARN:SVG preview: resvg preflight failed: " + ex.Message);
+                    return false;
                 }
                 finally
                 {
