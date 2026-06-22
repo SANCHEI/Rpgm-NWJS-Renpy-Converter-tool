@@ -4,7 +4,9 @@
 
 Drop a game folder or supported file into the window, run **Dry Run / Scan**, then extract only what the detected engine supports. Output is written into an `extracted` folder inside the selected game directory, so original files are left untouched.
 
-[Watch Demo Video](https://youtu.be/BnjRjik9fk0)
+[![Watch demo](https://img.shields.io/badge/Watch%20Demo-YouTube-ff0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/BnjRjik9fk0)
+[![Source code](https://img.shields.io/badge/Source-GitHub-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/SANCHEI/Rpgm-NWJS-Renpy-Converter-tool)
+[![Support](https://img.shields.io/badge/Support-Ko--fi-ff5e5b?style=for-the-badge&logo=kofi&logoColor=white)](https://ko-fi.com/sanchei)
 
 ## Main Features
 
