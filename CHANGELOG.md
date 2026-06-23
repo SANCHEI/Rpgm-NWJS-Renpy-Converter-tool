@@ -2,6 +2,8 @@
 
 ## 2.4.1 - 2026-06-20
 
+- Added an **Engine override** dropdown for forcing extraction when auto-detection picks the wrong engine.
+- Added a **Skip gallery index** option for low-memory runs and very large extraction outputs.
 - Removed the redundant Unity **Asset type** selector; Unity extraction now follows the selected **Extract** profile.
 - Shortened the completion dialog to a minimal one-screen summary with compact file type and Unity diagnostic lines.
 - Removed largest-file noise from the result summary and HTML report; detailed diagnostics remain available through the HTML diagnostics tab or engine-specific files where applicable.
