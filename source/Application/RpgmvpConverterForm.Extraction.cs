@@ -1736,8 +1736,15 @@ namespace RpgmvpConverterWinForms
             UpdateActionTooltips();
             if (!string.IsNullOrWhiteSpace(htmlReportPath))
                 WriteLog("HTML report: " + htmlReportPath);
-            int galleryFiles = ResultsGalleryForm.PrepareIndexCache(result.OutputDir);
-            if (galleryFiles > 0) WriteLog("Gallery index: " + galleryFiles + " file(s)");
+            if (skipGalleryIndexCheckBox != null && skipGalleryIndexCheckBox.Checked)
+            {
+                WriteLog("Gallery index skipped by user option.");
+            }
+            else
+            {
+                int galleryFiles = ResultsGalleryForm.PrepareIndexCache(result.OutputDir);
+                if (galleryFiles > 0) WriteLog("Gallery index: " + galleryFiles + " file(s)");
+            }
             using (ResultsDialog dialog = new ResultsDialog(result, htmlReportPath, reportText, russianUi, RunApkFollowup))
                 dialog.ShowDialog(this);
         }

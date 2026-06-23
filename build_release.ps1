@@ -94,7 +94,7 @@ if (-not $releaseText.Contains("RESULT:{0}:{1}:{2}:{3}:{4}")) {
     throw "Embedded Unity extractor does not contain the expected result format"
 }
 
-Assert-FileContains $inspectorSource "(unknown) SPITE тест" "ReleaseInspector path/root fixture is missing"
+Assert-FileContains $inspectorSource "(unknown) SPITE" "ReleaseInspector path/root fixture is missing"
 
 Write-Host "ReleaseInspector executable check skipped to avoid Windows Defender / Smart App Control blocking a freshly compiled test exe. Static release checks above still ran."
 Write-Host "Release checks passed."

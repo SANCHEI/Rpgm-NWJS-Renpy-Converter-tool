@@ -34,6 +34,8 @@ namespace RpgmvpConverterWinForms
         private ComboBox languageBox;
         private ComboBox unlockerModeBox;
         private ComboBox javaExtractModeBox;
+        private ComboBox engineOverrideBox;
+        private CheckBox skipGalleryIndexCheckBox;
         private Label subtitleLabel;
         private Label folderSectionLabel;
         private Label extractSectionLabel;
@@ -71,6 +73,7 @@ namespace RpgmvpConverterWinForms
         private ContextMenuStrip looseModeMenu;
         private int selectedExtractionProfileIndex;
         private int selectedLooseModeIndex;
+        private bool updatingEngineOverrideItems;
 
         private readonly object processSync = new object();
         private readonly object externalOutputSync = new object();

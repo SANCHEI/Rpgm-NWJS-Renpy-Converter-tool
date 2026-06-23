@@ -334,14 +334,20 @@ namespace RpgmvpConverterWinForms
 
         private static ScanSummary BuildScanSummary(string inputPath)
         {
-            return BuildScanSummaryCore(inputPath, CancellationToken.None);
+            return BuildScanSummaryCore(inputPath, CancellationToken.None, GameEngine.Unknown);
         }
 
         private static ScanSummary BuildScanSummaryCore(string inputPath, CancellationToken cancellationToken)
         {
+            return BuildScanSummaryCore(inputPath, cancellationToken, GameEngine.Unknown);
+        }
+
+        private static ScanSummary BuildScanSummaryCore(string inputPath, CancellationToken cancellationToken, GameEngine forcedEngine)
+        {
             string rootPath = InputDirectory(inputPath);
             cancellationToken.ThrowIfCancellationRequested();
-            GameEngine engine = DetectEngine(inputPath);
+            GameEngine detectedEngine = DetectEngine(inputPath);
+            GameEngine engine = forcedEngine == GameEngine.Unknown ? detectedEngine : forcedEngine;
             IEnumerable<string> files;
             int archives;
             string routeHints = "";
