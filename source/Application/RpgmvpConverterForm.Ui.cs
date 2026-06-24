@@ -796,7 +796,7 @@ namespace RpgmvpConverterWinForms
             bool hasStartupArgument = !string.IsNullOrWhiteSpace(startupGamePath);
             string requestedPath = hasStartupArgument
                 ? startupGamePath
-                : AppDomain.CurrentDomain.BaseDirectory;
+                : GetStartupExecutableDirectory();
             string initialRoot = TryFindGameRoot(requestedPath);
             if (string.IsNullOrWhiteSpace(initialRoot) && hasStartupArgument && IsExistingInput(requestedPath))
                 initialRoot = requestedPath;
@@ -804,6 +804,19 @@ namespace RpgmvpConverterWinForms
                 ApplyGamePath(hasStartupArgument ? requestedPath : initialRoot, false);
         }
 
+        private static string GetStartupExecutableDirectory()
+        {
+            try
+            {
+                string executableDirectory = Path.GetDirectoryName(Application.ExecutablePath);
+                if (!string.IsNullOrWhiteSpace(executableDirectory) && Directory.Exists(executableDirectory))
+                    return executableDirectory;
+            }
+            catch
+            {
+            }
+            return AppDomain.CurrentDomain.BaseDirectory;
+        }
         private void OnPathChanged()
         {
             string path = pathBox.Text.Trim();

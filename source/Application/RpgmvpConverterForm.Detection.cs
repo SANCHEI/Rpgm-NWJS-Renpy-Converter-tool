@@ -26,7 +26,8 @@ namespace RpgmvpConverterWinForms
             if (!string.Equals(pygameRoot, rootPath, StringComparison.OrdinalIgnoreCase)
                 && Directory.Exists(pygameRoot)
                 && IsPygamePyInstallerGame(pygameRoot))
-                return GameEngine.PygamePyInstaller;            if (AssetCollectors.IsGameMakerInput(rootPath)) return GameEngine.GameMaker;
+                return GameEngine.PygamePyInstaller;
+            if (AssetCollectors.IsGameMakerInput(rootPath)) return GameEngine.GameMaker;
             if (IsUnityGame(rootPath)) return GameEngine.Unity;
             if (IsRenpyGame(rootPath)) return GameEngine.Renpy;
             if (IsLegacyRpgMakerGame(rootPath)) return GameEngine.LegacyRpgMaker;
@@ -60,7 +61,8 @@ namespace RpgmvpConverterWinForms
             if (!string.Equals(pygameRoot, rootPath, StringComparison.OrdinalIgnoreCase)
                 && Directory.Exists(pygameRoot)
                 && IsPygamePyInstallerGame(pygameRoot))
-                return GameEngine.PygamePyInstaller;            if (AssetCollectors.IsGameMakerInput(rootPath)) return GameEngine.GameMaker;
+                return GameEngine.PygamePyInstaller;
+            if (AssetCollectors.IsGameMakerInput(rootPath)) return GameEngine.GameMaker;
             if (IsUnityGame(rootPath)) return GameEngine.Unity;
             if (IsRenpyGameFast(rootPath)) return GameEngine.Renpy;
             if (IsLegacyRpgMakerGame(rootPath)) return GameEngine.LegacyRpgMaker;
@@ -845,6 +847,7 @@ namespace RpgmvpConverterWinForms
                     || IsFlashGame(root)
                     || IsElectronGame(root)
                     || IsSpakDatGame(root)
+                    || IsPygamePyInstallerGame(root)
                     || IsLegacyRpgMakerGame(root)
                     || AssetCollectors.IsHtmlGame(root)
                     || AssetCollectors.IsQspGame(root)

@@ -2,6 +2,7 @@
 
 ## 2.4.1 - 2026-06-20
 
+- Fixed startup auto-path detection for Pygame/PyInstaller games so launching Game Asset Tool from inside the game folder no longer selects a parent collection folder.
 - Fixed Pygame/PyInstaller .exe and _internal inputs so Dry Run and extraction use the actual game folder instead of a parent collection folder.
 - Fixed Pygame/PyInstaller startup folders so launching Game Asset Tool from inside that game folder no longer climbs to a parent collection folder.
 - File-based Godot extraction now writes to `extracted/<game name>` and only prompts to replace that game output folder.
