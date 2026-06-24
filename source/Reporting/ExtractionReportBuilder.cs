@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace RpgmvpConverterWinForms
 {
@@ -150,6 +151,7 @@ namespace RpgmvpConverterWinForms
 
             string reportReason = GetRowValue(rows, "Skipped diagnostics");
             if (!string.IsNullOrWhiteSpace(reportReason)) AddDistinct(reasons, reportReason);
+            AddExtractionQualityHints(GetRowValue(rows, "Engine"), GetRowValue(rows, "Extracted files"), skipped, reasons);
 
             foreach (KeyValuePair<string, string> diagnostic in diagnostics)
             {
@@ -207,9 +209,37 @@ namespace RpgmvpConverterWinForms
 
         private static bool IsPositiveText(string value)
         {
-            if (string.IsNullOrWhiteSpace(value)) return false;
+            return ParseLeadingInt(value) > 0;
+        }
+
+        private static int ParseLeadingInt(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return 0;
+            Match match = Regex.Match(value.Trim(), @"^\d+");
             int number;
-            return int.TryParse(value.Trim().Split(' ')[0], out number) && number > 0;
+            return match.Success && int.TryParse(match.Value, out number) ? number : 0;
+        }
+
+        private static void AddExtractionQualityHints(string engine, string extractedText, string skippedText, List<string> reasons)
+        {
+            int extracted = ParseLeadingInt(extractedText);
+            int skipped = ParseLeadingInt(skippedText);
+            if (skipped <= 0 && extracted > 0) return;
+
+            if (extracted == 0)
+                AddDistinct(reasons, "No files were extracted. Try Dry Run / Scan, verify the selected engine, and check whether the archive is encrypted or protected.");
+            else if (skipped > Math.Max(100, extracted * 3))
+                AddDistinct(reasons, "Many entries were skipped compared with extracted files. This can be normal for filtered profiles; try Everything or Force engine if the output looks too small.");
+
+            string value = engine ?? "";
+            if (value.IndexOf("Unity", StringComparison.OrdinalIgnoreCase) >= 0)
+                AddDistinct(reasons, "Unity: media profiles intentionally skip scripts, shaders, materials, meshes, animation clips and internal metadata unless Everything is selected.");
+            else if (value.IndexOf("Godot", StringComparison.OrdinalIgnoreCase) >= 0)
+                AddDistinct(reasons, "Godot: imported cache files may remain as .ctex/.stex when no embedded image preview can be recovered; encrypted PCKs need a valid key.");
+            else if (value.IndexOf("Unreal", StringComparison.OrdinalIgnoreCase) >= 0)
+                AddDistinct(reasons, "Unreal: encrypted PAK/IoStore, protected blocks or unsupported compression can be skipped; provide AES keys through the key field or keys.txt when required.");
+            else if (value.IndexOf("NWJS", StringComparison.OrdinalIgnoreCase) >= 0)
+                AddDistinct(reasons, "NWJS: media profiles skip scripts and data files; use Loose: All if you also need JSON, JS or other loose resources.");
         }
 
         private static string ReadDiagnosticValue(string text, string key)

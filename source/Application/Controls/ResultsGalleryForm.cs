@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using GameAssetTool.ApplicationUi;
 
 namespace RpgmvpConverterWinForms
@@ -25,18 +26,30 @@ namespace RpgmvpConverterWinForms
 
         internal static int PrepareIndexCache(string outputDir)
         {
-            List<string> files = IndexFiles(outputDir);
+            return PrepareIndexCache(outputDir, CancellationToken.None);
+        }
+
+        internal static int PrepareIndexCache(string outputDir, CancellationToken token)
+        {
+            List<string> files = IndexFiles(outputDir, token);
+            token.ThrowIfCancellationRequested();
             WriteIndexCache(outputDir, files);
             return files.Count;
         }
 
         private static List<string> IndexFiles(string outputDir)
         {
+            return IndexFiles(outputDir, CancellationToken.None);
+        }
+
+        private static List<string> IndexFiles(string outputDir, CancellationToken token)
+        {
             if (!Directory.Exists(outputDir))
             {
                 return new List<string>();
             }
 
+            token.ThrowIfCancellationRequested();
             List<string> cached = ReadIndexCache(outputDir);
             if (cached != null)
             {
@@ -45,10 +58,21 @@ namespace RpgmvpConverterWinForms
 
             try
             {
-                return Directory.EnumerateFiles(outputDir, "*.*", SearchOption.AllDirectories)
-                    .Where(IsGalleryFile)
-                    .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
-                    .ToList();
+                List<string> files = new List<string>();
+                foreach (string path in Directory.EnumerateFiles(outputDir, "*.*", SearchOption.AllDirectories))
+                {
+                    token.ThrowIfCancellationRequested();
+                    if (IsGalleryFile(path)) files.Add(path);
+                }
+                files.Sort(delegate(string left, string right)
+                {
+                    return string.Compare(Path.GetFileName(left), Path.GetFileName(right), StringComparison.OrdinalIgnoreCase);
+                });
+                return files;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch
             {

@@ -1,0 +1,45 @@
+name: Build Windows Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build release executable
+        shell: powershell
+        run: .\build_release.ps1
+
+      - name: Calculate SHA-256
+        shell: powershell
+        run: |
+          $exe = 'release\GameAssetTool-v2.4.1.exe'
+          $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash
+          "SHA-256: $hash" | Out-File -FilePath release\SHA256.txt -Encoding utf8
+          "SHA256=$hash" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Upload executable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GameAssetTool-v2.4.1
+          path: release/GameAssetTool-v2.4.1.exe
+
+      - name: Upload checksum artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GameAssetTool-v2.4.1-sha256
+          path: release/SHA256.txt
+
+      - name: Attach assets to GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload $env:GITHUB_REF_NAME release\GameAssetTool-v2.4.1.exe release\SHA256.txt --clobber

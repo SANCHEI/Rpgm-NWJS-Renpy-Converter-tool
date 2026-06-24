@@ -21,6 +21,7 @@ MAX_SCANNED_EXE_BYTES = 256 * 1024 * 1024
 HEX_KEY = re.compile(rb"(?<![0-9a-fA-F])[0-9a-fA-F]{64}(?![0-9a-fA-F])")
 BASE64_KEY = re.compile(rb"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{43}=(?![A-Za-z0-9+/=])")
 KEY_SOURCES = []
+IMPORTED_TEXTURE_EXTENSIONS = (".ctex", ".stex")
 
 
 class UnsupportedArchive(Exception):
@@ -143,9 +144,16 @@ def extract_embedded_image(data):
     return data[start:end], extension
 
 
+def is_imported_texture_path(path):
+    lowered = path.lower().replace("\\", "/")
+    if lowered.endswith(IMPORTED_TEXTURE_EXTENSIONS):
+        return True
+    name = os.path.basename(lowered)
+    return "/.godot/imported/" in lowered and re.search(r"\.(png|jpg|jpeg|webp)-[0-9a-f]{32}\.", name) is not None
+
+
 def write_imported_preview(destination, data):
-    lowered = destination.lower()
-    if not lowered.endswith(".ctex"):
+    if not is_imported_texture_path(destination):
         return 0, 0, 0
     image, extension = extract_embedded_image(data)
     if not image:
@@ -353,6 +361,7 @@ def extract_archive(archive, output_path, keys):
     extracted = 0
     byte_count = 0
     renamed = 0
+    preview_count = 0
     archive_output = os.path.join(output_path, "archives", normalize_name(os.path.splitext(os.path.basename(archive))[0]))
     with open(archive, "rb") as stream:
         pck_start = locate_pck(stream)
@@ -381,6 +390,9 @@ def extract_archive(archive, output_path, keys):
             extracted += preview_extracted
             byte_count += preview_bytes
             renamed += preview_renamed
+            preview_count += preview_extracted
+    if preview_count:
+        print("Godot imported preview(s): {}".format(preview_count))
     return extracted, byte_count, renamed
 
 

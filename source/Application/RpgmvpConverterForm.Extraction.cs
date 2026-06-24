@@ -1742,8 +1742,7 @@ namespace RpgmvpConverterWinForms
             }
             else
             {
-                int galleryFiles = ResultsGalleryForm.PrepareIndexCache(result.OutputDir);
-                if (galleryFiles > 0) WriteLog("Gallery index: " + galleryFiles + " file(s)");
+                StartBackgroundGalleryIndex(result.OutputDir);
             }
             using (ResultsDialog dialog = new ResultsDialog(result, htmlReportPath, reportText, russianUi, RunApkFollowup))
                 dialog.ShowDialog(this);

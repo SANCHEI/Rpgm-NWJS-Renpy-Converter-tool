@@ -93,6 +93,7 @@ namespace RpgmvpConverterWinForms
         private bool localCopyCancellationRequested;
         private bool russianUi;
         private CancellationTokenSource dryScanCancellation;
+        private CancellationTokenSource galleryIndexCancellation;
         private ExtractionRunContext localExtractionContext;
         private string lastOutputDir = "";
         private OperationResult lastOperationResult;
@@ -363,6 +364,11 @@ namespace RpgmvpConverterWinForms
                 dryScanCancellation.Dispose();
                 dryScanCancellation = null;
             }
+            if (galleryIndexCancellation != null)
+            {
+                galleryIndexCancellation.Cancel();
+                galleryIndexCancellation = null;
+            }
             if (localExtractionContext != null)
             {
                 localExtractionContext.Dispose();
@@ -370,6 +376,37 @@ namespace RpgmvpConverterWinForms
             }
             PortableRuntime.Cleanup();
             ToolRuntime.Cleanup();
+        }
+
+        private void StartBackgroundGalleryIndex(string outputDir)
+        {
+            if (string.IsNullOrWhiteSpace(outputDir) || !Directory.Exists(outputDir)) return;
+
+            CancellationTokenSource previous = galleryIndexCancellation;
+            if (previous != null)
+                previous.Cancel();
+
+            CancellationTokenSource cts = new CancellationTokenSource();
+            CancellationToken token = cts.Token;
+            galleryIndexCancellation = cts;
+            WriteLog("Gallery index: preparing in background...");
+
+            Task.Run(delegate
+            {
+                int count = ResultsGalleryForm.PrepareIndexCache(outputDir, token);
+                BeginUi(delegate
+                {
+                    if (!token.IsCancellationRequested)
+                        WriteLog("Gallery index ready: " + count + " file(s)");
+                });
+            }, token).ContinueWith(delegate(Task task)
+            {
+                if (task.IsFaulted && !task.IsCanceled)
+                    SafeLog("Gallery index failed: " + task.Exception.GetBaseException().Message);
+                if (ReferenceEquals(galleryIndexCancellation, cts))
+                    galleryIndexCancellation = null;
+                cts.Dispose();
+            });
         }
 
         private static bool UsesPortableRuntime(GameEngine engine)

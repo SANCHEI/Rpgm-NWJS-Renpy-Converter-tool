@@ -2,6 +2,10 @@
 
 ## 2.4.1 - 2026-06-20
 
+- Prepare the results gallery index in the background after extraction so the completion dialog opens immediately.
+- Added clearer HTML skipped-output hints for Unity, Godot, Unreal and NWJS, including low-output and high-skip guidance.
+- Added a GitHub Actions workflow for reproducible Windows release builds with exe and SHA-256 artifacts.
+- Improved Godot imported texture recovery for `.stex` and hashed `.godot/imported` texture cache files, not only `.ctex`.
 - Added an **Engine override** dropdown for forcing extraction when auto-detection picks the wrong engine.
 - Added a **Skip gallery index** option for low-memory runs and very large extraction outputs.
 - Removed the redundant Unity **Asset type** selector; Unity extraction now follows the selected **Extract** profile.
