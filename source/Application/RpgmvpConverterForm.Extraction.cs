@@ -706,19 +706,43 @@ namespace RpgmvpConverterWinForms
 
         private async Task StartPygamePyInstallerExtractionAsync()
         {
-            await StartLocalExtractionAsync("Pygame / PyInstaller", "pygame", RunPygamePyInstallerExtraction);
+            if (currentRun != null || externalRunning) return;
+
+            string rootPath = GetPygamePyInstallerRoot(pathBox.Text.Trim());
+            if (!Directory.Exists(rootPath) || !IsPygamePyInstallerGame(rootPath))
+            {
+                WriteLog("Invalid Pygame / PyInstaller path");
+                return;
+            }
+
+            string outputDir = Path.Combine(rootPath, "extracted", "pygame");
+            lastOutputDir = outputDir;
+            if (!TryResetExtractionRootForOutput(outputDir)) return;
+            SetExternalRunningState(true, "Pygame / PyInstaller");
+            WriteLog("Pygame / PyInstaller extraction started");
+
+            OperationResult result;
+            try
+            {
+                result = await Task.Run(delegate { return RunPygamePyInstallerExtraction(rootPath, outputDir); });
+            }
+            catch (Exception ex)
+            {
+                result = OperationResult.Failed("Pygame / PyInstaller", outputDir, ex.Message);
+            }
+            SetExternalRunningState(false, "Pygame / PyInstaller");
+            CompleteExternalOperation(result);
         }
 
         private OperationResult RunPygamePyInstallerExtraction(string inputPath, string outputDir)
         {
             DateTime start = DateTime.UtcNow;
-            string root = InputDirectory(inputPath);
+            string root = GetPygamePyInstallerRoot(inputPath);
             List<string> loose = AssetCollectors.GetLooseResourceFiles(root, outputDir);
             CollectorResult copied = AssetCollectors.CopyFiles(root, loose, outputDir, "loose");
             CollectorResult decoded = DecodePygameDatImages(root, Path.Combine(outputDir, "decoded-dat"));
             return new OperationResult("Pygame / PyInstaller", outputDir, copied.Extracted + decoded.Extracted, copied.Bytes + decoded.Bytes, 0, copied.Renamed + decoded.Renamed, copied.Skipped + decoded.Skipped, DateTime.UtcNow - start);
         }
-
         private CollectorResult DecodePygameDatImages(string rootPath, string outputDir)
         {
             int extracted = 0, renamed = 0, skipped = 0;

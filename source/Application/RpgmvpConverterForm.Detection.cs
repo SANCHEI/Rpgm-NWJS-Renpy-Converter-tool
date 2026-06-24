@@ -22,7 +22,11 @@ namespace RpgmvpConverterWinForms
             if (direct != GameEngine.Unknown) return direct;
             string rootPath = InputDirectory(inputPath);
             if (!Directory.Exists(rootPath)) return GameEngine.Unknown;
-            if (AssetCollectors.IsGameMakerInput(rootPath)) return GameEngine.GameMaker;
+            string pygameRoot = GetPygamePyInstallerRoot(inputPath);
+            if (!string.Equals(pygameRoot, rootPath, StringComparison.OrdinalIgnoreCase)
+                && Directory.Exists(pygameRoot)
+                && IsPygamePyInstallerGame(pygameRoot))
+                return GameEngine.PygamePyInstaller;            if (AssetCollectors.IsGameMakerInput(rootPath)) return GameEngine.GameMaker;
             if (IsUnityGame(rootPath)) return GameEngine.Unity;
             if (IsRenpyGame(rootPath)) return GameEngine.Renpy;
             if (IsLegacyRpgMakerGame(rootPath)) return GameEngine.LegacyRpgMaker;
@@ -52,7 +56,11 @@ namespace RpgmvpConverterWinForms
             if (direct != GameEngine.Unknown) return direct;
             string rootPath = InputDirectory(inputPath);
             if (!Directory.Exists(rootPath)) return GameEngine.Unknown;
-            if (AssetCollectors.IsGameMakerInput(rootPath)) return GameEngine.GameMaker;
+            string pygameRoot = GetPygamePyInstallerRoot(inputPath);
+            if (!string.Equals(pygameRoot, rootPath, StringComparison.OrdinalIgnoreCase)
+                && Directory.Exists(pygameRoot)
+                && IsPygamePyInstallerGame(pygameRoot))
+                return GameEngine.PygamePyInstaller;            if (AssetCollectors.IsGameMakerInput(rootPath)) return GameEngine.GameMaker;
             if (IsUnityGame(rootPath)) return GameEngine.Unity;
             if (IsRenpyGameFast(rootPath)) return GameEngine.Renpy;
             if (IsLegacyRpgMakerGame(rootPath)) return GameEngine.LegacyRpgMaker;
@@ -501,6 +509,12 @@ namespace RpgmvpConverterWinForms
                 archives = SpakDatExtractor.FindArchives(inputPath).Count;
                 files = SpakDatExtractor.FindSourceFiles(inputPath);
             }
+            else if (engine == GameEngine.PygamePyInstaller)
+            {
+                string pygameRoot = GetPygamePyInstallerRoot(inputPath);
+                files = GetPygamePyInstallerFiles(pygameRoot, Path.Combine(pygameRoot, "extracted", "pygame"));
+                archives = 0;
+            }
             else
             {
                 files = GetFilesToConvert(rootPath);
@@ -796,10 +810,27 @@ namespace RpgmvpConverterWinForms
                 .ToList();
         }
 
+        private static string GetPygamePyInstallerRoot(string inputPath)
+        {
+            if (string.IsNullOrWhiteSpace(inputPath)) return inputPath;
+            string root = InputDirectory(inputPath);
+            if (Path.GetFileName(root).Equals("_internal", StringComparison.OrdinalIgnoreCase))
+                root = Directory.GetParent(root) != null ? Directory.GetParent(root).FullName : root;
+            return root;
+        }
+
+        private static List<string> GetPygamePyInstallerFiles(string rootPath, string outputDir)
+        {
+            return IsPygamePyInstallerGame(rootPath)
+                ? AssetCollectors.GetLooseResourceFiles(rootPath, outputDir)
+                : new List<string>();
+        }
+
         private static string TryFindGameRoot(string path)
         {
             if (string.IsNullOrWhiteSpace(path)) return null;
             DirectoryInfo current = Directory.Exists(path) ? new DirectoryInfo(path) : new FileInfo(path).Directory;
+            if (current != null && current.Name.Equals("_internal", StringComparison.OrdinalIgnoreCase)) current = current.Parent;
             int remainingParents = 6;
             while (current != null && remainingParents-- > 0)
             {
