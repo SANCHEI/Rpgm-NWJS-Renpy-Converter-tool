@@ -45,7 +45,7 @@ namespace RpgmvpConverterWinForms
             }
             if (engine == GameEngine.Godot)
             {
-                await StartPortableScriptExtractionAsync("Godot", "godot", "extract_godot.py", "RpgmvpConverterWinForms.scripts.extract_godot.py");
+                await StartGodotExtractionAsync();
                 return;
             }
             if (engine == GameEngine.Kirikiri)
@@ -1328,6 +1328,43 @@ namespace RpgmvpConverterWinForms
                 if (File.Exists(stale)) File.Delete(stale);
             }
             catch { }
+        }
+
+        private async Task StartGodotExtractionAsync()
+        {
+            if (currentRun != null || externalRunning) return;
+
+            string inputPath = pathBox.Text.Trim();
+            string outputRoot = InputDirectory(inputPath);
+            if (!Directory.Exists(outputRoot))
+            {
+                WriteLog("Invalid path");
+                return;
+            }
+            if (!EnsurePortableRuntimeAvailable()) return;
+
+            string extractionInput = File.Exists(inputPath) ? Path.GetFullPath(inputPath) : outputRoot;
+            string outputDir = Path.Combine(outputRoot, "extracted", "godot");
+            lastOutputDir = outputDir;
+            if (!TryResetExtractionRootForOutput(outputDir)) return;
+            SetExternalRunningState(true, "Godot");
+            WriteLog("Godot extraction started: " + extractionInput);
+
+            OperationResult result;
+            try
+            {
+                string optionalKey = keyBox.Text.Trim();
+                result = await Task.Run(delegate
+                {
+                    return RunPortableScriptExtraction(extractionInput, outputDir, "Godot", "extract_godot.py", "RpgmvpConverterWinForms.scripts.extract_godot.py", optionalKey);
+                });
+            }
+            catch (Exception ex)
+            {
+                result = OperationResult.Failed("Godot", outputDir, ex.Message);
+            }
+            SetExternalRunningState(false, "Godot");
+            CompleteExternalOperation(result);
         }
 
         private async Task StartPortableScriptExtractionAsync(string engineName, string outputFolder, string scriptFile, string resourceName)

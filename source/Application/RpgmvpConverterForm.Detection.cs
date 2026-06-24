@@ -103,6 +103,7 @@ namespace RpgmvpConverterWinForms
                 case ".rgss2a":
                 case ".rgss3a": return GameEngine.LegacyRpgMaker;
                 case ".dat": return SpakDatExtractor.IsSpakArchive(path) ? GameEngine.SpakDat : GameEngine.Unknown;
+                case ".exe": return IsGodotEmbeddedPckFile(path) ? GameEngine.Godot : GameEngine.Unknown;
                 default: return GameEngine.Unknown;
             }
         }
@@ -275,18 +276,28 @@ namespace RpgmvpConverterWinForms
             {
                 foreach (string executable in Directory.EnumerateFiles(rootPath, "*.exe", SearchOption.TopDirectoryOnly))
                 {
-                    using (FileStream stream = File.OpenRead(executable))
-                    {
-                        if (stream.Length < 4) continue;
-                        stream.Seek(-4, SeekOrigin.End);
-                        byte[] footer = new byte[4];
-                        if (stream.Read(footer, 0, footer.Length) == footer.Length && Encoding.ASCII.GetString(footer) == "GDPC")
-                            return true;
-                    }
+                    if (IsGodotEmbeddedPckFile(executable)) return true;
                 }
             }
             catch { }
             return false;
+        }
+
+        private static bool IsGodotEmbeddedPckFile(string executable)
+        {
+            try
+            {
+                if (!File.Exists(executable)) return false;
+                using (FileStream stream = File.OpenRead(executable))
+                {
+                    if (stream.Length < 4) return false;
+                    stream.Seek(-4, SeekOrigin.End);
+                    byte[] footer = new byte[4];
+                    return stream.Read(footer, 0, footer.Length) == footer.Length
+                        && Encoding.ASCII.GetString(footer) == "GDPC";
+                }
+            }
+            catch { return false; }
         }
 
         private static bool IsKirikiriGame(string rootPath)
@@ -376,7 +387,7 @@ namespace RpgmvpConverterWinForms
             }
             else if (engine == GameEngine.Godot)
             {
-                files = EnumerateFilesSafe(rootPath, "*.pck").ToList();
+                files = FindGodotArchives(inputPath);
                 archives = files.Count();
             }
             else if (engine == GameEngine.Kirikiri)
@@ -587,6 +598,25 @@ namespace RpgmvpConverterWinForms
             string rootPath = InputDirectory(inputPath);
             string gameFolder = Path.Combine(rootPath, "game");
             return Directory.Exists(gameFolder) ? gameFolder : rootPath;
+        }
+
+        private static List<string> FindGodotArchives(string inputPath)
+        {
+            if (File.Exists(inputPath))
+            {
+                string fullPath = Path.GetFullPath(inputPath);
+                string extension = Path.GetExtension(fullPath);
+                if (extension.Equals(".pck", StringComparison.OrdinalIgnoreCase)
+                    || extension.Equals(".exe", StringComparison.OrdinalIgnoreCase) && IsGodotEmbeddedPckFile(fullPath))
+                    return new List<string> { fullPath };
+                return new List<string>();
+            }
+
+            string rootPath = InputDirectory(inputPath);
+            return EnumerateFilesSafe(rootPath, "*.pck")
+                .Concat(EnumerateFilesTopLevelSafe(rootPath, "*.exe").Where(IsGodotEmbeddedPckFile))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
         }
 
         private static List<string> FindRenpyArchives(string inputPath)

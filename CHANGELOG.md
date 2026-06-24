@@ -2,6 +2,7 @@
 
 ## 2.4.1 - 2026-06-20
 
+- Fixed Godot file-input extraction so selecting an embedded-PCK `.exe` no longer scans sibling game folders in the same directory.
 - Prepare the results gallery index in the background after extraction so the completion dialog opens immediately.
 - Added clearer HTML skipped-output hints for Unity, Godot, Unreal and NWJS, including low-output and high-skip guidance.
 - Added a GitHub Actions workflow for reproducible Windows release builds with exe and SHA-256 artifacts.

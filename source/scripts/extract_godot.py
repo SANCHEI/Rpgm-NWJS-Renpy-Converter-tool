@@ -343,6 +343,11 @@ def is_embedded_pck(path):
 def find_archives(game_path, output_path):
     output_path = os.path.abspath(output_path)
     archives = []
+    if os.path.isfile(game_path):
+        lowered = game_path.lower()
+        if lowered.endswith(".pck") or lowered.endswith(".exe") and is_embedded_pck(game_path):
+            return [os.path.abspath(game_path)]
+        return []
     for root, directories, files in os.walk(game_path):
         root_path = os.path.abspath(root)
         directories[:] = [
@@ -407,6 +412,7 @@ def main():
     else:
         print("Godot key candidate(s): 0")
     archives = find_archives(game_path, output_path)
+    display_root = game_path if os.path.isdir(game_path) else os.path.dirname(game_path)
     print("TOTAL:{}".format(len(archives)))
 
     extracted = 0
@@ -415,7 +421,7 @@ def main():
     renamed = 0
     for index, archive in enumerate(archives, 1):
         try:
-            print("Processing PCK: {}".format(os.path.relpath(archive, game_path)))
+            print("Processing PCK: {}".format(os.path.relpath(archive, display_root)))
             current_extracted, current_bytes, current_renamed = extract_archive(archive, output_path, keys)
             extracted += current_extracted
             byte_count += current_bytes
