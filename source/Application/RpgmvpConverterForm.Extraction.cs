@@ -1344,7 +1344,8 @@ namespace RpgmvpConverterWinForms
             if (!EnsurePortableRuntimeAvailable()) return;
 
             string extractionInput = File.Exists(inputPath) ? Path.GetFullPath(inputPath) : outputRoot;
-            string outputDir = Path.Combine(outputRoot, "extracted", "godot");
+            string outputName = File.Exists(inputPath) ? SanitizeRelativePath(Path.GetFileNameWithoutExtension(inputPath)) : "godot";
+            string outputDir = Path.Combine(outputRoot, "extracted", outputName);
             lastOutputDir = outputDir;
             if (!TryResetExtractionRootForOutput(outputDir)) return;
             SetExternalRunningState(true, "Godot");
@@ -1640,54 +1641,41 @@ namespace RpgmvpConverterWinForms
             try
             {
                 string fullOutput = Path.GetFullPath(outputDir);
-                DirectoryInfo output = new DirectoryInfo(fullOutput);
-                DirectoryInfo extractedRoot = output;
-                while (extractedRoot != null && !extractedRoot.Name.Equals("extracted", StringComparison.OrdinalIgnoreCase))
-                    extractedRoot = extractedRoot.Parent;
-
-                if (extractedRoot == null || extractedRoot.Parent == null)
-                {
-                    if (Directory.Exists(fullOutput))
-                        Directory.Delete(fullOutput, true);
-                    Directory.CreateDirectory(fullOutput);
-                    return true;
-                }
-
-                if (extractedRoot.Exists)
+                if (Directory.Exists(fullOutput))
                 {
                     DialogResult answer = MessageBox.Show(
-                        "Existing extracted folder will be deleted before extraction:\n\n"
-                        + extractedRoot.FullName
+                        "Existing output folder will be deleted before extraction:\n\n"
+                        + fullOutput
                         + "\n\nContinue?",
-                        "Clean extracted",
+                        "Clean output",
                         MessageBoxButtons.YesNo,
                         MessageBoxIcon.Warning,
                         MessageBoxDefaultButton.Button2);
                     if (answer != DialogResult.Yes)
                     {
-                        WriteLog("Extraction cancelled before clearing extracted folder.");
+                        WriteLog("Extraction cancelled before clearing output folder.");
                         return false;
                     }
 
-                    WriteLog("Clearing previous extracted folder: " + extractedRoot.FullName);
+                    WriteLog("Clearing previous output folder: " + fullOutput);
                     try
                     {
-                        DeleteDirectoryRobust(extractedRoot.FullName);
+                        DeleteDirectoryRobust(fullOutput);
                     }
                     catch (Exception deleteError)
                     {
-                        List<string> lockedFiles = FindLockedFiles(extractedRoot.FullName, 8);
+                        List<string> lockedFiles = FindLockedFiles(fullOutput, 8);
                         string details = lockedFiles.Count > 0
                             ? "\n\nPossible locked files:\n" + string.Join("\n", lockedFiles.ToArray()) + (lockedFiles.Count >= 8 ? "\n..." : "")
                             : "";
                         MessageBox.Show(
-                            "Could not clear existing extracted folder:\n"
+                            "Could not clear existing output folder:\n"
                             + deleteError.Message
                             + details,
                             "Extraction",
                             MessageBoxButtons.OK,
                             MessageBoxIcon.Warning);
-                        WriteLog("Could not clear extracted folder: " + deleteError.Message);
+                        WriteLog("Could not clear output folder: " + deleteError.Message);
                         return false;
                     }
                 }
@@ -1697,9 +1685,9 @@ namespace RpgmvpConverterWinForms
             }
             catch (Exception ex)
             {
-                WriteLog("Could not clear extracted folder: " + ex.Message);
+                WriteLog("Could not prepare output folder: " + ex.Message);
                 MessageBox.Show(
-                    "Could not clear existing extracted folder:\n" + ex.Message,
+                    "Could not prepare output folder:\n" + ex.Message,
                     "Extraction",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);
