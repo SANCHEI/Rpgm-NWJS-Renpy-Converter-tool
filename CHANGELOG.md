@@ -2,6 +2,7 @@
 
 ## 2.4.1 - 2026-06-20
 
+- Fixed Pygame/PyInstaller startup folders so launching Game Asset Tool from inside that game folder no longer climbs to a parent collection folder.
 - File-based Godot extraction now writes to `extracted/<game name>` and only prompts to replace that game output folder.
 - Fixed Godot file-input extraction so selecting an embedded-PCK `.exe` no longer scans sibling game folders in the same directory.
 - Prepare the results gallery index in the background after extraction so the completion dialog opens immediately.
