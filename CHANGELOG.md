@@ -1,23 +1,18 @@
 # Changelog
 
-## 2.4.1 - 2026-06-20
+## 2.4.2 - 2026-06-26
 
-- Fixed startup auto-path detection for Pygame/PyInstaller games so launching Game Asset Tool from inside the game folder no longer selects a parent collection folder.
-- Fixed Pygame/PyInstaller .exe and _internal inputs so Dry Run and extraction use the actual game folder instead of a parent collection folder.
-- Fixed Pygame/PyInstaller startup folders so launching Game Asset Tool from inside that game folder no longer climbs to a parent collection folder.
+- Fixed startup auto-path detection for Pygame/PyInstaller games so launching Game Asset Tool from inside that game folder no longer selects a parent collection folder.
+- Fixed Pygame/PyInstaller `.exe` and `_internal` inputs so Dry Run and extraction use the actual game folder instead of a parent collection folder.
 - File-based Godot extraction now writes to `extracted/<game name>` and only prompts to replace that game output folder.
 - Fixed Godot file-input extraction so selecting an embedded-PCK `.exe` no longer scans sibling game folders in the same directory.
 - Prepare the results gallery index in the background after extraction so the completion dialog opens immediately.
 - Added clearer HTML skipped-output hints for Unity, Godot, Unreal and NWJS, including low-output and high-skip guidance.
 - Added a GitHub Actions workflow for reproducible Windows release builds with exe and SHA-256 artifacts.
 - Improved Godot imported texture recovery for `.stex` and hashed `.godot/imported` texture cache files, not only `.ctex`.
+- Added Godot imported texture preview recovery for `.ctex` files that contain embedded WebP, PNG or JPEG image data.
 - Added an **Engine override** dropdown for forcing extraction when auto-detection picks the wrong engine.
 - Added a **Skip gallery index** option for low-memory runs and very large extraction outputs.
-- Removed the redundant Unity **Asset type** selector; Unity extraction now follows the selected **Extract** profile.
-- Shortened the completion dialog to a minimal one-screen summary with compact file type and Unity diagnostic lines.
-- Removed largest-file noise from the result summary and HTML report; detailed diagnostics remain available through the HTML diagnostics tab or engine-specific files where applicable.
-- Fixed a Results Gallery startup crash caused by loading the initial folder before the gallery window handle exists.
-- Added Godot imported texture preview recovery for `.ctex` files that contain embedded WebP, PNG or JPEG image data.
 - Hide the follow-up extractor button when no APK follow-up exists and give it a concrete engine-specific label when it is available.
 - Removed the always-visible **Clean extracted** checkbox; existing output now prompts to delete only when needed, with more robust long-path cleanup.
 - Added Pygame/PyInstaller detection and recovery for XOR `0x6A` image `.dat` files used by games such as Isekai NTR Inn.
@@ -39,6 +34,14 @@
 - Added a lightweight sprite-sheet preview/export tool for selected raster images in the gallery.
 - Added extraction performance statistics to the HTML report, including files/sec, data/sec and process memory.
 - Stopped writing `GameAssetTool-report.txt`; `GameAssetTool-report.html` is now the single persisted report file.
+- Updated the release version to 2.4.2.
+
+## 2.4.1 - 2026-06-20
+
+- Removed the redundant Unity **Asset type** selector; Unity extraction now follows the selected **Extract** profile.
+- Shortened the completion dialog to a minimal one-screen summary with compact file type and Unity diagnostic lines.
+- Removed largest-file noise from the standard text and HTML reports; detailed diagnostic files remain available in the output folder.
+- Fixed a Results Gallery startup crash caused by loading the initial folder before the gallery window handle exists.
 - Updated the release version to 2.4.1.
 
 ## 2.4.0 - 2026-06-18

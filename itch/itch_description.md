@@ -40,9 +40,9 @@ https://github.com/SANCHEI/Rpgm-NWJS-Renpy-Converter-tool
 
 The Windows build is unsigned, so SmartScreen or Defender may show a warning until the app gains reputation. This does not automatically mean the file is malicious; verify the SHA-256 below if needed.
 
-SHA-256 for v2.4.1:
+SHA-256 for v2.4.2:
 
-`DB11E64921A5A34C7E923DE28E0470832DA554645A7D5A911183CE5003AE8E57`
+`2DD853A374B5262C928924F8648648B341A92DD6888CCC1CE99418A9222F2CF1`
 
 ## Support Development
 
