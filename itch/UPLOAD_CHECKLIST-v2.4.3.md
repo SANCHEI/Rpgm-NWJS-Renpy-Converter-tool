@@ -1,12 +1,12 @@
-# itch.io Upload Checklist - v2.4.2
+# itch.io Upload Checklist - v2.4.3
 
 ## Upload
 
-- File: `release/GameAssetTool-v2.4.2.exe`
-- Display name: `Game Asset Tool v2.4.2 - Windows x64`
+- File: `release/GameAssetTool-v2.4.3.exe`
+- Display name: `Game Asset Tool v2.4.3 - Windows x64`
 - Platform: Windows
 - Architecture: x64
-- SHA-256: `2DD853A374B5262C928924F8648648B341A92DD6888CCC1CE99418A9222F2CF1`
+- SHA-256: `F1DD454C8CCC4FA7F206DA077B714D585FEF9EF22C5E21C014FFD35129768F29`
 
 ## Patch Log
 
@@ -37,14 +37,14 @@
 
 - Use `itch/itch_description.md` or `itch/itch_description.html` for the release description.
 - Keep the existing logo, background, banner and demo video unless updating screenshots.
-- Upload `release/GameAssetTool-v2.4.2.exe` as the current Windows build.
+- Upload `release/GameAssetTool-v2.4.3.exe` as the current Windows build.
 
 ## Manual Verification
 
 - Download the uploaded file from itch.io.
 - Compare its SHA-256 with the value above.
 - Launch it without neighboring files.
-- Confirm the title shows `Game Asset Tool v2.4.2`.
+- Confirm the title shows `Game Asset Tool v2.4.3`.
 - Run Unity extraction and confirm the completion dialog is short and readable.
 - Confirm only `GameAssetTool-report.html` is created in the output folder; `GameAssetTool-report.txt` should not remain.
 - Click **Results Gallery** from the completion dialog and confirm it opens without the startup crash.

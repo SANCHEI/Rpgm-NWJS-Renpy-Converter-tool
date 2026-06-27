@@ -99,7 +99,7 @@ namespace RpgmvpConverterWinForms
         private static bool IsGalleryFile(string path)
         {
             string extension = Path.GetExtension(path);
-            return MediaTypeRegistry.IsMedia(extension);
+            return MediaTypeRegistry.IsMedia(extension) || MediaTypeRegistry.IsText(extension);
         }
 
         private static void SortFiles(List<string> files, int sortIndex)

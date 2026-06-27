@@ -211,6 +211,7 @@ namespace RpgmvpConverterWinForms
             List<string> visible = new List<string>();
             AddNonZeroPart(visible, parts, "Images");
             AddNonZeroPart(visible, parts, "SVG");
+            AddNonZeroPart(visible, parts, "Text");
             AddNonZeroPart(visible, parts, "Audio");
             AddNonZeroPart(visible, parts, "Video");
             AddNonZeroPart(visible, parts, "Other");

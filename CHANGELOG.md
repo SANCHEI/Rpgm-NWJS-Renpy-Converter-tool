@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.4.3 - 2026-06-27
+
+- Added **Text only** and **Images + Text** extraction profiles for translation workflows.
+- Unity extraction now exports `TextAsset` resources and direct text/localization files such as `.txt`, `.json`, `.csv`, `.xml`, `.po`, `.strings`, `.lang`, `.rpy`, `.ks` and `.bytes`.
+- Loose resource collection and Ren'Py loose-resource fallback can now follow text-focused profiles instead of always collecting the same resource mix.
+- Reports now count extracted text files separately from `Other`, and the results gallery can list text files with a generic file preview.
+- Updated the release version to 2.4.3.
+
 ## 2.4.2 - 2026-06-26
 
 - Fixed startup auto-path detection for Pygame/PyInstaller games so launching Game Asset Tool from inside that game folder no longer selects a parent collection folder.

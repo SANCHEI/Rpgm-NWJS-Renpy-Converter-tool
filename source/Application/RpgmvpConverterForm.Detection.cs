@@ -378,8 +378,8 @@ namespace RpgmvpConverterWinForms
                 {
                     string ext = Path.GetExtension(path).ToLowerInvariant();
                     return ext == ".assets" || ext == ".bundle" || ext == ".ress"
-                        || ext == ".png" || ext == ".jpg" || ext == ".jpeg"
-                        || ext == ".mp4" || ext == ".webm" || ext == ".ogg" || ext == ".wav";
+                        || MediaTypeRegistry.IsMedia(ext)
+                        || MediaTypeRegistry.IsText(ext);
                 }).ToList();
                 archives = files.Count(delegate(string path)
                 {
@@ -436,7 +436,7 @@ namespace RpgmvpConverterWinForms
             else if (engine == GameEngine.JavaJar)
             {
                 List<string> javaArchives = FindJavaArchives(inputPath);
-                files = GetJavaLooseFiles(rootPath, Path.Combine(rootPath, "extracted", "java"))
+                files = GetJavaLooseFiles(rootPath, Path.Combine(rootPath, "extracted", "java"), "images-svg")
                     .Concat(javaArchives)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList();
@@ -727,26 +727,31 @@ namespace RpgmvpConverterWinForms
             catch { return false; }
         }
 
-        private static List<string> GetJavaLooseFiles(string rootPath, string outputDir)
-        {
-            return GetJavaLooseFiles(rootPath, outputDir, "images-svg");
-        }
-
         private static List<string> GetJavaLooseFiles(string rootPath, string outputDir, string mode)
         {
             string resources = Path.Combine(rootPath, "res");
             if (!IsJavaLooseResourceGame(rootPath)) return new List<string>();
             List<string> files = GetLooseFiles(resources, outputDir);
-            return string.Equals(mode, "all", StringComparison.OrdinalIgnoreCase)
-                ? files
-                : files.Where(IsJavaImageFile).ToList();
+            if (string.Equals(mode, "all", StringComparison.OrdinalIgnoreCase)) return files;
+            if (string.Equals(mode, "text", StringComparison.OrdinalIgnoreCase)) return files.Where(IsJavaTextFile).ToList();
+            if (string.Equals(mode, "images-text", StringComparison.OrdinalIgnoreCase)) return files.Where(IsJavaImageOrTextFile).ToList();
+            return files.Where(IsJavaImageFile).ToList();
         }
-
         private static bool IsJavaImageFile(string path)
         {
             return MediaTypeRegistry.IsImageLike(Path.GetExtension(path));
         }
 
+        private static bool IsJavaTextFile(string path)
+        {
+            return MediaTypeRegistry.IsText(Path.GetExtension(path));
+        }
+
+        private static bool IsJavaImageOrTextFile(string path)
+        {
+            string extension = Path.GetExtension(path);
+            return MediaTypeRegistry.IsImageLike(extension) || MediaTypeRegistry.IsText(extension);
+        }
         private static List<string> FindFlashFiles(string rootPath)
         {
             return FlashSwfExtractor.FindFiles(rootPath);

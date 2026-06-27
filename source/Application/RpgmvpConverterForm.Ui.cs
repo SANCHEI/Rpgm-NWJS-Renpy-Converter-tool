@@ -23,7 +23,7 @@ namespace RpgmvpConverterWinForms
             Font titleFont = new Font("Segoe UI Semibold", 14f, FontStyle.Regular);
             Font logFont = new Font("Consolas", 9.5f, FontStyle.Regular);
 
-            Text = "Game Asset Tool v2.4.2";
+            Text = "Game Asset Tool v2.4.3";
             StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
@@ -445,6 +445,8 @@ namespace RpgmvpConverterWinForms
                 AddModeItem(extractModeMenu, ExtractionProfileDisplayName(3), selectedExtractionProfileIndex == 3, delegate { SelectExtractionProfile(3); });
                 AddModeItem(extractModeMenu, ExtractionProfileDisplayName(4), selectedExtractionProfileIndex == 4, delegate { SelectExtractionProfile(4); });
                 AddModeItem(extractModeMenu, ExtractionProfileDisplayName(5), selectedExtractionProfileIndex == 5, delegate { SelectExtractionProfile(5); });
+                AddModeItem(extractModeMenu, ExtractionProfileDisplayName(6), selectedExtractionProfileIndex == 6, delegate { SelectExtractionProfile(6); });
+                AddModeItem(extractModeMenu, ExtractionProfileDisplayName(7), selectedExtractionProfileIndex == 7, delegate { SelectExtractionProfile(7); });
             }
 
             if (looseModeMenu != null)
@@ -480,7 +482,7 @@ namespace RpgmvpConverterWinForms
         }
         private void SelectExtractionProfile(int index)
         {
-            selectedExtractionProfileIndex = Math.Max(0, Math.Min(5, index));
+            selectedExtractionProfileIndex = Math.Max(0, Math.Min(7, index));
             BuildModeMenus();
             UpdateModeButtonTexts();
             OnProfileChanged();
@@ -516,9 +518,11 @@ namespace RpgmvpConverterWinForms
             {
                 case 1: return T("Images only", "Только изображения");
                 case 2: return T("Images + Video", "Изображения + видео");
-                case 3: return T("Everything", "Все файлы");
-                case 4: return T("Diagnostics only", "Только диагностика");
-                case 5: return T("Recovery mode", "Восстановление");
+                case 3: return T("Text only", "Только текст");
+                case 4: return T("Images + Text", "Изображения + текст");
+                case 5: return T("Everything", "Все файлы");
+                case 6: return T("Diagnostics only", "Только диагностика");
+                case 7: return T("Recovery mode", "Восстановление");
                 default: return T("Auto: Images + Video", "Авто: изображения + видео");
             }
         }
@@ -529,9 +533,11 @@ namespace RpgmvpConverterWinForms
             {
                 case 1: return T("Images", "Изобр.");
                 case 2: return T("Media", "Медиа");
-                case 3: return T("Everything", "Все");
-                case 4: return T("Only", "Только");
-                case 5: return T("Recovery", "Восст.");
+                case 3: return T("Text", "Текст");
+                case 4: return T("Images+Text", "Изобр.+текст");
+                case 5: return T("Everything", "Все");
+                case 6: return T("Only", "Только");
+                case 7: return T("Recovery", "Восст.");
                 default: return T("Auto media", "Авто медиа");
             }
         }
@@ -1150,8 +1156,8 @@ namespace RpgmvpConverterWinForms
                     break;
                 case GameEngine.Unity:
                     extractionHintLabel.Text = T(
-                        "Unity extraction follows the selected Extract profile.",
-                        "Unity извлекается по выбранному профилю Extract.");
+                        "Unity extraction follows the selected Extract profile, including Text only for TextAsset/localization files.",
+                        "Unity извлекается по выбранному профилю Extract, включая «Только текст» для TextAsset/локализаций.");
                     break;
                 case GameEngine.Renpy:
                     extractionHintLabel.Text = FindRenpyArchives(pathBox.Text.Trim()).Count > 0
@@ -1347,7 +1353,7 @@ namespace RpgmvpConverterWinForms
             SetActionTooltip(engineOverrideBox, T("Override auto-detection when the game is detected as the wrong engine. Auto is recommended for normal use.", "Выбрать движок вручную, если автоопределение ошиблось. Обычно лучше оставить Auto."));
             SetActionTooltip(skipGalleryIndexCheckBox, T("Skip preparing the gallery index after extraction. Useful for very large outputs or low-memory runs; the gallery can still scan later when opened.", "Не подготавливать индекс галереи после извлечения. Полезно для больших результатов; галерея всё равно сможет просканировать папку при открытии."));
             SetActionTooltip(languageBox, T("Switch interface language.", "Переключить язык интерфейса."));
-            SetActionTooltip(extractModeButton, T("Choose the extraction profile shown on the Extract button.", "Выбрать профиль извлечения, который отображается на кнопке запуска."));
+            SetActionTooltip(extractModeButton, T("Choose the extraction profile shown on the Extract button, including text-only modes for translation files.", "Выбрать профиль извлечения на кнопке запуска, включая текстовые режимы для файлов перевода."));
             SetActionTooltip(looseModeButton, T("Choose what Collect Loose Media should copy: images/videos, images only, or all already unpacked files.", "Выбрать, что копирует «Открытые медиа»: изображения/видео, только изображения или все уже распакованные файлы."));
             SetActionTooltip(javaExtractModeBox, T(
                 "Images only is fastest. SVG previews are cached after the first conversion. All resources keeps non-image JAR and res files.",

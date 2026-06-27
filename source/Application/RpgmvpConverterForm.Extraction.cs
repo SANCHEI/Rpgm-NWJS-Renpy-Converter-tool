@@ -290,9 +290,11 @@ namespace RpgmvpConverterWinForms
                 result = await Task.Run(delegate
                 {
                     DateTime start = DateTime.UtcNow;
+                    string mode = LooseModeValue();
                     List<string> files = AssetCollectors.GetLooseResourceFiles(gameFolder, outputDir);
+                    files = FilterLooseCollectionFiles(files, mode);
                     CollectorResult copied = AssetCollectors.CopyFiles(gameFolder, files, outputDir, "");
-                    return new OperationResult("Ren'Py loose resources", outputDir, copied.Extracted, copied.Bytes, 0, copied.Renamed, copied.Skipped, DateTime.UtcNow - start);
+                    return new OperationResult("Ren'Py loose resources (" + mode + ")", outputDir, copied.Extracted, copied.Bytes, 0, copied.Renamed, copied.Skipped, DateTime.UtcNow - start);
                 });
             }
             catch (Exception ex)
@@ -832,14 +834,17 @@ namespace RpgmvpConverterWinForms
                 return files.ToList();
 
             bool imagesOnly = string.Equals(mode, "images", StringComparison.OrdinalIgnoreCase);
+            bool textOnly = string.Equals(mode, "text", StringComparison.OrdinalIgnoreCase);
+            bool imagesText = string.Equals(mode, "images-text", StringComparison.OrdinalIgnoreCase);
             return files.Where(delegate(string path)
             {
                 string extension = Path.GetExtension(path);
+                if (textOnly) return MediaTypeRegistry.IsText(extension);
+                if (imagesText) return MediaTypeRegistry.IsImageLike(extension) || MediaTypeRegistry.IsText(extension);
                 if (MediaTypeRegistry.IsImageLike(extension)) return true;
                 return !imagesOnly && MediaTypeRegistry.IsVideo(extension);
             }).ToList();
         }
-
         private async Task StartSignatureRecoveryAsync()
         {
             await StartLocalExtractionAsync("Signature recovery", "signature-recovery", delegate(string inputPath, string outputDir)
@@ -969,6 +974,8 @@ namespace RpgmvpConverterWinForms
             Directory.CreateDirectory(outputDir);
             List<string> archives = FindJavaArchives(inputPath);
             bool allResources = string.Equals(mode, "all", StringComparison.OrdinalIgnoreCase);
+            bool textOnly = string.Equals(mode, "text", StringComparison.OrdinalIgnoreCase);
+            bool imagesText = string.Equals(mode, "images-text", StringComparison.OrdinalIgnoreCase);
             bool renderPreviews = string.Equals(mode, "images-svg", StringComparison.OrdinalIgnoreCase);
             List<string> looseFiles = GetJavaLooseFiles(rootPath, outputDir, mode);
             List<string> extractedPaths = new List<string>();
@@ -993,7 +1000,7 @@ namespace RpgmvpConverterWinForms
                         archive,
                         outputDir,
                         Path.Combine("archives", Path.GetFileNameWithoutExtension(archive)),
-                        allResources ? null : (Func<string, bool>)IsJavaImageFile,
+                        allResources ? null : (textOnly ? (Func<string, bool>)IsJavaTextFile : (imagesText ? (Func<string, bool>)IsJavaImageOrTextFile : (Func<string, bool>)IsJavaImageFile)),
                         extractedPaths,
                         true);
                     extracted += stats.Extracted;

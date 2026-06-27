@@ -9,6 +9,7 @@ namespace RpgmvpConverterWinForms
         Other,
         Image,
         Vector,
+        Text,
         Audio,
         Video
     }
@@ -27,6 +28,13 @@ namespace RpgmvpConverterWinForms
             ".svg"
         };
 
+        private static readonly HashSet<string> TextExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".txt", ".json", ".xml", ".csv", ".tsv", ".ini", ".cfg", ".conf", ".yaml", ".yml",
+            ".po", ".pot", ".mo", ".tmx", ".strings", ".lang", ".loc", ".rpy", ".rpym", ".ks",
+            ".js", ".css", ".html", ".htm", ".bytes"
+        };
+
         private static readonly HashSet<string> AudioExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             ".mp3", ".ogg", ".wav", ".flac", ".m4a", ".aac", ".mid", ".midi", ".opus", ".wma"
@@ -39,10 +47,9 @@ namespace RpgmvpConverterWinForms
 
         private static readonly HashSet<string> LooseResourceExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            ".html", ".htm", ".css", ".js", ".json", ".xml", ".txt", ".csv", ".ini",
-            ".po", ".tmx", ".rb", ".ruby",
+            ".rb", ".ruby",
             ".ttf", ".otf", ".woff", ".woff2",
-            ".qsp", ".qproj", ".rpy", ".rpyc", ".rpym", ".rpymc", ".ks",
+            ".qsp", ".qproj", ".rpyc", ".rpymc",
             ".rts", ".dts", ".srk", ".srpgs", ".pgmproject", ".pgmexport", ".sspj"
         };
 
@@ -71,6 +78,11 @@ namespace RpgmvpConverterWinForms
             return IsImage(extension) || IsVector(extension);
         }
 
+        public static bool IsText(string extension)
+        {
+            return TextExtensions.Contains(Normalize(extension));
+        }
+
         public static bool IsAudio(string extension)
         {
             return AudioExtensions.Contains(Normalize(extension));
@@ -89,13 +101,13 @@ namespace RpgmvpConverterWinForms
         public static bool IsLooseResource(string extension)
         {
             string normalized = Normalize(extension);
-            return IsMedia(normalized) || LooseResourceExtensions.Contains(normalized);
+            return IsMedia(normalized) || IsText(normalized) || LooseResourceExtensions.Contains(normalized);
         }
 
         public static bool IsKnownDryRunExtension(string extension)
         {
             string normalized = Normalize(extension);
-            return IsMedia(normalized) || KnownDryRunExtensions.Contains(normalized);
+            return IsMedia(normalized) || IsText(normalized) || KnownDryRunExtensions.Contains(normalized);
         }
 
         public static bool IsClassicBitmap(string extension)
@@ -115,6 +127,7 @@ namespace RpgmvpConverterWinForms
             string extension = Normalize(pathOrExtension);
             if (IsImage(extension)) return MediaAssetKind.Image;
             if (IsVector(extension)) return MediaAssetKind.Vector;
+            if (IsText(extension)) return MediaAssetKind.Text;
             if (IsVideo(extension)) return MediaAssetKind.Video;
             if (IsAudio(extension)) return MediaAssetKind.Audio;
             return MediaAssetKind.Other;

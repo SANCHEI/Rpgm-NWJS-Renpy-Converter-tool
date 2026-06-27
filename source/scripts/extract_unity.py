@@ -28,11 +28,17 @@ SAVE_BACKLOG = max(SAVE_WORKERS * 4, 4)
 IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tga", ".tiff")
 VIDEO_EXTENSIONS = (".mp4", ".webm", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".3gp")
 AUDIO_EXTENSIONS = (".ogg", ".wav", ".mp3", ".flac")
-DIRECT_EXTENSIONS = IMAGE_EXTENSIONS + VIDEO_EXTENSIONS + AUDIO_EXTENSIONS
+TEXT_EXTENSIONS = (
+    ".txt", ".json", ".xml", ".csv", ".tsv", ".ini", ".cfg", ".conf", ".yaml", ".yml",
+    ".po", ".pot", ".mo", ".tmx", ".strings", ".lang", ".loc", ".rpy", ".rpym", ".ks",
+    ".js", ".css", ".html", ".htm", ".bytes"
+)
+DIRECT_EXTENSIONS = IMAGE_EXTENSIONS + VIDEO_EXTENSIONS + AUDIO_EXTENSIONS + TEXT_EXTENSIONS
 TEXTURE_TYPES = ("Texture2D", "Sprite", "Cubemap", "Texture3D", "Texture2DArray")
-MODE_TEXTURES = EXTRACT_MODE in ("textures", "media", "all")
+MODE_TEXTURES = EXTRACT_MODE in ("textures", "media", "textures-text", "all")
 MODE_VIDEOS = EXTRACT_MODE in ("videos", "media", "all")
 MODE_AUDIOS = EXTRACT_MODE in ("audios", "all")
+MODE_TEXT = EXTRACT_MODE in ("text", "textures-text", "all")
 MODE_MESHES = EXTRACT_MODE in ("meshes", "all")
 
 reserved_paths = set()
@@ -147,6 +153,50 @@ def export_mesh(path, mesh):
     return os.path.getsize(path), int(renamed)
 
 
+def text_asset_bytes(data):
+    for attr in ("script", "m_Script"):
+        value = safe_getattr(data, attr)
+        if value is None:
+            continue
+        if isinstance(value, bytes):
+            return value
+        if isinstance(value, str):
+            return value.encode("utf-8")
+        try:
+            return bytes(value)
+        except Exception:
+            continue
+    return None
+
+
+def is_likely_text_bytes(data):
+    if not data:
+        return True
+    sample = data[:8192]
+    if sample.startswith((b"\xef\xbb\xbf", b"\xff\xfe", b"\xfe\xff")):
+        return True
+    if b"\x00" in sample:
+        return False
+    try:
+        sample.decode("utf-8")
+        return True
+    except Exception:
+        pass
+    printable = 0
+    for item in sample:
+        value = item if isinstance(item, int) else ord(item)
+        if value in (9, 10, 13) or 32 <= value <= 126 or value >= 128:
+            printable += 1
+    return printable >= max(1, int(len(sample) * 0.90))
+
+
+def text_asset_extension(name, data):
+    original_ext = os.path.splitext(str(name or ""))[1].lower()
+    if original_ext in TEXT_EXTENSIONS and original_ext != ".bytes":
+        return original_ext
+    return ".txt" if is_likely_text_bytes(data) else ".bytes"
+
+
 def extract_archive(file_path):
     extracted = 0
     total_size = 0
@@ -185,6 +235,7 @@ def extract_archive(file_path):
                 (MODE_TEXTURES and obj_type in TEXTURE_TYPES)
                 or (MODE_VIDEOS and obj_type == "VideoClip")
                 or (MODE_AUDIOS and obj_type == "AudioClip")
+                or (MODE_TEXT and obj_type == "TextAsset")
                 or (MODE_MESHES and obj_type == "Mesh")
             )
             if not supported:
@@ -249,6 +300,21 @@ def extract_archive(file_path):
                     else:
                         skipped += 1
 
+                elif MODE_TEXT and obj_type == "TextAsset":
+                    name = getattr(data, "name", None) or getattr(data, "m_Name", None)
+                    text_data = text_asset_bytes(data)
+                    if text_data is not None:
+                        ext = text_asset_extension(name, text_data)
+                        size, collision = save_bytes(
+                            os.path.join(output_dir, safe_component(name, "text_{0}".format(index)) + ext),
+                            text_data,
+                        )
+                        extracted += 1
+                        total_size += size
+                        renamed += collision
+                    else:
+                        skipped += 1
+
                 elif MODE_MESHES and obj_type == "Mesh":
                     name = getattr(data, "m_Name", None)
                     size, collision = export_mesh(
@@ -288,6 +354,7 @@ def direct_file_supported(filename):
         (MODE_TEXTURES and lower.endswith(IMAGE_EXTENSIONS))
         or (MODE_VIDEOS and lower.endswith(VIDEO_EXTENSIONS))
         or (MODE_AUDIOS and lower.endswith(AUDIO_EXTENSIONS))
+        or (MODE_TEXT and lower.endswith(TEXT_EXTENSIONS))
     )
 
 

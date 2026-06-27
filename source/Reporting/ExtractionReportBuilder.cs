@@ -429,6 +429,7 @@ namespace RpgmvpConverterWinForms
             if (files == null || files.Count == 0) return "";
             int images = 0;
             int svg = 0;
+            int text = 0;
             int audio = 0;
             int video = 0;
             int other = 0;
@@ -438,6 +439,7 @@ namespace RpgmvpConverterWinForms
                 string extension = info.Extension.ToLowerInvariant();
                 if (extension == ".svg") svg++;
                 else if (MediaTypeRegistry.IsImage(extension)) images++;
+                else if (MediaTypeRegistry.IsText(extension)) text++;
                 else if (MediaTypeRegistry.IsAudio(extension)) audio++;
                 else if (MediaTypeRegistry.IsVideo(extension)) video++;
                 else other++;
@@ -445,11 +447,11 @@ namespace RpgmvpConverterWinForms
 
             return "Images: " + images
                 + " | SVG: " + svg
+                + " | Text: " + text
                 + " | Audio: " + audio
                 + " | Video: " + video
                 + " | Other: " + other;
         }
-
         private static string BuildUnknownExtensionSummary(List<FileInfo> files)
         {
             if (files == null || files.Count == 0) return "";
