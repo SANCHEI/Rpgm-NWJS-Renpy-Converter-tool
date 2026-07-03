@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.4.8 - 2026-07-03
+- Added Unity AudioClip sample extraction from Addressables bundles, including UnityPy-provided WAV samples.
+- Added AnimationClip JSON export in the Everything profile so Unity animation data is no longer silently skipped.
+- Improved coverage for Addressables bundles that contain audio, meshes and animation data rather than textures/videos.
 ## 2.4.7 - 2026-07-03
 - Added Unity Addressables discovery for extensionless UnityFS/UnityWeb/UnityRaw archives inside StreamingAssets/aa and bundle folders.
 - Updated Unity dry-run and bundle prompts so Addressables archives are counted before extraction.

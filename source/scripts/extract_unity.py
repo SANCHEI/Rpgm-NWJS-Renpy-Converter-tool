@@ -2,6 +2,7 @@
 from __future__ import print_function
 
 import io
+import json
 import os
 import shutil
 import sys
@@ -52,6 +53,7 @@ MODE_VIDEOS = EXTRACT_MODE in ("videos", "media", "all")
 MODE_AUDIOS = EXTRACT_MODE in ("audios", "all")
 MODE_TEXT = EXTRACT_MODE in ("text", "textures-text", "all")
 MODE_MESHES = EXTRACT_MODE in ("meshes", "all")
+MODE_ANIMATIONS = EXTRACT_MODE in ("animations", "all")
 
 reserved_paths = set()
 path_lock = threading.Lock()
@@ -249,6 +251,7 @@ def extract_archive(file_path):
                 or (MODE_AUDIOS and obj_type == "AudioClip")
                 or (MODE_TEXT and obj_type == "TextAsset")
                 or (MODE_MESHES and obj_type == "Mesh")
+                or (MODE_ANIMATIONS and obj_type == "AnimationClip")
             )
             if not supported:
                 skipped += 1
@@ -297,20 +300,38 @@ def extract_archive(file_path):
 
                 elif MODE_AUDIOS and obj_type == "AudioClip":
                     name = getattr(data, "name", None) or getattr(data, "m_Name", None)
-                    audio_data = read_streamed_resource(file_path, getattr(data, "m_Resource", None))
-                    if not audio_data:
-                        audio_data = safe_getattr(data, "audio_data") or safe_getattr(data, "m_AudioData")
-                    if audio_data:
-                        pending_saves.append(
-                            save_pool.submit(
-                                save_bytes,
-                                os.path.join(output_dir, safe_component(name, "audio_{0}".format(index)) + ".wav"),
-                                audio_data,
+                    samples = safe_getattr(data, "samples")
+                    saved_sample = False
+                    if isinstance(samples, dict) and samples:
+                        for sample_name, sample_data in samples.items():
+                            if not sample_data:
+                                continue
+                            sample_ext = os.path.splitext(str(sample_name))[1] or ".wav"
+                            sample_base = os.path.splitext(str(sample_name))[0] or safe_component(name, "audio_{0}".format(index))
+                            pending_saves.append(
+                                save_pool.submit(
+                                    save_bytes,
+                                    os.path.join(output_dir, safe_component(sample_base, "audio_{0}".format(index)) + sample_ext),
+                                    sample_data,
+                                )
                             )
-                        )
-                        drain_saves()
-                    else:
-                        skipped += 1
+                            saved_sample = True
+                            drain_saves()
+                    if not saved_sample:
+                        audio_data = read_streamed_resource(file_path, getattr(data, "m_Resource", None))
+                        if not audio_data:
+                            audio_data = safe_getattr(data, "audio_data") or safe_getattr(data, "m_AudioData")
+                        if audio_data:
+                            pending_saves.append(
+                                save_pool.submit(
+                                    save_bytes,
+                                    os.path.join(output_dir, safe_component(name, "audio_{0}".format(index)) + ".wav"),
+                                    audio_data,
+                                )
+                            )
+                            drain_saves()
+                        else:
+                            skipped += 1
 
                 elif MODE_TEXT and obj_type == "TextAsset":
                     name = getattr(data, "name", None) or getattr(data, "m_Name", None)
@@ -337,6 +358,20 @@ def extract_archive(file_path):
                     total_size += size
                     renamed += collision
 
+                elif MODE_ANIMATIONS and obj_type == "AnimationClip":
+                    name = getattr(data, "m_Name", None)
+                    try:
+                        tree = obj.read_typetree()
+                    except Exception:
+                        tree = {"name": name or "", "type": obj_type}
+                    payload = json.dumps(tree, ensure_ascii=False, indent=2, default=str).encode("utf-8")
+                    size, collision = save_bytes(
+                        os.path.join(output_dir, safe_component(name, "animation_{0}".format(index)) + ".json"),
+                        payload,
+                    )
+                    extracted += 1
+                    total_size += size
+                    renamed += collision
             except Exception as error:
                 errors += 1
                 log_warn("WARN:{0}:{1}".format(os.path.basename(file_path), error))
