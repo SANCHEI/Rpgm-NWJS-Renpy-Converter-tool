@@ -32,7 +32,22 @@ namespace RpgmvpConverterWinForms
                 return;
             }
 
-            GameEngine engine = EffectiveEngine(DetectEngine(inputPath));
+            GameEngine detectedEngine = DetectEngine(inputPath);
+            GameEngine engine = EffectiveEngine(detectedEngine);
+            if (SelectedForcedEngine() == GameEngine.Unknown)
+            {
+                string warning = BuildCollectionFolderWarning(inputPath, rootPath);
+                if (!string.IsNullOrWhiteSpace(warning))
+                {
+                    DialogResult choice = MessageBox.Show(
+                        warning + Environment.NewLine + Environment.NewLine +
+                        T("Continue extraction from this folder?", "Продолжить извлечение из этой папки?"),
+                        T("Possible collection folder", "Возможно выбрана папка-коллекция"),
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Warning);
+                    if (choice != DialogResult.Yes) return;
+                }
+            }
             if (engine == GameEngine.Unity)
             {
                 await StartUnityExtractionAsync();
@@ -173,7 +188,7 @@ namespace RpgmvpConverterWinForms
             }
 
             string outputDir = Path.Combine(rootPath, "extracted", "rpgm");
-            if (!TryResetExtractionRootForOutput(outputDir)) return;
+            if (!await TryResetExtractionRootForOutputAsync(outputDir)) return;
 
             List<string> files = GetFilesToConvert(rootPath);
             if (files.Count == 0)
@@ -223,7 +238,7 @@ namespace RpgmvpConverterWinForms
 
             string outputDir = Path.Combine(rootPath, "extracted", "renpy");
             lastOutputDir = outputDir;
-            if (!TryResetExtractionRootForOutput(outputDir)) return;
+            if (!await TryResetExtractionRootForOutputAsync(outputDir)) return;
             SetExternalRunningState(true, "Ren'Py");
             progressBar.Maximum = Math.Max(archives.Count, 1);
             progressBar.Value = 0;
@@ -281,7 +296,7 @@ namespace RpgmvpConverterWinForms
         {
             string outputDir = Path.Combine(rootPath, "extracted", "renpy", "loose");
             lastOutputDir = outputDir;
-            if (!TryResetExtractionRootForOutput(outputDir)) return;
+            if (!await TryResetExtractionRootForOutputAsync(outputDir)) return;
             SetExternalRunningState(true, "Ren'Py loose files");
             WriteLog("Ren'Py resources are already open. Collecting loose files.");
             OperationResult result;
@@ -318,13 +333,13 @@ namespace RpgmvpConverterWinForms
 
             if (!EnsurePortableRuntimeAvailable()) return;
 
-            List<string> bundles = FindUnityBundleFiles(rootPath);
+            List<string> bundles = UnityArchiveDiscovery.FindBundleLikeArchives(rootPath);
             bool includeBundles = true;
             if (bundles.Count > 0)
             {
                 long bytes = bundles.Sum(delegate(string file) { return SafeFileLength(file); });
                 includeBundles = MessageBox.Show(
-                    "Found " + bundles.Count + " bundle file(s), " + FormatBytes(bytes) + ".\n\nExtract bundles too?",
+                    "Found " + bundles.Count + " Unity bundle-like file(s), " + FormatBytes(bytes) + ".\n\nExtract .bundle/.unity3d and Addressables UnityFS archives too?",
                     "Unity Bundles",
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Question) == DialogResult.Yes;
@@ -334,7 +349,7 @@ namespace RpgmvpConverterWinForms
             UnityExtractionConfig config = UnityExtractionConfig.Create(mode, includeBundles);
             string outputDir = Path.Combine(rootPath, "extracted", "unity");
             lastOutputDir = outputDir;
-            if (!TryResetExtractionRootForOutput(outputDir)) return;
+            if (!await TryResetExtractionRootForOutputAsync(outputDir)) return;
             SetExternalRunningState(true, "Unity");
             WriteLog("Unity extraction started: " + mode + (includeBundles ? " with bundles" : " without bundles"));
 
@@ -391,7 +406,7 @@ namespace RpgmvpConverterWinForms
                         {
                             progressBar.Value = 0;
                             statusLabel.Text = T("Unity: scanning files", "Unity: поиск файлов");
-                            statsLabel.Text = T("Looking for .assets, .bundle and direct media files...", "Поиск .assets, .bundle и открытых медиа...");
+                            statsLabel.Text = T("Looking for .assets, .bundle, .unity3d and direct media files...", "Поиск .assets, .bundle, .unity3d и открытых медиа...");
                         }
                         else if (unityPhase == "direct")
                         {
@@ -464,7 +479,7 @@ namespace RpgmvpConverterWinForms
 
             string outputDir = Path.Combine(rootPath, "extracted", "nwjs");
             lastOutputDir = outputDir;
-            if (!TryResetExtractionRootForOutput(outputDir)) return;
+            if (!await TryResetExtractionRootForOutputAsync(outputDir)) return;
             localCopyCancellationRequested = false;
             SetExternalRunningState(true, "NWJS");
             WriteLog("NWJS file extraction started");
@@ -719,7 +734,7 @@ namespace RpgmvpConverterWinForms
 
             string outputDir = Path.Combine(rootPath, "extracted", "pygame");
             lastOutputDir = outputDir;
-            if (!TryResetExtractionRootForOutput(outputDir)) return;
+            if (!await TryResetExtractionRootForOutputAsync(outputDir)) return;
             SetExternalRunningState(true, "Pygame / PyInstaller");
             WriteLog("Pygame / PyInstaller extraction started");
 
@@ -825,7 +840,7 @@ namespace RpgmvpConverterWinForms
 
         private string LooseModeValue()
         {
-            return CurrentExtractionProfile().LooseMode(selectedLooseModeIndex);
+            return CurrentProfileModes().LooseMode;
         }
 
         private static List<string> FilterLooseCollectionFiles(IEnumerable<string> files, string mode)
@@ -918,7 +933,7 @@ namespace RpgmvpConverterWinForms
 
             string outputDir = Path.Combine(rootPath, "extracted", outputFolder);
             lastOutputDir = outputDir;
-            if (!TryResetExtractionRootForOutput(outputDir)) return;
+            if (!await TryResetExtractionRootForOutputAsync(outputDir)) return;
             localCopyCancellationRequested = false;
             if (localExtractionContext != null)
             {
@@ -1378,7 +1393,7 @@ namespace RpgmvpConverterWinForms
             string outputName = File.Exists(inputPath) ? SanitizeRelativePath(Path.GetFileNameWithoutExtension(inputPath)) : "godot";
             string outputDir = Path.Combine(outputRoot, "extracted", outputName);
             lastOutputDir = outputDir;
-            if (!TryResetExtractionRootForOutput(outputDir)) return;
+            if (!await TryResetExtractionRootForOutputAsync(outputDir)) return;
             SetExternalRunningState(true, "Godot");
             WriteLog("Godot extraction started: " + extractionInput);
 
@@ -1413,7 +1428,7 @@ namespace RpgmvpConverterWinForms
 
             string outputDir = Path.Combine(rootPath, "extracted", outputFolder);
             lastOutputDir = outputDir;
-            if (!TryResetExtractionRootForOutput(outputDir)) return;
+            if (!await TryResetExtractionRootForOutputAsync(outputDir)) return;
             SetExternalRunningState(true, engineName);
             WriteLog(engineName + " extraction started");
 
@@ -1667,7 +1682,7 @@ namespace RpgmvpConverterWinForms
             CompleteExternalOperation(result);
         }
 
-        private bool TryResetExtractionRootForOutput(string outputDir)
+        private async Task<bool> TryResetExtractionRootForOutputAsync(string outputDir)
         {
             try
             {
@@ -1689,9 +1704,15 @@ namespace RpgmvpConverterWinForms
                     }
 
                     WriteLog("Clearing previous output folder: " + fullOutput);
+                    string previousStatus = statusLabel.Text;
+                    string previousStats = statsLabel.Text;
+                    Cursor previousCursor = Cursor;
+                    statusLabel.Text = T("Preparing output", "Подготовка результата");
+                    statsLabel.Text = T("Deleting previous extracted folder in background...", "Удаление предыдущей папки extracted в фоне...");
+                    Cursor = Cursors.WaitCursor;
                     try
                     {
-                        DeleteDirectoryRobust(fullOutput);
+                        await Task.Run(delegate { DeleteDirectoryRobust(fullOutput); });
                     }
                     catch (Exception deleteError)
                     {
@@ -1708,6 +1729,12 @@ namespace RpgmvpConverterWinForms
                             MessageBoxIcon.Warning);
                         WriteLog("Could not clear output folder: " + deleteError.Message);
                         return false;
+                    }
+                    finally
+                    {
+                        Cursor = previousCursor;
+                        statusLabel.Text = previousStatus;
+                        statsLabel.Text = previousStats;
                     }
                 }
 

@@ -41,6 +41,7 @@
     <Compile Include="source\Application\Controllers\DryScanCache.cs" />
     <Compile Include="source\Application\Controllers\ExtractionProfile.cs" />
     <Compile Include="source\Application\Controllers\ExtractionProgressEvent.cs" />
+    <Compile Include="source\Application\Controllers\ExtractionProfileResolver.cs" />
     <Compile Include="source\Application\Controllers\PreflightBuilder.cs" />
     <Compile Include="source\Application\RpgmvpConverterForm.cs" />
     <Compile Include="source\Application\RpgmvpConverterForm.Ui.cs" />
@@ -61,6 +62,7 @@
     <Compile Include="source\Extractors\SignatureAssetExtractor.cs" />
     <Compile Include="source\Extractors\SpakDatExtractor.cs" />
     <Compile Include="source\Extractors\UnityExtractionConfig.cs" />
+    <Compile Include="source\Extractors\UnityArchiveDiscovery.cs" />
     <Compile Include="source\Features\UnlockerResources.cs" />
     <Compile Include="source\Features\UnityDecensorInstaller.cs" />
     <Compile Include="source\Reporting\ApkDiagnosticBuilder.cs" />

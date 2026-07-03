@@ -1,13 +1,12 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
 
-[assembly: AssemblyTitle("Game Asset Tool")]
-[assembly: AssemblyDescription("Convert, extract and unlock game assets")]
+[assembly: AssemblyTitle("UnityTextLab")]
+[assembly: AssemblyDescription("Experimental Unity text extraction lab for Game Asset Tool")]
 [assembly: AssemblyCompany("SANCHEI")]
 [assembly: AssemblyProduct("Game Asset Tool")]
-[assembly: AssemblyCopyright("Copyright (c) SANCHEI")]
 [assembly: ComVisible(false)]
-[assembly: Guid("d5bab407-6636-4197-8266-264a35833917")]
+[assembly: Guid("7b7b8d1e-2f5f-4c85-a28e-3f7c2b7fd244")]
 [assembly: AssemblyVersion("2.4.7.0")]
 [assembly: AssemblyFileVersion("2.4.7.0")]
 [assembly: AssemblyInformationalVersion("2.4.7")]

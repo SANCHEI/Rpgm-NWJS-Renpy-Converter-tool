@@ -12,7 +12,7 @@ namespace RpgmvpConverterWinForms
     {
         private static readonly HashSet<string> KnownReportExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            ".aac", ".ani", ".asar", ".assets", ".avif", ".avi", ".bin", ".bmp", ".bundle", ".cfg", ".content",
+            ".aac", ".ani", ".asar", ".assets", ".avif", ".avi", ".bin", ".bmp", ".bundle", ".unity3d", ".cfg", ".content",
             ".crn", ".css", ".csv", ".dat", ".data", ".dds", ".dll", ".dts", ".exe", ".flac", ".flv", ".gif", ".html", ".htm",
             ".ico", ".ini", ".jar", ".jpeg", ".jpg", ".js", ".json", ".ks", ".ktx", ".ktx2", ".m4a", ".mid",
             ".midi", ".mkv", ".mov", ".mp3", ".mp4", ".nlch", ".ogg", ".otf", ".pak", ".pck",
@@ -163,8 +163,8 @@ namespace RpgmvpConverterWinForms
                     if (IsPositiveText(unitySkipped))
                     {
                         hasSkipped = true;
-                        AddDistinct(types, "Unity non-exported objects: " + unitySkipped);
-                        AddDistinct(reasons, "Unity: internal archive entries were filtered by the selected profile, unsupported by the exporter, or came from protected/zero-output archives.");
+                        AddDistinct(types, "Unity filtered/unsupported entries: " + unitySkipped);
+                        AddDistinct(reasons, "Unity: these are internal engine objects or archive entries filtered by the selected profile, unsupported by the exporter, or from protected/zero-output archives.");
                     }
                     AddUnityZeroOutputTypes(text, types);
                 }
@@ -172,6 +172,11 @@ namespace RpgmvpConverterWinForms
                 {
                     AddZipSkippedTypes(text, types, reasons);
                     if (!string.IsNullOrWhiteSpace(text)) hasSkipped = true;
+                }
+                else if (name.Equals("GameAssetTool-godot-diagnostics.txt", StringComparison.OrdinalIgnoreCase))
+                {
+                    AddGodotSkippedTypes(text, types, reasons);
+                    if (text.IndexOf("Texture cache files without embedded preview:", StringComparison.OrdinalIgnoreCase) >= 0) hasSkipped = true;
                 }
                 else if (text.IndexOf("skipped", StringComparison.OrdinalIgnoreCase) >= 0
                     || text.IndexOf("protected", StringComparison.OrdinalIgnoreCase) >= 0
@@ -273,6 +278,21 @@ namespace RpgmvpConverterWinForms
                 AddDistinct(types, "Unity zero-output " + item.Key + ": " + item.Value);
         }
 
+        private static void AddGodotSkippedTypes(string text, List<string> types, List<string> reasons)
+        {
+            string textureContainers = ReadDiagnosticValue(text, "Texture cache files without embedded preview");
+            string previews = ReadDiagnosticValue(text, "Recovered imported previews");
+            string audio = ReadDiagnosticValue(text, "Imported audio stream/cache files");
+            if (IsPositiveText(textureContainers))
+            {
+                AddDistinct(types, "Godot texture cache containers without embedded preview: " + textureContainers);
+                AddDistinct(reasons, "Godot: some .ctex/.stex cache files do not contain an embedded PNG/JPG/WebP preview; full decoding can require Godot import metadata or engine-specific texture decoding.");
+            }
+            if (IsPositiveText(previews))
+                AddDistinct(types, "Godot recovered imported image previews: " + previews);
+            if (IsPositiveText(audio))
+                AddDistinct(types, "Godot imported audio stream/cache files: " + audio);
+        }
         private static void AddZipSkippedTypes(string text, List<string> types, List<string> reasons)
         {
             Dictionary<string, int> extensionCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -345,7 +365,8 @@ namespace RpgmvpConverterWinForms
                 "GameAssetTool-unity-diagnostics.txt",
                 "GameAssetTool-apk-diagnostics.txt",
                 "GameAssetTool-zip-diagnostics.tsv",
-                "GameAssetTool-wolf-diagnostics.txt"
+                "GameAssetTool-wolf-diagnostics.txt",
+                "GameAssetTool-godot-diagnostics.txt"
             };
             foreach (string name in preferred)
             {

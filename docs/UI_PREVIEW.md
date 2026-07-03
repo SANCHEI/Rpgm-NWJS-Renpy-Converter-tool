@@ -1,4 +1,4 @@
-# Game Asset Tool v2.4.3 UI Preview
+# Game Asset Tool v2.4.6 UI Preview
 
 ## Main Window
 

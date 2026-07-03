@@ -23,7 +23,7 @@ namespace RpgmvpConverterWinForms
             Font titleFont = new Font("Segoe UI Semibold", 14f, FontStyle.Regular);
             Font logFont = new Font("Consolas", 9.5f, FontStyle.Regular);
 
-            Text = "Game Asset Tool v2.4.3";
+            Text = "Game Asset Tool v2.4.7";
             StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
@@ -246,7 +246,7 @@ namespace RpgmvpConverterWinForms
             extractModeButton.Click += delegate { ShowModeMenu(extractModeMenu, extractModeButton); };
             extractionPanel.Controls.Add(extractModeButton);
 
-            collectLooseButton = CreateButton("Loose: Images + Video", new Point(704, 39), new Size(150, 26), Color.FromArgb(45, 50, 60), textColor, uiBold);
+            collectLooseButton = CreateButton("Collect: Media", new Point(704, 39), new Size(150, 26), Color.FromArgb(45, 50, 60), textColor, uiBold);
             collectLooseButton.Click += async delegate { await StartLooseResourceCollectionAsync(); };
             extractionPanel.Controls.Add(collectLooseButton);
             looseModeButton = CreateButton("▼", new Point(858, 39), new Size(26, 26), Color.FromArgb(45, 50, 60), textColor, uiBold);
@@ -508,7 +508,7 @@ namespace RpgmvpConverterWinForms
 
             if (collectLooseButton != null)
             {
-                collectLooseButton.Text = T("Loose: ", "Открытые: ") + LooseModeShortName(selectedLooseModeIndex);
+                collectLooseButton.Text = T("Collect: ", "Собрать: ") + LooseModeShortName(selectedLooseModeIndex);
             }
         }
 
@@ -536,7 +536,7 @@ namespace RpgmvpConverterWinForms
                 case 3: return T("Text", "Текст");
                 case 4: return T("Images+Text", "Изобр.+текст");
                 case 5: return T("Everything", "Все");
-                case 6: return T("Only", "Только");
+                case 6: return T("Diagnostics", "Диагн.");
                 case 7: return T("Recovery", "Восст.");
                 default: return T("Auto media", "Авто медиа");
             }
@@ -557,7 +557,7 @@ namespace RpgmvpConverterWinForms
             switch (index)
             {
                 case 1: return T("Images", "Изобр.");
-                case 2: return T("All", "Все");
+                case 2: return T("All files", "Все файлы");
                 default: return T("Media", "Медиа");
             }
         }
@@ -888,6 +888,7 @@ namespace RpgmvpConverterWinForms
                 GameEngine engine = EffectiveEngine(summary.Engine);
                 detectedEngineLabel.Text = BuildEngineLabel(engine);
                 detectedEngineLabel.ForeColor = EngineColor(engine);
+                UpdateEngineOverrideVisual(summary.DetectionConfidence, summary.CollectionWarning);
                 string scanSummary = string.Format(
                     T(
                         "{0} archive(s), {1} candidate file(s), input size {2} (not estimated output)",
@@ -899,6 +900,10 @@ namespace RpgmvpConverterWinForms
                     scanSummary += T(" | Unknown: ", " | Неизвестные: ") + summary.UnknownExtensions;
                 if (!string.IsNullOrWhiteSpace(summary.TopExtensions))
                     scanSummary += T(" | Top: ", " | Топ: ") + summary.TopExtensions;
+                if (!string.IsNullOrWhiteSpace(summary.DetectionConfidence))
+                    scanSummary += " | Confidence: " + summary.DetectionConfidence;
+                if (!string.IsNullOrWhiteSpace(summary.CollectionWarning))
+                    scanSummary += T(" | Warning: collection folder?", " | Внимание: папка-коллекция?");
                 if (!string.IsNullOrWhiteSpace(summary.RouteHints))
                     scanSummary += T(" | Route: ", " | Маршрут: ") + ShortUiText(summary.RouteHints, 140);
                 scanSummaryLabel.Text = scanSummary;
@@ -917,6 +922,10 @@ namespace RpgmvpConverterWinForms
                         WriteLog("Top extensions: " + summary.TopExtensions);
                     if (!string.IsNullOrWhiteSpace(summary.LargestFiles))
                         WriteLog("Largest inputs: " + summary.LargestFiles);
+                    if (!string.IsNullOrWhiteSpace(summary.DetectionConfidence))
+                        WriteLog("Detection confidence: " + summary.DetectionConfidence + (string.IsNullOrWhiteSpace(summary.DetectionNotes) ? "" : " | " + summary.DetectionNotes));
+                    if (!string.IsNullOrWhiteSpace(summary.CollectionWarning))
+                        WriteLog("Warning: " + summary.CollectionWarning);
                     if (!string.IsNullOrWhiteSpace(summary.RouteHints))
                         WriteLog("Route hints: " + summary.RouteHints);
                 }
@@ -955,7 +964,8 @@ namespace RpgmvpConverterWinForms
                 FileCount = summary.FileCount,
                 ArchiveCount = summary.ArchiveCount,
                 TotalSize = FormatBytes(summary.TotalBytes),
-                ExistingOutputPolicy = "ask",
+                ExistingOutputPolicy = Directory.Exists(GetDefaultOutputFolder(rootPath, engine)) ? "ask-delete" : "new",
+                OutputExists = Directory.Exists(GetDefaultOutputFolder(rootPath, engine)),
                 DiagnosticsOnly = IsDiagnosticsOnlyProfile(),
                 UsesPortableRuntime = engine == GameEngine.Unity
                     || engine == GameEngine.Renpy
@@ -969,7 +979,15 @@ namespace RpgmvpConverterWinForms
                 IsUnreal = engine == GameEngine.Unreal,
                 IsUnity = engine == GameEngine.Unity,
                 UnityMode = UnityModeValue(),
-                UnknownExtensions = summary.UnknownExtensions
+                UnknownExtensions = summary.UnknownExtensions,
+                TopExtensions = summary.TopExtensions,
+                LargestInputs = summary.LargestFiles,
+                RouteHints = summary.RouteHints,
+                UnityArchivePreview = engine == GameEngine.Unity ? UnityArchiveDiscovery.BuildArchiveSummary(rootPath, 4) : "",
+                ExcludedFolders = engine == GameEngine.Unity ? UnityArchiveDiscovery.BuildSkippedFolderSummary(rootPath) : "",
+                DetectionConfidence = summary.DetectionConfidence,
+                DetectionNotes = summary.DetectionNotes,
+                CollectionWarning = summary.CollectionWarning
             });
         }
 
@@ -1343,6 +1361,25 @@ namespace RpgmvpConverterWinForms
             return (int)Math.Round(logicalHeight * (dpi > 0 ? dpi / 96f : 1f));
         }
 
+        private void UpdateEngineOverrideVisual(string confidence, string warning)
+        {
+            if (engineOverrideBox == null) return;
+            if (SelectedForcedEngine() != GameEngine.Unknown)
+            {
+                engineOverrideBox.BackColor = Color.FromArgb(32, 74, 55);
+                engineOverrideBox.ForeColor = Color.White;
+            }
+            else if (string.Equals(confidence, "low", StringComparison.OrdinalIgnoreCase) || !string.IsNullOrWhiteSpace(warning))
+            {
+                engineOverrideBox.BackColor = Color.FromArgb(82, 61, 28);
+                engineOverrideBox.ForeColor = Color.White;
+            }
+            else
+            {
+                engineOverrideBox.BackColor = inputBack;
+                engineOverrideBox.ForeColor = textColor;
+            }
+        }
         private void ConfigureActionTooltips()
         {
             SetActionTooltip(pathBox, T("Drop a game folder or a supported file here, or choose a folder with Browse.", "Перетащите папку или поддерживаемый файл игры либо выберите папку через «Обзор»."));
@@ -1350,11 +1387,11 @@ namespace RpgmvpConverterWinForms
             SetActionTooltip(dryRunButton, T("Inspect supported archives, show preflight details and estimate the input size without extracting files.", "Проверить архивы, показать preflight-сводку и входной размер без извлечения файлов."));
             SetActionTooltip(toggleLogButton, T("Show or hide technical extraction messages.", "Показать или скрыть технические сообщения."));
             SetActionTooltip(healthCheckButton, T("Check embedded runtime, tools, temp folders and common Windows blocking symptoms.", "Проверить встроенный runtime, инструменты, temp-папки и возможные блокировки Windows."));
-            SetActionTooltip(engineOverrideBox, T("Override auto-detection when the game is detected as the wrong engine. Auto is recommended for normal use.", "Выбрать движок вручную, если автоопределение ошиблось. Обычно лучше оставить Auto."));
+            SetActionTooltip(engineOverrideBox, T("Override auto-detection when the game is detected as the wrong engine. If Dry Run shows low confidence or a collection-folder warning, choose the exact engine here.", "Выбрать движок вручную, если автоопределение ошиблось. Если проверка показывает low confidence или папку-коллекцию, выберите точный движок здесь."));
             SetActionTooltip(skipGalleryIndexCheckBox, T("Skip preparing the gallery index after extraction. Useful for very large outputs or low-memory runs; the gallery can still scan later when opened.", "Не подготавливать индекс галереи после извлечения. Полезно для больших результатов; галерея всё равно сможет просканировать папку при открытии."));
             SetActionTooltip(languageBox, T("Switch interface language.", "Переключить язык интерфейса."));
-            SetActionTooltip(extractModeButton, T("Choose the extraction profile shown on the Extract button, including text-only modes for translation files.", "Выбрать профиль извлечения на кнопке запуска, включая текстовые режимы для файлов перевода."));
-            SetActionTooltip(looseModeButton, T("Choose what Collect Loose Media should copy: images/videos, images only, or all already unpacked files.", "Выбрать, что копирует «Открытые медиа»: изображения/видео, только изображения или все уже распакованные файлы."));
+            SetActionTooltip(extractModeButton, T("Choose the Extract profile. Auto media is recommended; Text only is for exported text assets, not binary Unity patching.", "Выбрать профиль Extract. Обычно лучше Auto media; «Только текст» нужен для экспортируемых текстовых ассетов, не для бинарной правки Unity."));
+            SetActionTooltip(looseModeButton, T("Choose what Collect copies from already unpacked files: media, images only, or every loose file. It does not unpack archives.", "Выбрать, что «Собрать» копирует из уже открытых файлов: медиа, только изображения или все файлы. Архивы этот режим не распаковывает."));
             SetActionTooltip(javaExtractModeBox, T(
                 "Images only is fastest. SVG previews are cached after the first conversion. All resources keeps non-image JAR and res files.",
                 "«Только изображения» работает быстрее всего. PNG-превью SVG кэшируются после первой конвертации. «Все ресурсы» сохраняет и файлы других типов из JAR и res."));
@@ -1370,7 +1407,7 @@ namespace RpgmvpConverterWinForms
                 : CanExtractAssets(selectedEngine)
                     ? T("Extract supported assets for the detected engine using the selected profile.", "Извлечь поддерживаемые ресурсы определённого движка с выбранным профилем.")
                     : T("Recover embedded media by signatures and write diagnostics for this unknown format.", "Извлечь встроенные медиа по сигнатурам и записать диагностику неизвестного формата."));
-            SetActionTooltip(collectLooseButton, T("Copy already unpacked files using the selected loose mode. This does not unpack archives like data.win, .rpa, .assets or .pak.", "Скопировать уже распакованные файлы с выбранным loose-режимом. Это не распаковывает архивы вроде data.win, .rpa, .assets или .pak."));
+            SetActionTooltip(collectLooseButton, T("Collect already unpacked files using the selected Collect profile. Use this for NWJS/www folders or games that store media loose on disk.", "Собрать уже открытые файлы по выбранному профилю Collect. Полезно для NWJS/www и игр, где медиа лежит обычными файлами на диске."));
             SetActionTooltip(unityDecensorButton, T("Detect Mono BE5, Mono BE6 or IL2CPP, install the latest compatible BepInEx online and install the built-in SW_Decensor.", "Определить Mono BE5, Mono BE6 или IL2CPP, установить актуальный совместимый BepInEx из сети и встроенный SW_Decensor."));
             SetActionTooltip(unlockerButton, selectedEngine == GameEngine.Renpy
                 ? T("Install the Ren'Py gallery unlocker. Try Soft mode first.", "Установить анлокер галереи Ren'Py. Сначала попробуйте мягкий режим.")

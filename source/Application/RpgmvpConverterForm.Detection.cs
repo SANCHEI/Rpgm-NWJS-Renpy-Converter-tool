@@ -377,14 +377,14 @@ namespace RpgmvpConverterWinForms
                 files = EnumerateFilesSafe(rootPath, "*.*").Where(delegate(string path)
                 {
                     string ext = Path.GetExtension(path).ToLowerInvariant();
-                    return ext == ".assets" || ext == ".bundle" || ext == ".ress"
+                    return UnityArchiveDiscovery.IsArchiveLikeExtension(ext) || UnityArchiveDiscovery.IsBundleLikeArchive(path) || ext == ".ress"
                         || MediaTypeRegistry.IsMedia(ext)
                         || MediaTypeRegistry.IsText(ext);
                 }).ToList();
                 archives = files.Count(delegate(string path)
                 {
                     string ext = Path.GetExtension(path).ToLowerInvariant();
-                    return ext == ".assets" || ext == ".bundle";
+                    return UnityArchiveDiscovery.IsArchiveLikeExtension(ext) || UnityArchiveDiscovery.IsBundleLikeArchive(path);
                 });
             }
             else if (engine == GameEngine.Renpy)
@@ -534,9 +534,62 @@ namespace RpgmvpConverterWinForms
             cancellationToken.ThrowIfCancellationRequested();
             string topExtensions = ExtractionReportBuilder.BuildFileExtensionSummary(fileList, 6);
             string largestFiles = ExtractionReportBuilder.BuildLargestFileSummary(rootPath, fileList, 3);
-            return new ScanSummary(engine, fileList.Count, archives, bytes, unknownExtensions, topExtensions, largestFiles, routeHints);
+            string collectionWarning = BuildCollectionFolderWarning(inputPath, rootPath);
+            string confidence = BuildDetectionConfidence(inputPath, detectedEngine, forcedEngine, engine, fileList.Count, archives, collectionWarning);
+            string detectionNotes = BuildDetectionNotes(inputPath, detectedEngine, forcedEngine, engine);
+            return new ScanSummary(engine, fileList.Count, archives, bytes, unknownExtensions, topExtensions, largestFiles, routeHints, confidence, detectionNotes, collectionWarning);
         }
 
+        private static string BuildDetectionConfidence(string inputPath, GameEngine detectedEngine, GameEngine forcedEngine, GameEngine engine, int fileCount, int archiveCount, string collectionWarning)
+        {
+            if (forcedEngine != GameEngine.Unknown) return "forced";
+            if (DetectDirectFileEngine(inputPath) != GameEngine.Unknown) return "high";
+            if (engine == GameEngine.Unknown) return "low";
+            if (!string.IsNullOrWhiteSpace(collectionWarning)) return "low";
+            if (archiveCount > 0) return "high";
+            if (fileCount > 0) return "medium";
+            return detectedEngine == GameEngine.Unknown ? "low" : "medium";
+        }
+
+        private static string BuildDetectionNotes(string inputPath, GameEngine detectedEngine, GameEngine forcedEngine, GameEngine engine)
+        {
+            if (forcedEngine != GameEngine.Unknown)
+                return "user selected " + EngineName(engine) + " in Force engine";
+            if (DetectDirectFileEngine(inputPath) != GameEngine.Unknown)
+                return "direct supported file input";
+            switch (engine)
+            {
+                case GameEngine.Unity: return "Unity markers: *_Data folder, .assets/.bundle/.unity3d or Unity player files";
+                case GameEngine.Godot: return "Godot markers: .pck, project.godot or embedded PCK executable";
+                case GameEngine.Renpy: return "Ren'Py markers: game folder and .rpa/.rpy resources";
+                case GameEngine.RpgMaker: return "RPG Maker markers: www/data and encrypted RPGM assets";
+                case GameEngine.Nwjs: return "NWJS markers: package.json/www or browser game files";
+                case GameEngine.AndroidApk: return "APK file input";
+                case GameEngine.Unknown: return "no strong engine markers found";
+                default: return "engine-specific markers found";
+            }
+        }
+
+        private static string BuildCollectionFolderWarning(string inputPath, string rootPath)
+        {
+            if (string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath) || File.Exists(inputPath)) return "";
+            try
+            {
+                int detectedFolders = 0;
+                foreach (string folder in Directory.EnumerateDirectories(rootPath, "*", SearchOption.TopDirectoryOnly).Take(12))
+                {
+                    string name = Path.GetFileName(folder);
+                    if (name.Equals("extracted", StringComparison.OrdinalIgnoreCase) || name.Equals("tools", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (DetectEngineFast(folder) != GameEngine.Unknown) detectedFolders++;
+                    if (detectedFolders >= 2) return "selected folder looks like a collection with multiple games; choose the exact game folder or force the engine before extraction.";
+                }
+                int executableCount = Directory.EnumerateFiles(rootPath, "*.exe", SearchOption.TopDirectoryOnly).Take(5).Count();
+                if (executableCount >= 4)
+                    return "selected folder contains several executables; verify this is the exact game root before extraction.";
+            }
+            catch { }
+            return "";
+        }
         private static string BuildUnknownExtensionSummary(IEnumerable<string> files)
         {
             List<string> unknown = files
@@ -596,7 +649,7 @@ namespace RpgmvpConverterWinForms
 
         private static List<string> FindUnityBundleFiles(string rootPath)
         {
-            return EnumerateFilesSafe(rootPath, "*.bundle").Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            return UnityArchiveDiscovery.FindBundleLikeArchives(rootPath);
         }
 
         private static List<string> FindNwjsPackageArchives(string rootPath)
@@ -900,7 +953,7 @@ namespace RpgmvpConverterWinForms
 
         private sealed class ScanSummary
         {
-            public ScanSummary(GameEngine engine, int fileCount, int archiveCount, long totalBytes, string unknownExtensions, string topExtensions, string largestFiles, string routeHints)
+            public ScanSummary(GameEngine engine, int fileCount, int archiveCount, long totalBytes, string unknownExtensions, string topExtensions, string largestFiles, string routeHints, string detectionConfidence, string detectionNotes, string collectionWarning)
             {
                 Engine = engine;
                 FileCount = fileCount;
@@ -910,6 +963,9 @@ namespace RpgmvpConverterWinForms
                 TopExtensions = topExtensions ?? "";
                 LargestFiles = largestFiles ?? "";
                 RouteHints = routeHints ?? "";
+                DetectionConfidence = detectionConfidence ?? "";
+                DetectionNotes = detectionNotes ?? "";
+                CollectionWarning = collectionWarning ?? "";
             }
 
             public GameEngine Engine { get; private set; }
@@ -920,6 +976,9 @@ namespace RpgmvpConverterWinForms
             public string TopExtensions { get; private set; }
             public string LargestFiles { get; private set; }
             public string RouteHints { get; private set; }
+            public string DetectionConfidence { get; private set; }
+            public string DetectionNotes { get; private set; }
+            public string CollectionWarning { get; private set; }
         }
 
     }

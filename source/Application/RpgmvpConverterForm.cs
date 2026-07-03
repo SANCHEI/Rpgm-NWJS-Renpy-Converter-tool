@@ -511,12 +511,12 @@ namespace RpgmvpConverterWinForms
 
         private string UnityModeValue()
         {
-            return CurrentExtractionProfile().UnityMode(0);
+            return CurrentProfileModes().UnityMode;
         }
 
         private string JavaModeValue()
         {
-            return CurrentExtractionProfile().JavaMode(javaExtractModeBox == null ? 1 : javaExtractModeBox.SelectedIndex);
+            return CurrentProfileModes().JavaMode;
         }
 
         private bool IsImagesOnlyProfile()
@@ -551,7 +551,13 @@ namespace RpgmvpConverterWinForms
 
         private ExtractionProfile CurrentExtractionProfile()
         {
-            return ExtractionProfile.FromIndex(selectedExtractionProfileIndex, ExtractionProfileDisplayName(selectedExtractionProfileIndex));
+            return CurrentProfileModes().Profile;
+        }
+
+        private ExtractionProfileModes CurrentProfileModes()
+        {
+            int javaModeIndex = javaExtractModeBox == null ? 1 : javaExtractModeBox.SelectedIndex;
+            return ExtractionProfileResolver.Resolve(selectedExtractionProfileIndex, ExtractionProfileDisplayName(selectedExtractionProfileIndex), javaModeIndex, selectedLooseModeIndex);
         }
 
         private static string EngineName(GameEngine engine)

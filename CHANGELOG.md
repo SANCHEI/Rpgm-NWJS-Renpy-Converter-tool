@@ -1,5 +1,40 @@
 # Changelog
 
+## 2.4.7 - 2026-07-03
+- Added Unity Addressables discovery for extensionless UnityFS/UnityWeb/UnityRaw archives inside StreamingAssets/aa and bundle folders.
+- Updated Unity dry-run and bundle prompts so Addressables archives are counted before extraction.
+- Added Unity diagnostics count for Addressables/signature-detected bundles.
+## 2.4.6 - 2026-07-03
+
+- Added best-effort Godot `.ctex/.stex` raw texture preview decoding for simple RGBA/RGB/L8/LA8 payloads, with clearer diagnostics for unsupported compressed texture cache files.
+- Added cancellable large-preview loading in the results gallery to reduce UI stalls when switching selections or upscale-heavy previews.
+- Added Dry Run detection confidence, detection notes and collection-folder warnings to help avoid scanning parent folders that contain multiple games.
+- Highlighted Force engine when auto-detection confidence is low or a collection-folder warning is present.
+- Added a safety prompt before extraction when the selected folder looks like a game collection rather than one exact game root.
+- Hidden APK follow-up actions unless the suggested extracted target path exists.
+- Added a small no-argument UnityTextLab folder-picker GUI while keeping CLI usage unchanged.
+- Added a separate experimental tools ZIP for UnityTextLab releases.
+- Updated the release version to 2.4.6.
+## 2.4.5 - 2026-07-03
+
+- Expanded HTML skipped diagnostics with clearer Unity filtered/unsupported-entry wording and Godot imported-cache details.
+- Improved Unity Dry Run archive previews with UnityFS/UnityWeb/UnityRaw/unknown signature counts for `.assets`, `.bundle` and `.unity3d` inputs.
+- Moved gallery filtering and sorting to a cancellable background task to reduce UI freezes on large result folders.
+- Added Godot diagnostics for imported `.ctex/.stex` texture cache files, recovered previews and audio stream/cache containers.
+- Kept Unity text extraction isolated in the separate UnityTextLab build for translation experiments instead of mixing it into the main extractor.
+- Updated the release version to 2.4.5.
+## 2.4.4 - 2026-07-02
+
+- Added Unity `.unity3d` archive support for games that store main assets in `data.unity3d`; Dry Run, extraction and diagnostics now count these archives.
+- Excluded service folders such as `BepInEx`, `dotnet`, `mono`, `logs` and `extracted` from Unity archive/direct-media scans to avoid collecting mod/runtime files as game assets.
+- Added `ExtractionProfileResolver` to centralize Extract/Collect profile mode mapping for Unity, Java and loose-resource collection.
+- Added `UnityArchiveDiscovery` to centralize Unity archive discovery, bundle-like prompts and preflight archive summaries.
+- Improved Dry Run / Scan preflight with top extensions, largest inputs, route hints, Unity archive previews and excluded folder summaries.
+- Improved Health diagnostics with a user-facing summary before technical details, including unsigned build and Mark-of-the-Web guidance.
+- Improved gallery filtering with Huge images and Wide CG presets, Top folder grouping, search tooltip and the sprite sheet button in the toolbar.
+- Renamed the loose-resource action to Collect in the UI and clarified its tooltips.
+- Updated the release version to 2.4.4.
+
 ## 2.4.3 - 2026-06-27
 
 - Added **Text only** and **Images + Text** extraction profiles for translation workflows.

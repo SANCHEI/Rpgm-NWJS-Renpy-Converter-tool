@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
 namespace RpgmvpConverterWinForms
@@ -34,9 +35,12 @@ namespace RpgmvpConverterWinForms
 
             CheckFolder(lines, "LocalAppData", Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
             CheckFolder(lines, "Temp", Path.GetTempPath());
+            CheckExecutableTrust(lines);
             CheckEmbeddedResources(lines);
             CheckPortableRuntime(lines);
             CheckEmbeddedTools(lines);
+
+            InsertUserSummary(lines);
 
             lines.Add("");
             lines.Add("Result: " + (HasFailure(lines) ? "warnings/errors found" : "OK"));
@@ -57,13 +61,31 @@ namespace RpgmvpConverterWinForms
             CheckFolder(lines, "Temp", Path.GetTempPath());
             if (!string.IsNullOrWhiteSpace(outputDir))
                 CheckFolder(lines, "Output", outputDir);
+            CheckExecutableTrust(lines);
             CheckEmbeddedResources(lines);
             lines.Add("INFO Python runtime: " + (PortableRuntime.IsReady ? "already extracted for this session" : "not extracted at report time"));
             lines.Add("INFO Tool process preflight: skipped in HTML report to avoid slowing extraction; use the Health button for the full live check.");
 
+            InsertUserSummary(lines);
+
             lines.Add("");
             lines.Add("Result: " + (HasFailure(lines) ? "warnings/errors found" : "OK"));
             return string.Join(Environment.NewLine, lines.ToArray());
+        }
+
+        private static void InsertUserSummary(List<string> lines)
+        {
+            bool hasWarning = HasFailure(lines);
+            List<string> summary = new List<string>();
+            summary.Add("");
+            summary.Add("User summary");
+            summary.Add(hasWarning
+                ? "WARN Some checks need attention. Read the WARN/ERR technical lines below before reporting an extraction bug."
+                : "OK  No obvious local environment problems were detected.");
+            summary.Add("INFO If Windows blocks the app, the most likely causes are an unsigned fresh build, Mark-of-the-Web, or Defender reputation for embedded tools.");
+            summary.Add("INFO Technical details follow below for copying into bug reports.");
+            int insertAt = Math.Min(4, lines.Count);
+            lines.InsertRange(insertAt, summary);
         }
         private static void CheckFolder(List<string> lines, string label, string folder)
         {
@@ -83,6 +105,45 @@ namespace RpgmvpConverterWinForms
             }
         }
 
+
+        private static void CheckExecutableTrust(List<string> lines)
+        {
+            string exe = "";
+            try { exe = Assembly.GetExecutingAssembly().Location; }
+            catch { }
+
+            if (string.IsNullOrWhiteSpace(exe) || !File.Exists(exe))
+            {
+                lines.Add("WARN executable trust: application path is unavailable");
+                return;
+            }
+
+            lines.Add("INFO executable: " + exe);
+            try
+            {
+                X509Certificate cert = X509Certificate.CreateFromSignedFile(exe);
+                lines.Add("OK  signature: " + cert.Subject);
+            }
+            catch
+            {
+                lines.Add("WARN signature: executable is not Authenticode-signed; Windows SmartScreen may show an unknown publisher warning until reputation is built.");
+            }
+
+            try
+            {
+                string zonePath = exe + ":Zone.Identifier";
+                if (File.Exists(zonePath))
+                    lines.Add("WARN Mark-of-the-Web: Zone.Identifier is present; unblock the downloaded ZIP/EXE properties if Windows blocks startup.");
+                else
+                    lines.Add("OK  Mark-of-the-Web: no Zone.Identifier stream on the executable");
+            }
+            catch (Exception ex)
+            {
+                lines.Add("INFO Mark-of-the-Web: could not check Zone.Identifier (" + ex.Message + ")");
+            }
+
+            lines.Add("INFO Defender/SmartScreen: false positives are more likely for freshly built unsigned single-file tools with embedded runtimes.");
+        }
         private static void CheckEmbeddedResources(List<string> lines)
         {
             Assembly assembly = Assembly.GetExecutingAssembly();

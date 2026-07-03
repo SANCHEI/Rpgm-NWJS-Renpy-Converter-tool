@@ -55,10 +55,13 @@ namespace GameAssetTool.ApplicationUi
         private readonly bool russian;
 
         private CancellationTokenSource indexCts;
+        private CancellationTokenSource filterCts;
+        private CancellationTokenSource previewCts;
         private List<GalleryFile> allFiles = new List<GalleryFile>();
         private List<GalleryFile> visibleFiles = new List<GalleryFile>();
         private int thumbnailVersion;
         private int previewVersion;
+        private int filterVersion;
         private Image previewImage;
         private MemoryStream previewImageStream;
         private int thumbnailSize = DefaultThumbnailSize;
@@ -133,6 +136,8 @@ namespace GameAssetTool.ApplicationUi
                 "UI",
                 russian ? "Фоны/CG" : "Backgrounds/CG",
                 russian ? "Крупные" : "Large images",
+                russian ? "Очень крупные" : "Huge images",
+                russian ? "Широкие CG" : "Wide CG",
                 russian ? "Портрет" : "Portrait",
                 russian ? "Пейзаж" : "Landscape",
                 russian ? "Кадры анимации" : "Animation frames",
@@ -158,6 +163,7 @@ namespace GameAssetTool.ApplicationUi
             searchBox.ForeColor = Color.WhiteSmoke;
             searchBox.BorderStyle = BorderStyle.FixedSingle;
             searchBox.TextChanged += delegate { ScheduleFilter(); };
+            controlToolTip.SetToolTip(searchBox, russian ? "Поиск по имени и полному пути. Фильтрация запускается с небольшой задержкой, чтобы окно не зависало при вводе." : "Search by file name and full path. Filtering is delayed slightly to keep typing responsive.");
 
             Label sortLabel = CreateLabel(russian ? "Сортировка" : "Sort", 530, 145);
             sortCombo = new ComboBox();
@@ -186,7 +192,8 @@ namespace GameAssetTool.ApplicationUi
                 russian ? "Папка" : "Folder",
                 russian ? "Тип" : "Type",
                 russian ? "Вид" : "Kind",
-                russian ? "Размер" : "Size"
+                russian ? "Размер" : "Size",
+                russian ? "Первая папка" : "Top folder"
             });
             groupCombo.SelectedIndex = 0;
             groupCombo.Location = new Point(666, 168);
@@ -352,6 +359,7 @@ namespace GameAssetTool.ApplicationUi
             Controls.Add(thumbnailSizeCombo);
             controlToolTip.SetToolTip(upscaleCheckBox, russian ? "Увеличивать маленькие картинки в миниатюрах." : "Upscale small images in thumbnails.");
             Controls.Add(upscaleCheckBox);
+            Controls.Add(spriteSheetButton);
             Controls.Add(openButton);
             Controls.Add(showInFolderButton);
             Controls.Add(refreshButton);
@@ -527,7 +535,7 @@ namespace GameAssetTool.ApplicationUi
             ClearPreview(
                 russian ? "Просмотр" : "Preview",
                 russian ? "Выберите изображение, gif, webp или видео для предпросмотра." : "Select an image, gif, webp or video to preview it here.");
-            statusLabel.Text = "Indexing media files...";
+            statusLabel.Text = russian ? "Индексация медиафайлов..." : "Indexing media files...";
             indexing = true;
 
             indexCts = new CancellationTokenSource();
@@ -832,52 +840,86 @@ namespace GameAssetTool.ApplicationUi
             int filter = filterCombo.SelectedIndex;
             int sort = sortCombo.SelectedIndex;
             int group = groupCombo.SelectedIndex;
+            string root = ResolveFolder(pathBox.Text);
+            List<GalleryFile> source = allFiles.ToList();
 
-            IEnumerable<GalleryFile> files = allFiles;
-            if (filter == 1)
+            if (filterCts != null)
             {
-                files = files.Where(f => f.Kind == FileKind.Image);
+                filterCts.Cancel();
+                filterCts.Dispose();
             }
-            else if (filter == 2)
+            filterCts = new CancellationTokenSource();
+            CancellationToken token = filterCts.Token;
+            int version = Interlocked.Increment(ref filterVersion);
+
+            if (source.Count > 1500)
+                statusLabel.Text = russian ? "Фильтрация медиафайлов..." : "Filtering media files...";
+
+            Task.Factory.StartNew(delegate
             {
-                files = files.Where(f => IsSpriteLike(f));
-            }
-            else if (filter == 3)
+                return BuildFilteredFiles(source, query, filter, sort, group, root, token);
+            }, token).ContinueWith(delegate(Task<List<GalleryFile>> task)
             {
-                files = files.Where(f => IsUiLike(f));
-            }
-            else if (filter == 4)
-            {
-                files = files.Where(f => IsBackgroundLike(f));
-            }
-            else if (filter == 5)
-            {
-                files = files.Where(f => f.Kind == FileKind.Image && HasDimensions(f) && Math.Max(f.Width, f.Height) >= 720);
-            }
-            else if (filter == 6)
-            {
-                files = files.Where(f => f.Kind == FileKind.Image && HasDimensions(f) && f.Height > f.Width);
-            }
-            else if (filter == 7)
-            {
-                files = files.Where(f => f.Kind == FileKind.Image && HasDimensions(f) && f.Width > f.Height);
-            }
-            else if (filter == 8)
-            {
-                files = files.Where(f => IsAnimationFrameLike(f));
-            }
-            else if (filter == 9)
-            {
-                files = files.Where(f => f.Kind == FileKind.Vector);
-            }
-            else if (filter == 10)
-            {
-                files = files.Where(f => f.Kind == FileKind.Video);
-            }
-            else if (filter == 11)
-            {
-                files = files.Where(f => f.Kind == FileKind.Audio);
-            }
+                if (IsDisposed)
+                    return;
+
+                BeginInvokeSafe(new Action(delegate
+                {
+                    if (version != filterVersion || token.IsCancellationRequested)
+                        return;
+
+                    if (task.IsCanceled)
+                    {
+                        statusLabel.Text = BuildStatusText();
+                        return;
+                    }
+
+                    if (task.IsFaulted)
+                    {
+                        statusLabel.Text = "Filter failed: " + task.Exception.GetBaseException().Message;
+                        return;
+                    }
+
+                    visibleFiles = task.Result ?? new List<GalleryFile>();
+                    thumbnailVersion++;
+
+                    listView.BeginUpdate();
+                    try
+                    {
+                        listView.VirtualListSize = 0;
+                        listView.VirtualListSize = visibleFiles.Count;
+                    }
+                    finally
+                    {
+                        listView.EndUpdate();
+                    }
+
+                    QueueInitialThumbnails();
+                    UpdateSelectionButtons();
+                    UpdatePreviewFromSelection();
+                    statusLabel.Text = BuildStatusText();
+                }));
+            });
+        }
+
+        private static List<GalleryFile> BuildFilteredFiles(List<GalleryFile> source, string query, int filter, int sort, int group, string root, CancellationToken token)
+        {
+            IEnumerable<GalleryFile> files = source ?? new List<GalleryFile>();
+            token.ThrowIfCancellationRequested();
+
+            if (filter == 1) files = files.Where(f => f.Kind == FileKind.Image);
+            else if (filter == 2) files = files.Where(f => IsSpriteLike(f));
+            else if (filter == 3) files = files.Where(f => IsUiLike(f));
+            else if (filter == 4) files = files.Where(f => IsBackgroundLike(f));
+            else if (filter == 5) files = files.Where(f => f.Kind == FileKind.Image && HasDimensions(f) && Math.Max(f.Width, f.Height) >= 720);
+            else if (filter == 6) files = files.Where(f => f.Kind == FileKind.Image && HasDimensions(f) && Math.Max(f.Width, f.Height) >= 1920);
+            else if (filter == 7) files = files.Where(f => f.Kind == FileKind.Image && HasDimensions(f) && f.Width >= f.Height * 2);
+            else if (filter == 8) files = files.Where(f => f.Kind == FileKind.Image && HasDimensions(f) && f.Height > f.Width);
+            else if (filter == 9) files = files.Where(f => f.Kind == FileKind.Image && HasDimensions(f) && f.Width > f.Height);
+            else if (filter == 10) files = files.Where(f => IsAnimationFrameLike(f));
+            else if (filter == 11) files = files.Where(f => f.Kind == FileKind.Vector);
+            else if (filter == 12) files = files.Where(f => f.Kind == FileKind.Video);
+            else if (filter == 13) files = files.Where(f => f.Kind == FileKind.Audio);
 
             if (!string.IsNullOrEmpty(query))
             {
@@ -885,49 +927,22 @@ namespace GameAssetTool.ApplicationUi
                                          f.Path.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0);
             }
 
+            token.ThrowIfCancellationRequested();
+
             if (group != 0)
-            {
-                files = files.OrderBy(f => GetGroupKey(f, group), StringComparer.OrdinalIgnoreCase);
-            }
+                files = files.OrderBy(f => GetGroupKey(f, group, root), StringComparer.OrdinalIgnoreCase);
 
             if (sort == 1)
-            {
-                files = ThenByGroupAware(files, group, f => f.Extension)
-                             .ThenBy(f => f.Name, StringComparer.OrdinalIgnoreCase);
-            }
+                files = ThenByGroupAware(files, group, f => f.Extension).ThenBy(f => f.Name, StringComparer.OrdinalIgnoreCase);
             else if (sort == 2)
-            {
-                files = ThenByGroupAwareDescending(files, group, f => f.Size)
-                             .ThenBy(f => f.Name, StringComparer.OrdinalIgnoreCase);
-            }
+                files = ThenByGroupAwareDescending(files, group, f => f.Size).ThenBy(f => f.Name, StringComparer.OrdinalIgnoreCase);
             else if (sort == 3)
-            {
-                files = ThenByGroupAwareDescending(files, group, f => f.Modified)
-                             .ThenBy(f => f.Name, StringComparer.OrdinalIgnoreCase);
-            }
+                files = ThenByGroupAwareDescending(files, group, f => f.Modified).ThenBy(f => f.Name, StringComparer.OrdinalIgnoreCase);
             else
-            {
                 files = ThenByGroupAware(files, group, f => f.Name);
-            }
 
-            visibleFiles = files.ToList();
-            thumbnailVersion++;
-
-            listView.BeginUpdate();
-            try
-            {
-                listView.VirtualListSize = 0;
-                listView.VirtualListSize = visibleFiles.Count;
-            }
-            finally
-            {
-                listView.EndUpdate();
-            }
-
-            QueueInitialThumbnails();
-            UpdateSelectionButtons();
-            UpdatePreviewFromSelection();
-            statusLabel.Text = BuildStatusText();
+            token.ThrowIfCancellationRequested();
+            return files.ToList();
         }
 
         private string BuildStatusText()
@@ -940,7 +955,44 @@ namespace GameAssetTool.ApplicationUi
                 thumbnailSize,
                 suffix);
         }
+        private static string GetGroupKey(GalleryFile file, int group, string root)
+        {
+            if (group == 1)
+            {
+                string directory = Path.GetDirectoryName(file.Path) ?? "";
+                if (!string.IsNullOrEmpty(root) && directory.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                    directory = directory.Substring(root.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                return string.IsNullOrEmpty(directory) ? "(root)" : directory;
+            }
 
+            if (group == 2)
+                return string.IsNullOrEmpty(file.Extension) ? "(no extension)" : file.Extension;
+
+            if (group == 3)
+                return file.Kind.ToString();
+
+            if (group == 4)
+            {
+                if (file.Size >= 100L * 1024L * 1024L) return "100 MB+";
+                if (file.Size >= 10L * 1024L * 1024L) return "10-100 MB";
+                if (file.Size >= 1024L * 1024L) return "1-10 MB";
+                if (file.Size >= 100L * 1024L) return "100 KB-1 MB";
+                return "0-100 KB";
+            }
+
+            if (group == 5)
+            {
+                string directory = Path.GetDirectoryName(file.Path) ?? "";
+                if (!string.IsNullOrEmpty(root) && directory.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                    directory = directory.Substring(root.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                if (string.IsNullOrEmpty(directory)) return "(root)";
+                char[] separators = { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar };
+                string[] parts = directory.Split(separators, StringSplitOptions.RemoveEmptyEntries);
+                return parts.Length == 0 ? "(root)" : parts[0];
+            }
+
+            return "";
+        }
         private string GetGroupKey(GalleryFile file, int group)
         {
             if (group == 1)
@@ -988,6 +1040,18 @@ namespace GameAssetTool.ApplicationUi
                 }
 
                 return "0-100 KB";
+            }
+
+            if (group == 5)
+            {
+                string root = ResolveFolder(pathBox.Text);
+                string directory = Path.GetDirectoryName(file.Path) ?? "";
+                if (!string.IsNullOrEmpty(root) && directory.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                    directory = directory.Substring(root.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                if (string.IsNullOrEmpty(directory)) return "(root)";
+                char[] separators = { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar };
+                string[] parts = directory.Split(separators, StringSplitOptions.RemoveEmptyEntries);
+                return parts.Length == 0 ? "(root)" : parts[0];
             }
 
             return "";
@@ -1452,11 +1516,16 @@ namespace GameAssetTool.ApplicationUi
             ClearPreview(file.Name, "Loading preview...");
             int version = previewVersion;
             previewMetaLabel.Text = BuildPreviewMeta(file, null);
+            CancelPreviewTask();
+            previewCts = new CancellationTokenSource();
+            CancellationToken token = previewCts.Token;
+            int previewSize = Math.Max(320, Math.Min(900, Math.Max(previewBox.Width, previewBox.Height) * 2));
 
             Task.Factory.StartNew(delegate
             {
-                return CreateLargePreview(file, Math.Max(320, Math.Min(900, Math.Max(previewBox.Width, previewBox.Height) * 2)));
-            }).ContinueWith(delegate(Task<PreviewImage> task)
+                token.ThrowIfCancellationRequested();
+                return CreateLargePreview(file, previewSize, token);
+            }, token).ContinueWith(delegate(Task<PreviewImage> task)
             {
                 if (IsDisposed)
                 {
@@ -1466,7 +1535,7 @@ namespace GameAssetTool.ApplicationUi
 
                 BeginInvokeSafe(new Action(delegate
                 {
-                    if (version != previewVersion || task.IsFaulted || task.IsCanceled)
+                    if (version != previewVersion || token.IsCancellationRequested || task.IsFaulted || task.IsCanceled)
                     {
                         DisposePreviewResult(task);
                         return;
@@ -1525,9 +1594,20 @@ namespace GameAssetTool.ApplicationUi
         private void ClearPreview(string title, string meta)
         {
             ++previewVersion;
+            CancelPreviewTask();
             ClearPreviewImageOnly();
             previewTitleLabel.Text = title;
             previewMetaLabel.Text = meta;
+        }
+
+        private void CancelPreviewTask()
+        {
+            if (previewCts != null)
+            {
+                previewCts.Cancel();
+                previewCts.Dispose();
+                previewCts = null;
+            }
         }
 
         private void ClearPreviewImageOnly()
@@ -1566,17 +1646,19 @@ namespace GameAssetTool.ApplicationUi
             }
         }
 
-        private static PreviewImage CreateLargePreview(GalleryFile file, int size)
+        private static PreviewImage CreateLargePreview(GalleryFile file, int size, CancellationToken token)
         {
+            token.ThrowIfCancellationRequested();
             if (file.Kind == FileKind.Image && IsClassicBitmap(file.Extension))
             {
-                PreviewImage loaded = TryLoadImagePreview(file.Path);
+                PreviewImage loaded = TryLoadImagePreview(file.Path, token);
                 if (loaded != null)
                 {
                     return loaded;
                 }
             }
 
+            token.ThrowIfCancellationRequested();
             Bitmap shell = TryCreateShellThumbnail(file.Path, size);
             if (shell != null)
             {
@@ -1601,11 +1683,13 @@ namespace GameAssetTool.ApplicationUi
             return new PreviewImage(CreateTypeTile("FILE", Color.FromArgb(160, 170, 184), size), null);
         }
 
-        private static PreviewImage TryLoadImagePreview(string path)
+        private static PreviewImage TryLoadImagePreview(string path, CancellationToken token)
         {
             try
             {
+                token.ThrowIfCancellationRequested();
                 byte[] bytes = File.ReadAllBytes(path);
+                token.ThrowIfCancellationRequested();
                 MemoryStream stream = new MemoryStream(bytes);
                 Image image = Image.FromStream(stream, false, false);
                 return new PreviewImage(image, stream);
@@ -1744,8 +1828,20 @@ namespace GameAssetTool.ApplicationUi
 
         private void OnFormClosing(object sender, FormClosingEventArgs e)
         {
+            CancelPreviewTask();
+            CancelFiltering();
             CancelIndexing();
             ClearPreviewImageOnly();
+        }
+
+        private void CancelFiltering()
+        {
+            if (filterCts != null)
+            {
+                filterCts.Cancel();
+                filterCts.Dispose();
+                filterCts = null;
+            }
         }
 
         private void CancelIndexing()

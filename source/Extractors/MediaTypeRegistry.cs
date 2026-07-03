@@ -55,7 +55,7 @@ namespace RpgmvpConverterWinForms
 
         private static readonly HashSet<string> KnownDryRunExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            ".aac", ".ani", ".asar", ".assets", ".bin", ".bundle", ".cfg", ".content",
+            ".aac", ".ani", ".asar", ".assets", ".bin", ".bundle", ".unity3d", ".cfg", ".content",
             ".dat", ".data", ".dll", ".dts", ".exe", ".jar", ".ks", ".pak", ".pck",
             ".png_", ".qsp", ".rag", ".res", ".ress", ".resource", ".rgss2a", ".rgss3a",
             ".rgssad", ".rpa", ".rpgmvp", ".rpy", ".po", ".qproj", ".rpyc", ".rpym",
