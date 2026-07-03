@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 $root = [IO.Path]::GetFullPath($PSScriptRoot)
-$version = "2.4.8"
+$version = "2.4.9"
 $project = [IO.Path]::GetFullPath((Join-Path $root "source\tools\UnityTextLab\UnityTextLab.csproj"))
 $output = [IO.Path]::GetFullPath((Join-Path $root "source\tools\UnityTextLab\bin\Release\UnityTextLab.exe"))
 $releaseTools = [IO.Path]::GetFullPath((Join-Path $root "release\tools"))

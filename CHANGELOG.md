@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.4.9 - 2026-07-04
+- Added Unity bundle fallback for Addressables files where UnityFS starts after a small wrapper/header offset.
+- Recovered textures and meshes from wrapped UnityFS bundles that previously produced zero-output archive folders.
+- Stopped creating empty archive output folders before an archive actually exports files.
+- Added Unity diagnostics for recovered embedded UnityFS offsets.
 ## 2.4.8 - 2026-07-03
 - Added Unity AudioClip sample extraction from Addressables bundles, including UnityPy-provided WAV samples.
 - Added AnimationClip JSON export in the Everything profile so Unity animation data is no longer silently skipped.

@@ -38,6 +38,7 @@ DIRECT_EXTENSIONS = IMAGE_EXTENSIONS + VIDEO_EXTENSIONS + AUDIO_EXTENSIONS + TEX
 ARCHIVE_EXTENSIONS = (".assets", ".bundle", ".unity3d")
 OPTIONAL_BUNDLE_EXTENSIONS = (".bundle", ".unity3d")
 UNITY_BUNDLE_SIGNATURES = (b"UnityFS", b"UnityWeb", b"UnityRaw")
+UNITY_BUNDLE_SCAN_BYTES = 1024 * 1024
 ADDRESSABLE_HINTS = (
     "/streamingassets/aa/",
     "\\streamingassets\\aa\\",
@@ -211,6 +212,43 @@ def text_asset_extension(name, data):
     return ".txt" if is_likely_text_bytes(data) else ".bytes"
 
 
+def find_embedded_unity_bundle_offset(file_path):
+    try:
+        with open(file_path, "rb") as handle:
+            chunk = handle.read(UNITY_BUNDLE_SCAN_BYTES)
+        offsets = [chunk.find(signature) for signature in UNITY_BUNDLE_SIGNATURES]
+        offsets = [offset for offset in offsets if offset > 0]
+        return min(offsets) if offsets else 0
+    except Exception:
+        return 0
+
+
+def load_unity_environment(file_path):
+    env = UnityPy.load(file_path)
+    try:
+        object_count = len(env.objects)
+    except Exception:
+        object_count = 0
+    if object_count > 0:
+        return env, 0
+
+    offset = find_embedded_unity_bundle_offset(file_path)
+    if offset <= 0:
+        return env, 0
+
+    with open(file_path, "rb") as handle:
+        handle.seek(offset)
+        payload = handle.read()
+    fallback_env = UnityPy.load(io.BytesIO(payload))
+    try:
+        fallback_count = len(fallback_env.objects)
+    except Exception:
+        fallback_count = 0
+    if fallback_count > object_count:
+        return fallback_env, offset
+    return env, 0
+
+
 def extract_archive(file_path):
     extracted = 0
     total_size = 0
@@ -218,6 +256,7 @@ def extract_archive(file_path):
     renamed = 0
     skipped = 0
     object_count = 0
+    embedded_offset = 0
     pending_saves = []
     save_pool = ThreadPoolExecutor(max_workers=SAVE_WORKERS) if (MODE_TEXTURES or MODE_VIDEOS or MODE_AUDIOS) else None
 
@@ -235,13 +274,12 @@ def extract_archive(file_path):
                 log_warn("WARN:{0}:{1}".format(os.path.basename(file_path), error))
 
     try:
-        env = UnityPy.load(file_path)
+        env, embedded_offset = load_unity_environment(file_path)
         try:
             object_count = len(env.objects)
         except Exception:
             object_count = 0
         output_dir = archive_output_dir(file_path)
-        os.makedirs(output_dir, exist_ok=True)
 
         for index, obj in enumerate(env.objects):
             obj_type = obj.type.name
@@ -392,6 +430,7 @@ def extract_archive(file_path):
         "renamed": renamed,
         "skipped": skipped,
         "objects": object_count,
+        "embedded_offset": embedded_offset,
     }
 
 
@@ -525,6 +564,7 @@ def write_unity_diagnostics(archives, direct_files, archive_results):
         archive_input_size = sum(os.path.getsize(item) for item in archives if os.path.isfile(item))
         zero_output = [item for item in archive_results if item.get("extracted", 0) == 0]
         error_archives = [item for item in archive_results if item.get("errors", 0) > 0]
+        embedded_offset_count = sum(1 for item in archive_results if item.get("embedded_offset", 0) > 0)
         largest = sorted(
             [item for item in archives if os.path.isfile(item)],
             key=lambda item: os.path.getsize(item),
@@ -545,6 +585,7 @@ def write_unity_diagnostics(archives, direct_files, archive_results):
             output.write("Archives with output: {0}\n".format(max(0, len(archives) - len(zero_output))))
             output.write("Archives with zero output: {0}\n".format(len(zero_output)))
             output.write("Archives with errors: {0}\n".format(len(error_archives)))
+            output.write("Embedded UnityFS offsets recovered: {0}\n".format(embedded_offset_count))
             output.write("Skipped Unity objects: {0}\n".format(sum(item.get("skipped", 0) for item in archive_results)))
             output.write("Warnings emitted: {0}\n".format(warning_count))
             if largest:
