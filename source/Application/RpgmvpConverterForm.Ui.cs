@@ -23,7 +23,7 @@ namespace RpgmvpConverterWinForms
             Font titleFont = new Font("Segoe UI Semibold", 14f, FontStyle.Regular);
             Font logFont = new Font("Consolas", 9.5f, FontStyle.Regular);
 
-            Text = "Game Asset Tool v2.4.9";
+            Text = "Game Asset Tool v2.4.10";
             StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
@@ -447,6 +447,7 @@ namespace RpgmvpConverterWinForms
                 AddModeItem(extractModeMenu, ExtractionProfileDisplayName(5), selectedExtractionProfileIndex == 5, delegate { SelectExtractionProfile(5); });
                 AddModeItem(extractModeMenu, ExtractionProfileDisplayName(6), selectedExtractionProfileIndex == 6, delegate { SelectExtractionProfile(6); });
                 AddModeItem(extractModeMenu, ExtractionProfileDisplayName(7), selectedExtractionProfileIndex == 7, delegate { SelectExtractionProfile(7); });
+                AddModeItem(extractModeMenu, ExtractionProfileDisplayName(8), selectedExtractionProfileIndex == 8, delegate { SelectExtractionProfile(8); });
             }
 
             if (looseModeMenu != null)
@@ -482,7 +483,7 @@ namespace RpgmvpConverterWinForms
         }
         private void SelectExtractionProfile(int index)
         {
-            selectedExtractionProfileIndex = Math.Max(0, Math.Min(7, index));
+            selectedExtractionProfileIndex = Math.Max(0, Math.Min(8, index));
             BuildModeMenus();
             UpdateModeButtonTexts();
             OnProfileChanged();
@@ -518,11 +519,12 @@ namespace RpgmvpConverterWinForms
             {
                 case 1: return T("Images only", "Только изображения");
                 case 2: return T("Images + Video", "Изображения + видео");
-                case 3: return T("Text only", "Только текст");
-                case 4: return T("Images + Text", "Изображения + текст");
-                case 5: return T("Everything", "Все файлы");
-                case 6: return T("Diagnostics only", "Только диагностика");
-                case 7: return T("Recovery mode", "Восстановление");
+                case 3: return T("Images + Video + Audio", "Изображения + видео + аудио");
+                case 4: return T("Text only", "Только текст");
+                case 5: return T("Images + Text", "Изображения + текст");
+                case 6: return T("Everything", "Все файлы");
+                case 7: return T("Diagnostics only", "Только диагностика");
+                case 8: return T("Recovery mode", "Восстановление");
                 default: return T("Auto: Images + Video", "Авто: изображения + видео");
             }
         }
@@ -533,11 +535,12 @@ namespace RpgmvpConverterWinForms
             {
                 case 1: return T("Images", "Изобр.");
                 case 2: return T("Media", "Медиа");
-                case 3: return T("Text", "Текст");
-                case 4: return T("Images+Text", "Изобр.+текст");
-                case 5: return T("Everything", "Все");
-                case 6: return T("Diagnostics", "Диагн.");
-                case 7: return T("Recovery", "Восст.");
+                case 3: return T("Media+Audio", "Медиа+аудио");
+                case 4: return T("Text", "Текст");
+                case 5: return T("Images+Text", "Изобр.+текст");
+                case 6: return T("Everything", "Все");
+                case 7: return T("Diagnostics", "Диагн.");
+                case 8: return T("Recovery", "Восст.");
                 default: return T("Auto media", "Авто медиа");
             }
         }
@@ -1390,7 +1393,7 @@ namespace RpgmvpConverterWinForms
             SetActionTooltip(engineOverrideBox, T("Override auto-detection when the game is detected as the wrong engine. If Dry Run shows low confidence or a collection-folder warning, choose the exact engine here.", "Выбрать движок вручную, если автоопределение ошиблось. Если проверка показывает low confidence или папку-коллекцию, выберите точный движок здесь."));
             SetActionTooltip(skipGalleryIndexCheckBox, T("Skip preparing the gallery index after extraction. Useful for very large outputs or low-memory runs; the gallery can still scan later when opened.", "Не подготавливать индекс галереи после извлечения. Полезно для больших результатов; галерея всё равно сможет просканировать папку при открытии."));
             SetActionTooltip(languageBox, T("Switch interface language.", "Переключить язык интерфейса."));
-            SetActionTooltip(extractModeButton, T("Choose the Extract profile. Auto media is recommended; Text only is for exported text assets, not binary Unity patching.", "Выбрать профиль Extract. Обычно лучше Auto media; «Только текст» нужен для экспортируемых текстовых ассетов, не для бинарной правки Unity."));
+            SetActionTooltip(extractModeButton, T("Choose the Extract profile. Auto media is recommended; Images + Video + Audio keeps media-only extraction without pulling texts, meshes and animations.", "Выбрать профиль Extract. Обычно лучше Auto media; «Изображения + видео + аудио» извлекает только медиа без текстов, мешей и анимаций."));
             SetActionTooltip(looseModeButton, T("Choose what Collect copies from already unpacked files: media, images only, or every loose file. It does not unpack archives.", "Выбрать, что «Собрать» копирует из уже открытых файлов: медиа, только изображения или все файлы. Архивы этот режим не распаковывает."));
             SetActionTooltip(javaExtractModeBox, T(
                 "Images only is fastest. SVG previews are cached after the first conversion. All resources keeps non-image JAR and res files.",

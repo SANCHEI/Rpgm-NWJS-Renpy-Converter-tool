@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.4.10 - 2026-07-04
+- Added a Unity `Images + Video + Audio` extraction profile for media-only exports that include AudioClip samples without pulling text, meshes or animation JSON.
+- Expanded Unity diagnostics with object-type export counts, skip reason summaries, wrapped UnityFS cache metadata and Addressables catalog label hints.
+- Added a `What was skipped?` table to the HTML report, with copy buttons for Unity object types and skip reasons.
+- Optimized the native results gallery to index previewable image/vector/video files first, show skipped non-previewable counters and expose exported `.obj` models through a lightweight `Models...` folder button.
+- Cached wrapped UnityFS offsets under diagnostics/cache so repeated Addressables scans avoid rechecking the same wrapped bundles.
+- Updated GitHub Actions release publishing to attach the main EXE, SHA256 and optional experimental tools ZIP while avoiding standalone experimental EXEs in the main release surface.
+- Added a release checklist covering version bumps, tag workflow behavior, GitHub assets and itch.io upload hygiene.
 ## 2.4.9 - 2026-07-04
 - Added Unity bundle fallback for Addressables files where UnityFS starts after a small wrapper/header offset.
 - Recovered textures and meshes from wrapped UnityFS bundles that previously produced zero-output archive folders.

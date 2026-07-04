@@ -94,6 +94,10 @@ namespace RpgmvpConverterWinForms
                 }
             }
 
+            string unitySkippedTable = BuildUnitySkippedHtmlTable(diagnostics);
+            if (!string.IsNullOrWhiteSpace(unitySkippedTable))
+                diagnostics.Insert(0, new KeyValuePair<string, string>("What was skipped? HTML", unitySkippedTable));
+
             string healthSnapshot = BuildHealthSnapshot(outputDir);
             if (!string.IsNullOrWhiteSpace(healthSnapshot))
                 diagnostics.Add(new KeyValuePair<string, string>("Health Check", healthSnapshot));
@@ -110,7 +114,7 @@ namespace RpgmvpConverterWinForms
             html.AppendLine(".wrap{max-width:1040px;margin:32px auto;padding:24px;background:#191d24;border:1px solid #323a46;border-radius:10px}");
             html.AppendLine("h1{margin:0 0 18px;font-size:24px;color:#44c5ff}.tabs{display:flex;gap:8px;margin:0 0 18px}.tabbtn{background:#2d3440;color:#eff3f8;border:1px solid #465268;border-radius:6px;padding:8px 12px;cursor:pointer}.tabbtn.active{background:#44c5ff;color:#0b1016;border-color:#44c5ff}.tab{display:none}.tab.active{display:block}");
             html.AppendLine("table{width:100%;border-collapse:collapse}th,td{padding:10px 12px;border-bottom:1px solid #303743;vertical-align:top}th{width:220px;text-align:left;color:#9ba7b5;font-weight:600}td{color:#f5f7fb}.value{white-space:pre-wrap;word-break:break-word}");
-            html.AppendLine(".ok{color:#46cc78}.warn{color:#ffb74d}.path{font-family:Consolas,monospace;font-size:13px;word-break:break-all}.copy{float:right;margin-left:12px;background:#26303d;color:#dce8f6;border:1px solid #4b5a70;border-radius:5px;padding:4px 8px;cursor:pointer}.copy:hover{border-color:#44c5ff}.diag{margin:0 0 18px}.diag h2{font-size:17px;color:#ffb74d;margin:0 0 8px}.diag pre{white-space:pre-wrap;word-break:break-word;background:#0a0e14;border:1px solid #303743;border-radius:8px;padding:12px;color:#dce8f6;max-height:520px;overflow:auto}.footer{margin-top:18px;color:#9ba7b5;font-size:12px}");
+            html.AppendLine(".ok{color:#46cc78}.warn{color:#ffb74d}.path{font-family:Consolas,monospace;font-size:13px;word-break:break-all}.copy{float:right;margin-left:12px;background:#26303d;color:#dce8f6;border:1px solid #4b5a70;border-radius:5px;padding:4px 8px;cursor:pointer}.copy:hover{border-color:#44c5ff}.diag{margin:0 0 18px}.diag h2{font-size:17px;color:#ffb74d;margin:0 0 8px}.diag pre{white-space:pre-wrap;word-break:break-word;background:#0a0e14;border:1px solid #303743;border-radius:8px;padding:12px;color:#dce8f6;max-height:520px;overflow:auto}.diagtable{width:100%;border-collapse:collapse;background:#0a0e14;border:1px solid #303743;border-radius:8px;overflow:hidden}.diagtable th{width:auto;color:#9ba7b5}.diagtable td,.diagtable th{border-bottom:1px solid #303743}.footer{margin-top:18px;color:#9ba7b5;font-size:12px}");
             html.AppendLine("</style><script>function copyText(b){var t=b.getAttribute('data-copy')||'';if(navigator.clipboard){navigator.clipboard.writeText(t);}else{var a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();document.execCommand('copy');document.body.removeChild(a);}}function showTab(id){var tabs=document.querySelectorAll('.tab');for(var i=0;i<tabs.length;i++)tabs[i].classList.remove('active');var buttons=document.querySelectorAll('.tabbtn');for(var j=0;j<buttons.length;j++)buttons[j].classList.remove('active');document.getElementById(id).classList.add('active');document.getElementById('btn-'+id).classList.add('active');}</script>");
             html.AppendLine("</head><body><div class=\"wrap\">");
             html.AppendLine("<h1>" + Html(title) + "</h1>");
@@ -132,7 +136,15 @@ namespace RpgmvpConverterWinForms
                 html.AppendLine("<div id=\"diagnostics\" class=\"tab\">");
                 foreach (KeyValuePair<string, string> diagnostic in diagnostics)
                 {
-                    html.AppendLine("<section class=\"diag\"><h2>" + Html(diagnostic.Key) + " <button class=\"copy\" data-copy=\"" + Html(diagnostic.Value) + "\" onclick=\"copyText(this)\">Copy</button></h2><pre>" + Html(diagnostic.Value) + "</pre></section>");
+                    if ((diagnostic.Key ?? "").EndsWith(" HTML", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string heading = diagnostic.Key.Substring(0, diagnostic.Key.Length - 5);
+                        html.AppendLine("<section class=\"diag\"><h2>" + Html(heading) + "</h2>" + diagnostic.Value + "</section>");
+                    }
+                    else
+                    {
+                        html.AppendLine("<section class=\"diag\"><h2>" + Html(diagnostic.Key) + " <button class=\"copy\" data-copy=\"" + Html(diagnostic.Value) + "\" onclick=\"copyText(this)\">Copy</button></h2><pre>" + Html(diagnostic.Value) + "</pre></section>");
+                    }
                 }
                 html.AppendLine("</div>");
             }
@@ -157,6 +169,7 @@ namespace RpgmvpConverterWinForms
             {
                 string name = diagnostic.Key ?? "";
                 string text = diagnostic.Value ?? "";
+                if (name.EndsWith(" HTML", StringComparison.OrdinalIgnoreCase)) continue;
                 if (name.Equals("GameAssetTool-unity-diagnostics.txt", StringComparison.OrdinalIgnoreCase))
                 {
                     string unitySkipped = ReadDiagnosticValue(text, "Skipped Unity objects");
@@ -210,6 +223,52 @@ namespace RpgmvpConverterWinForms
             foreach (KeyValuePair<string, string> row in rows)
                 if (row.Key.Equals(key, StringComparison.OrdinalIgnoreCase)) return row.Value;
             return "";
+        }
+
+
+        private static string BuildUnitySkippedHtmlTable(List<KeyValuePair<string, string>> diagnostics)
+        {
+            string text = "";
+            foreach (KeyValuePair<string, string> diagnostic in diagnostics)
+            {
+                if ((diagnostic.Key ?? "").Equals("GameAssetTool-unity-diagnostics.txt", StringComparison.OrdinalIgnoreCase))
+                {
+                    text = diagnostic.Value ?? "";
+                    break;
+                }
+            }
+            if (string.IsNullOrWhiteSpace(text)) return "";
+
+            StringBuilder builder = new StringBuilder();
+            bool hasRows = false;
+            builder.AppendLine("<table class=\"diagtable\"><tr><th>Type / reason</th><th>Total</th><th>Exported</th><th>What it means</th></tr>");
+            foreach (string raw in text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None))
+            {
+                string line = raw.Trim();
+                Match objectMatch = Regex.Match(line, @"^- (?<type>[^:]+): total=(?<total>\d+) exported=(?<exported>\d+) profile=(?<profile>.*)$");
+                if (objectMatch.Success)
+                {
+                    hasRows = true;
+                    string type = objectMatch.Groups["type"].Value;
+                    string total = objectMatch.Groups["total"].Value;
+                    string exported = objectMatch.Groups["exported"].Value;
+                    string profile = objectMatch.Groups["profile"].Value;
+                    builder.AppendLine("<tr><td><button class=\"copy\" data-copy=\"" + Html(type) + "\" onclick=\"copyText(this)\">Copy</button>" + Html(type) + "</td><td>" + Html(total) + "</td><td>" + Html(exported) + "</td><td>" + Html(profile) + "</td></tr>");
+                    continue;
+                }
+
+                Match reasonMatch = Regex.Match(line, @"^- (?<reason>.*): (?<count>\d+)$");
+                if (reasonMatch.Success && line.IndexOf("| objects=", StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    string reason = reasonMatch.Groups["reason"].Value;
+                    if (reason.IndexOf("archive", StringComparison.OrdinalIgnoreCase) >= 0 && reason.IndexOf("zero", StringComparison.OrdinalIgnoreCase) < 0)
+                        continue;
+                    hasRows = true;
+                    builder.AppendLine("<tr><td><button class=\"copy\" data-copy=\"" + Html(reason) + "\" onclick=\"copyText(this)\">Copy</button>" + Html(reason) + "</td><td>" + Html(reasonMatch.Groups["count"].Value) + "</td><td>-</td><td>Skipped reason from Unity diagnostics</td></tr>");
+                }
+            }
+            builder.AppendLine("</table>");
+            return hasRows ? builder.ToString() : "";
         }
 
         private static bool IsPositiveText(string value)

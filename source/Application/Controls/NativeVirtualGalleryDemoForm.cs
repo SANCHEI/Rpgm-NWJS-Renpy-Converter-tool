@@ -35,6 +35,7 @@ namespace GameAssetTool.ApplicationUi
         private readonly ComboBox thumbnailSizeCombo;
         private readonly CheckBox upscaleCheckBox;
         private readonly Button spriteSheetButton;
+        private readonly Button openModelsButton;
         private readonly Button showInFolderButton;
         private readonly Button openButton;
         private readonly Label statusLabel;
@@ -59,6 +60,9 @@ namespace GameAssetTool.ApplicationUi
         private CancellationTokenSource previewCts;
         private List<GalleryFile> allFiles = new List<GalleryFile>();
         private List<GalleryFile> visibleFiles = new List<GalleryFile>();
+        private Dictionary<string, int> skippedPreviewExtensions = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        private List<string> modelFiles = new List<string>();
+        private int skippedPreviewCount;
         private int thumbnailVersion;
         private int previewVersion;
         private int filterVersion;
@@ -142,8 +146,7 @@ namespace GameAssetTool.ApplicationUi
                 russian ? "Пейзаж" : "Landscape",
                 russian ? "Кадры анимации" : "Animation frames",
                 "SVG",
-                russian ? "Видео" : "Video",
-                russian ? "Аудио" : "Audio"
+                russian ? "Видео" : "Video"
             });
             filterCombo.SelectedIndex = 0;
             filterCombo.Location = new Point(18, 168);
@@ -226,11 +229,18 @@ namespace GameAssetTool.ApplicationUi
                 ResetThumbnails(false);
             };
 
-            spriteSheetButton = CreateButton(russian ? "Спрайты..." : "Sheet...", 572, 198, 110, 28);
+            spriteSheetButton = CreateButton(russian ? "Спрайты..." : "Sheet...", 450, 198, 110, 28);
             spriteSheetButton.Enabled = false;
             spriteSheetButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             spriteSheetButton.Click += delegate { OpenSpriteSheetTool(); };
             controlToolTip.SetToolTip(spriteSheetButton, russian ? "Открыть выбранное изображение как sprite sheet и экспортировать отдельный кадр." : "Open the selected image as a sprite sheet and export a single frame.");
+
+            openModelsButton = CreateButton(russian ? "Модели..." : "Models...", 572, 198, 110, 28);
+            openModelsButton.Enabled = false;
+            openModelsButton.Visible = false;
+            openModelsButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            openModelsButton.Click += delegate { OpenModelFolder(); };
+            controlToolTip.SetToolTip(openModelsButton, russian ? "Открыть папку с экспортированными .obj моделями. Полный 3D-просмотр не загружается, чтобы галерея оставалась быстрой." : "Open the folder with exported .obj models. Full 3D preview is intentionally not loaded to keep the gallery fast.");
 
             openButton = CreateButton(russian ? "Открыть" : "Open", 694, 198, 110, 28);
             openButton.Enabled = false;
@@ -360,6 +370,7 @@ namespace GameAssetTool.ApplicationUi
             controlToolTip.SetToolTip(upscaleCheckBox, russian ? "Увеличивать маленькие картинки в миниатюрах." : "Upscale small images in thumbnails.");
             Controls.Add(upscaleCheckBox);
             Controls.Add(spriteSheetButton);
+            Controls.Add(openModelsButton);
             Controls.Add(openButton);
             Controls.Add(showInFolderButton);
             Controls.Add(refreshButton);
@@ -524,6 +535,11 @@ namespace GameAssetTool.ApplicationUi
             pathBox.Text = folder;
             allFiles = new List<GalleryFile>();
             visibleFiles = new List<GalleryFile>();
+            skippedPreviewExtensions = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            modelFiles = new List<string>();
+            skippedPreviewCount = 0;
+            openModelsButton.Enabled = false;
+            openModelsButton.Visible = false;
             thumbnailVersion++;
             lock (thumbnailLock)
             {
@@ -541,7 +557,7 @@ namespace GameAssetTool.ApplicationUi
             indexCts = new CancellationTokenSource();
             CancellationToken token = indexCts.Token;
             Task.Factory.StartNew(delegate { return ScanFiles(folder, token); }, token)
-                .ContinueWith(delegate(Task<List<GalleryFile>> task)
+                .ContinueWith(delegate(Task<GalleryScanResult> task)
                 {
                     if (IsDisposed)
                     {
@@ -563,7 +579,13 @@ namespace GameAssetTool.ApplicationUi
                             return;
                         }
 
-                        allFiles = task.Result;
+                        GalleryScanResult result = task.Result ?? new GalleryScanResult();
+                        allFiles = result.Files;
+                        skippedPreviewExtensions = result.SkippedExtensions;
+                        skippedPreviewCount = result.SkippedCount;
+                        modelFiles = result.ModelFiles;
+                        openModelsButton.Visible = modelFiles.Count > 0;
+                        openModelsButton.Enabled = modelFiles.Count > 0;
                         ApplyFilter();
                     }));
                 });
@@ -611,9 +633,9 @@ namespace GameAssetTool.ApplicationUi
             }
         }
 
-        private static List<GalleryFile> ScanFiles(string root, CancellationToken token)
+        private static GalleryScanResult ScanFiles(string root, CancellationToken token)
         {
-            List<GalleryFile> results = new List<GalleryFile>(1024);
+            GalleryScanResult result = new GalleryScanResult();
             Stack<string> pending = new Stack<string>();
             pending.Push(root);
 
@@ -635,10 +657,20 @@ namespace GameAssetTool.ApplicationUi
                 for (int i = 0; i < files.Length; i++)
                 {
                     token.ThrowIfCancellationRequested();
+                    string extension = Path.GetExtension(files[i]);
                     GalleryFile file = CreateGalleryFile(files[i]);
-                    if (file != null)
+                    if (file != null && IsPreviewable(file))
                     {
-                        results.Add(file);
+                        result.Files.Add(file);
+                    }
+                    else
+                    {
+                        result.SkippedCount++;
+                        string key = string.IsNullOrWhiteSpace(extension) ? "<no extension>" : extension.ToLowerInvariant();
+                        if (!result.SkippedExtensions.ContainsKey(key)) result.SkippedExtensions[key] = 0;
+                        result.SkippedExtensions[key]++;
+                        if (key.Equals(".obj", StringComparison.OrdinalIgnoreCase))
+                            result.ModelFiles.Add(files[i]);
                     }
                 }
 
@@ -658,7 +690,7 @@ namespace GameAssetTool.ApplicationUi
                 }
             }
 
-            return results;
+            return result;
         }
 
         private static GalleryFile CreateGalleryFile(string path)
@@ -919,7 +951,6 @@ namespace GameAssetTool.ApplicationUi
             else if (filter == 10) files = files.Where(f => IsAnimationFrameLike(f));
             else if (filter == 11) files = files.Where(f => f.Kind == FileKind.Vector);
             else if (filter == 12) files = files.Where(f => f.Kind == FileKind.Video);
-            else if (filter == 13) files = files.Where(f => f.Kind == FileKind.Audio);
 
             if (!string.IsNullOrEmpty(query))
             {
@@ -948,13 +979,29 @@ namespace GameAssetTool.ApplicationUi
         private string BuildStatusText()
         {
             string suffix = indexing ? " | indexing..." : "";
+            string skipped = skippedPreviewCount > 0 ? " | skipped non-preview: " + skippedPreviewCount.ToString("n0") + BuildSkippedExtensionText() : "";
+            string models = modelFiles.Count > 0 ? " | models: " + modelFiles.Count.ToString("n0") : "";
             return string.Format(
-                "Native ListView VirtualMode | Visible: {0:n0} / Indexed: {1:n0} | Thumb: {2}px | cached thumbnails load lazily{3}",
+                "Native ListView VirtualMode | Visible: {0:n0} / Previewable indexed: {1:n0} | Thumb: {2}px | cached thumbnails load lazily{3}{4}{5}",
                 visibleFiles.Count,
                 allFiles.Count,
                 thumbnailSize,
+                skipped,
+                models,
                 suffix);
         }
+        private string BuildSkippedExtensionText()
+        {
+            if (skippedPreviewExtensions == null || skippedPreviewExtensions.Count == 0) return "";
+            string[] top = skippedPreviewExtensions
+                .OrderByDescending(kv => kv.Value)
+                .ThenBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
+                .Take(4)
+                .Select(kv => kv.Key + " " + kv.Value.ToString("n0"))
+                .ToArray();
+            return top.Length == 0 ? "" : " (" + string.Join(", ", top) + ")";
+        }
+
         private static string GetGroupKey(GalleryFile file, int group, string root)
         {
             if (group == 1)
@@ -1240,6 +1287,11 @@ namespace GameAssetTool.ApplicationUi
         }
 
         private static bool ShouldCacheThumbnail(GalleryFile file)
+        {
+            return file != null && IsPreviewable(file);
+        }
+
+        private static bool IsPreviewable(GalleryFile file)
         {
             return file != null && (file.Kind == FileKind.Image || file.Kind == FileKind.Vector || file.Kind == FileKind.Video);
         }
@@ -1781,6 +1833,29 @@ namespace GameAssetTool.ApplicationUi
             }
         }
 
+        private void OpenModelFolder()
+        {
+            string path = modelFiles != null && modelFiles.Count > 0 ? modelFiles[0] : null;
+            if (string.IsNullOrEmpty(path) || !File.Exists(path))
+            {
+                return;
+            }
+
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "explorer.exe",
+                    Arguments = "/select,\"" + path.Replace("\"", "\\\"") + "\"",
+                    UseShellExecute = false
+                });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Explorer failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
         private void ShowSelectedInFolder()
         {
             string path = GetSelectedPath();
@@ -1985,6 +2060,14 @@ namespace GameAssetTool.ApplicationUi
             Vector,
             Video,
             Audio
+        }
+
+        private sealed class GalleryScanResult
+        {
+            public readonly List<GalleryFile> Files = new List<GalleryFile>(1024);
+            public readonly Dictionary<string, int> SkippedExtensions = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            public readonly List<string> ModelFiles = new List<string>();
+            public int SkippedCount;
         }
 
         private sealed class GalleryFile

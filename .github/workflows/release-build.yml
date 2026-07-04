@@ -20,6 +20,10 @@ jobs:
         shell: powershell
         run: .\build_release.ps1
 
+      - name: Build experimental tools zip
+        shell: powershell
+        run: .\build_unity_text_lab.ps1
+
       - name: Resolve release file
         shell: powershell
         run: |
@@ -28,6 +32,12 @@ jobs:
           "RELEASE_EXE=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "RELEASE_EXE_NAME=$($exe.Name)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "Resolved release executable: $($exe.FullName)"
+          $toolsZip = Get-ChildItem -LiteralPath release -Filter 'GameAssetTool-tools-experimental-v*.zip' -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if ($toolsZip) {
+            "TOOLS_ZIP=$($toolsZip.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            "TOOLS_ZIP_NAME=$($toolsZip.Name)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            "Resolved experimental tools zip: $($toolsZip.FullName)"
+          }
 
       - name: Calculate SHA-256
         shell: powershell
@@ -48,9 +58,19 @@ jobs:
           name: ${{ env.RELEASE_EXE_NAME }}-sha256
           path: release/SHA256.txt
 
+      - name: Upload experimental tools zip artifact
+        if: env.TOOLS_ZIP != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.TOOLS_ZIP_NAME }}
+          path: ${{ env.TOOLS_ZIP }}
+
       - name: Attach assets to GitHub release
         if: startsWith(github.ref, 'refs/tags/')
         shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload $env:GITHUB_REF_NAME $env:RELEASE_EXE release\SHA256.txt --clobber
+        run: |
+          $assets = @($env:RELEASE_EXE, 'release\SHA256.txt')
+          if ($env:TOOLS_ZIP) { $assets += $env:TOOLS_ZIP }
+          gh release upload $env:GITHUB_REF_NAME @assets --clobber

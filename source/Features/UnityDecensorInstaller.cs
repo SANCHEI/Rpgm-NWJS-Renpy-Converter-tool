@@ -604,7 +604,7 @@ namespace RpgmvpConverterWinForms
         private static WebClient CreateWebClient()
         {
             WebClient client = new WebClient();
-            client.Headers[HttpRequestHeader.UserAgent] = "GameAssetTool/2.4.9";
+            client.Headers[HttpRequestHeader.UserAgent] = "GameAssetTool/2.4.10";
             return client;
         }
 
