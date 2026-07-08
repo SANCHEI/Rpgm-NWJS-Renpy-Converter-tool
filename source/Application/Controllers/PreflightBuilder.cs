@@ -24,6 +24,7 @@ namespace RpgmvpConverterWinForms
         public string TopExtensions { get; set; }
         public string LargestInputs { get; set; }
         public string RouteHints { get; set; }
+        public string UnityPrediction { get; set; }
         public string UnityArchivePreview { get; set; }
         public string ExcludedFolders { get; set; }
         public string DetectionConfidence { get; set; }
@@ -59,7 +60,11 @@ namespace RpgmvpConverterWinForms
             if (info.IsUnreal)
                 lines.Add("Unreal: AES may be auto-discovered; Oodle uses built-in fallback or local official DLL when available.");
             if (info.IsUnity)
+            {
                 lines.Add("Unity: " + (info.UnityMode ?? "media") + " profile; skipped objects are usually filtered engine metadata, scripts, shaders or unsupported/protected entries.");
+                if (!string.IsNullOrWhiteSpace(info.UnityPrediction))
+                    lines.Add("Unity forecast: " + info.UnityPrediction);
+            }
             if (!string.IsNullOrWhiteSpace(info.UnknownExtensions))
                 lines.Add("Unknown extensions: " + info.UnknownExtensions);
 

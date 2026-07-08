@@ -10,6 +10,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
 namespace RpgmvpConverterWinForms
@@ -355,15 +356,15 @@ namespace RpgmvpConverterWinForms
 
         private static ScanSummary BuildScanSummary(string inputPath)
         {
-            return BuildScanSummaryCore(inputPath, CancellationToken.None, GameEngine.Unknown);
+            return BuildScanSummaryCore(inputPath, CancellationToken.None, GameEngine.Unknown, "media");
         }
 
         private static ScanSummary BuildScanSummaryCore(string inputPath, CancellationToken cancellationToken)
         {
-            return BuildScanSummaryCore(inputPath, cancellationToken, GameEngine.Unknown);
+            return BuildScanSummaryCore(inputPath, cancellationToken, GameEngine.Unknown, "media");
         }
 
-        private static ScanSummary BuildScanSummaryCore(string inputPath, CancellationToken cancellationToken, GameEngine forcedEngine)
+        private static ScanSummary BuildScanSummaryCore(string inputPath, CancellationToken cancellationToken, GameEngine forcedEngine, string unityMode)
         {
             string rootPath = InputDirectory(inputPath);
             cancellationToken.ThrowIfCancellationRequested();
@@ -537,7 +538,77 @@ namespace RpgmvpConverterWinForms
             string collectionWarning = BuildCollectionFolderWarning(inputPath, rootPath);
             string confidence = BuildDetectionConfidence(inputPath, detectedEngine, forcedEngine, engine, fileList.Count, archives, collectionWarning);
             string detectionNotes = BuildDetectionNotes(inputPath, detectedEngine, forcedEngine, engine);
-            return new ScanSummary(engine, fileList.Count, archives, bytes, unknownExtensions, topExtensions, largestFiles, routeHints, confidence, detectionNotes, collectionWarning);
+            string unityPrediction = engine == GameEngine.Unity ? BuildUnityDryRunPrediction(rootPath, unityMode, cancellationToken) : "";
+            return new ScanSummary(engine, fileList.Count, archives, bytes, unknownExtensions, topExtensions, largestFiles, routeHints, confidence, detectionNotes, collectionWarning, unityPrediction);
+        }
+
+        private static string BuildUnityDryRunPrediction(string rootPath, string unityMode, CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath)) return "";
+            string outputDir = null;
+            try
+            {
+                string scriptPath = PortableRuntime.CreateSessionFilePath("extract_unity_dryrun.py");
+                WriteUnityPythonScripts(scriptPath);
+                outputDir = PortableRuntime.CreateSessionFilePath("unity-dryrun-output-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(outputDir);
+
+                ProcessStartInfo psi = PortableRuntime.CreatePythonProcessInfo();
+                psi.Arguments = QuoteArg(scriptPath);
+                psi.EnvironmentVariables["GAME_PATH"] = rootPath;
+                psi.EnvironmentVariables["OUTPUT_PATH"] = outputDir;
+                psi.EnvironmentVariables["EXTRACT_MODE"] = string.IsNullOrWhiteSpace(unityMode) ? "media" : unityMode;
+                psi.EnvironmentVariables["INCLUDE_BUNDLES"] = "1";
+                psi.EnvironmentVariables["DRY_RUN"] = "1";
+                psi.EnvironmentVariables["MAX_WARNINGS"] = "0";
+
+                List<string> lines = new List<string>();
+                using (Process process = new Process())
+                {
+                    process.StartInfo = psi;
+                    process.OutputDataReceived += delegate(object sender, DataReceivedEventArgs e) { if (e.Data != null) lines.Add(e.Data); };
+                    process.ErrorDataReceived += delegate(object sender, DataReceivedEventArgs e) { };
+                    process.Start();
+                    process.BeginOutputReadLine();
+                    process.BeginErrorReadLine();
+                    using (cancellationToken.Register(delegate { try { if (!process.HasExited) process.Kill(); } catch { } }))
+                    {
+                        if (!process.WaitForExit(45000))
+                        {
+                            try { process.Kill(); } catch { }
+                            return "forecast timed out; extraction can still run normally";
+                        }
+                    }
+                    process.WaitForExit();
+                }
+
+                foreach (string line in lines)
+                {
+                    if (!line.StartsWith("DRYRUN_JSON:", StringComparison.OrdinalIgnoreCase)) continue;
+                    string json = line.Substring("DRYRUN_JSON:".Length);
+                    Dictionary<string, object> root = new JavaScriptSerializer().DeserializeObject(json) as Dictionary<string, object>;
+                    object prediction;
+                    if (root != null && root.TryGetValue("prediction", out prediction) && prediction != null)
+                        return Convert.ToString(prediction);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch
+            {
+                return "forecast unavailable";
+            }
+            finally
+            {
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(outputDir) && Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+                }
+                catch { }
+            }
+            return "forecast unavailable";
         }
 
         private static string BuildDetectionConfidence(string inputPath, GameEngine detectedEngine, GameEngine forcedEngine, GameEngine engine, int fileCount, int archiveCount, string collectionWarning)
@@ -953,7 +1024,7 @@ namespace RpgmvpConverterWinForms
 
         private sealed class ScanSummary
         {
-            public ScanSummary(GameEngine engine, int fileCount, int archiveCount, long totalBytes, string unknownExtensions, string topExtensions, string largestFiles, string routeHints, string detectionConfidence, string detectionNotes, string collectionWarning)
+            public ScanSummary(GameEngine engine, int fileCount, int archiveCount, long totalBytes, string unknownExtensions, string topExtensions, string largestFiles, string routeHints, string detectionConfidence, string detectionNotes, string collectionWarning, string unityPrediction)
             {
                 Engine = engine;
                 FileCount = fileCount;
@@ -966,6 +1037,7 @@ namespace RpgmvpConverterWinForms
                 DetectionConfidence = detectionConfidence ?? "";
                 DetectionNotes = detectionNotes ?? "";
                 CollectionWarning = collectionWarning ?? "";
+                UnityPrediction = unityPrediction ?? "";
             }
 
             public GameEngine Engine { get; private set; }
@@ -979,6 +1051,7 @@ namespace RpgmvpConverterWinForms
             public string DetectionConfidence { get; private set; }
             public string DetectionNotes { get; private set; }
             public string CollectionWarning { get; private set; }
+            public string UnityPrediction { get; private set; }
         }
 
     }

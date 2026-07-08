@@ -82,6 +82,9 @@
     <EmbeddedResource Include="source\scripts\extract_unity.py">
       <LogicalName>RpgmvpConverterWinForms.scripts.extract_unity.py</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="source\scripts\unity_diagnostics.py">
+      <LogicalName>RpgmvpConverterWinForms.scripts.unity_diagnostics.py</LogicalName>
+    </EmbeddedResource>
     <EmbeddedResource Include="source\scripts\extract_godot.py">
       <LogicalName>RpgmvpConverterWinForms.scripts.extract_godot.py</LogicalName>
     </EmbeddedResource>

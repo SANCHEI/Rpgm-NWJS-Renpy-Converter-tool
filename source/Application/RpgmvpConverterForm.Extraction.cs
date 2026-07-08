@@ -366,12 +366,20 @@ namespace RpgmvpConverterWinForms
             CompleteExternalOperation(result);
         }
 
+        private static void WriteUnityPythonScripts(string entryScriptPath)
+        {
+            string directory = Path.GetDirectoryName(entryScriptPath);
+            if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
+            File.WriteAllText(entryScriptPath, EmbeddedScripts.ReadText("RpgmvpConverterWinForms.scripts.extract_unity.py"), new UTF8Encoding(false));
+            File.WriteAllText(Path.Combine(directory, "unity_diagnostics.py"), EmbeddedScripts.ReadText("RpgmvpConverterWinForms.scripts.unity_diagnostics.py"), new UTF8Encoding(false));
+        }
+
         private OperationResult RunUnityExtraction(string rootPath, string outputDir, UnityExtractionConfig config)
         {
             DateTime start = DateTime.UtcNow;
             Directory.CreateDirectory(outputDir);
             string scriptPath = PortableRuntime.CreateSessionFilePath("extract_unity.py");
-            File.WriteAllText(scriptPath, EmbeddedScripts.ReadText("RpgmvpConverterWinForms.scripts.extract_unity.py"), new UTF8Encoding(false));
+            WriteUnityPythonScripts(scriptPath);
 
             int extracted = 0;
             long bytes = 0;

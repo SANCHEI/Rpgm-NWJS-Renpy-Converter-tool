@@ -16,6 +16,14 @@ if sys.version_info[0] >= 3:
 
 import UnityPy
 
+from unity_diagnostics import (
+    OBJECT_EXPORT_HINTS,
+    build_payload,
+    build_prediction_text,
+    skip_reason_for_type,
+    write_diagnostics,
+)
+
 
 GAME_PATH = os.environ.get("GAME_PATH", "")
 OUTPUT_PATH = os.environ.get("OUTPUT_PATH", "")
@@ -24,6 +32,7 @@ INCLUDE_BUNDLES = os.environ.get("INCLUDE_BUNDLES", "1") == "1"
 MAX_WORKERS = max(1, min(int(os.environ.get("MAX_WORKERS", "4")), 12))
 PNG_COMPRESSION_LEVEL = max(0, min(int(os.environ.get("PNG_COMPRESSION_LEVEL", "1")), 9))
 MAX_WARNINGS = int(os.environ.get("MAX_WARNINGS", "120"))
+DRY_RUN = os.environ.get("DRY_RUN", "0") == "1"
 SAVE_WORKERS = max(1, min(int(os.environ.get("SAVE_WORKERS", "2")), 4))
 SAVE_BACKLOG = max(SAVE_WORKERS * 4, 4)
 
@@ -63,25 +72,10 @@ warning_lock = threading.Lock()
 warning_count = 0
 warning_suppressed = False
 embedded_offset_cache = {}
+embedded_offset_cache_touched = set()
+MAX_EMBEDDED_CACHE_ENTRIES = int(os.environ.get("MAX_EMBEDDED_CACHE_ENTRIES", "5000") or "5000")
 addressable_labels = {}
 
-OBJECT_EXPORT_HINTS = {
-    "Texture2D": "Images only / Images + Video / Images + Video + Audio / Everything",
-    "Sprite": "Images only / Images + Video / Images + Video + Audio / Everything",
-    "Cubemap": "Images only / Images + Video / Images + Video + Audio / Everything",
-    "Texture3D": "Images only / Images + Video / Images + Video + Audio / Everything",
-    "Texture2DArray": "Images only / Images + Video / Images + Video + Audio / Everything",
-    "VideoClip": "Images + Video / Images + Video + Audio / Everything",
-    "AudioClip": "Images + Video + Audio / Everything",
-    "TextAsset": "Text only / Images + Text / Everything",
-    "Mesh": "Everything",
-    "AnimationClip": "Everything",
-}
-INTERNAL_OBJECT_TYPES = set((
-    "GameObject", "Transform", "RectTransform", "MonoBehaviour", "MonoScript", "Material", "Shader",
-    "MeshRenderer", "SkinnedMeshRenderer", "MeshFilter", "Animator", "Animation", "AudioSource",
-    "Canvas", "CanvasRenderer", "Camera", "Light", "ParticleSystem", "SpriteRenderer",
-))
 
 
 def log(message):
@@ -191,8 +185,15 @@ def load_embedded_offset_cache():
 def save_embedded_offset_cache():
     try:
         os.makedirs(cache_dir(), exist_ok=True)
+        active = {}
+        for key in embedded_offset_cache_touched:
+            value = embedded_offset_cache.get(key)
+            if isinstance(value, int) and value > 0:
+                active[key] = value
+        if len(active) > MAX_EMBEDDED_CACHE_ENTRIES:
+            active = dict(list(sorted(active.items()))[-MAX_EMBEDDED_CACHE_ENTRIES:])
         with open(embedded_cache_path(), "w", encoding="utf-8") as handle:
-            json.dump(embedded_offset_cache, handle, ensure_ascii=False, indent=2, sort_keys=True)
+            json.dump(active, handle, ensure_ascii=False, indent=2, sort_keys=True)
     except Exception as error:
         log_warn("WARN:Unity cache save failed:{0}".format(error))
 
@@ -210,17 +211,38 @@ def flatten_json_strings(value, output):
             flatten_json_strings(item, output)
 
 
+def is_hexish(value):
+    cleaned = str(value or "").replace("-", "").replace("_", "")
+    return len(cleaned) >= 16 and all(ch in "0123456789abcdefABCDEF" for ch in cleaned)
+
+
 def looks_like_address_label(value):
     if not value:
         return False
-    lower = value.lower()
+    lower = value.lower().strip()
     if lower.endswith((".bundle", ".hash", ".json")):
         return False
     if lower.startswith(("http://", "https://", "file://")):
         return False
-    if len(value) > 96:
+    if len(value) > 160 or is_hexish(value):
         return False
     return any(ch.isalpha() for ch in value)
+
+
+def address_label_score(value):
+    if not looks_like_address_label(value):
+        return -100
+    lower = value.lower().replace("\\\\", "/")
+    score = 0
+    if "/" in lower:
+        score += 8
+    if lower.endswith((".png", ".jpg", ".jpeg", ".webp", ".gif", ".mp4", ".webm", ".ogg", ".wav", ".prefab", ".asset", ".controller", ".mat")):
+        score += 6
+    if any(token in lower for token in ("assets/", "sprites", "textures", "images", "cg", "movie", "video", "audio", "prefab", "character", "ui")):
+        score += 4
+    if len(value) <= 48:
+        score += 1
+    return score
 
 
 def load_addressable_labels():
@@ -253,10 +275,12 @@ def load_addressable_labels():
                 key = os.path.splitext(bundle_name)[0].lower()
                 if not key or key in labels:
                     continue
-                window = strings[max(0, index - 8):min(len(strings), index + 9)]
+                window = strings[max(0, index - 16):min(len(strings), index + 17)]
                 candidates = [item for item in window if item != text and looks_like_address_label(item)]
                 if candidates:
-                    labels[key] = short_component(candidates[0], key)
+                    best = max(candidates, key=address_label_score)
+                    labels[key] = short_component(best, key)
+                    labels[bundle_name.lower()] = labels[key]
         except Exception:
             continue
     addressable_labels = labels
@@ -355,6 +379,7 @@ def find_embedded_unity_bundle_offset(file_path):
     key = file_cache_key(file_path)
     cached = embedded_offset_cache.get(key)
     if isinstance(cached, int) and cached > 0:
+        embedded_offset_cache_touched.add(key)
         return cached
     try:
         with open(file_path, "rb") as handle:
@@ -364,17 +389,11 @@ def find_embedded_unity_bundle_offset(file_path):
         offset = min(offsets) if offsets else 0
         if offset > 0:
             embedded_offset_cache[key] = offset
+            embedded_offset_cache_touched.add(key)
         return offset
     except Exception:
         return 0
 
-
-def skip_reason_for_type(obj_type):
-    if obj_type in OBJECT_EXPORT_HINTS:
-        return "profile-filtered {0}; use {1}".format(obj_type, OBJECT_EXPORT_HINTS[obj_type])
-    if obj_type in INTERNAL_OBJECT_TYPES:
-        return "internal scene/runtime object {0}; not an exportable asset".format(obj_type)
-    return "unsupported Unity object {0}".format(obj_type)
 
 
 def load_unity_environment(file_path):
@@ -403,7 +422,7 @@ def load_unity_environment(file_path):
     return env, 0
 
 
-def extract_archive(file_path):
+def extract_archive(file_path, dry_run=False):
     extracted = 0
     total_size = 0
     errors = 0
@@ -452,6 +471,10 @@ def extract_archive(file_path):
             if not supported:
                 skipped += 1
                 skip_reason_counts[skip_reason_for_type(obj_type)] += 1
+                continue
+
+            if dry_run:
+                exported_type_counts[obj_type] += 1
                 continue
 
             try:
@@ -724,87 +747,30 @@ def rel_path(path):
         return path
 
 
-def write_unity_diagnostics(archives, direct_files, archive_results):
-    path = os.path.join(OUTPUT_PATH, "GameAssetTool-unity-diagnostics.txt")
-    try:
-        bundle_count = sum(1 for item in archives if item.lower().endswith(".bundle"))
-        unity3d_count = sum(1 for item in archives if item.lower().endswith(".unity3d"))
-        assets_count = sum(1 for item in archives if item.lower().endswith(".assets"))
-        signature_bundle_count = sum(
-            1 for item in archives
-            if not item.lower().endswith(ARCHIVE_EXTENSIONS) and is_unity_bundle_signature(item)
-        )
-        archive_input_size = sum(os.path.getsize(item) for item in archives if os.path.isfile(item))
-        zero_output = [item for item in archive_results if item.get("extracted", 0) == 0]
-        error_archives = [item for item in archive_results if item.get("errors", 0) > 0]
-        embedded_offset_count = sum(1 for item in archive_results if item.get("embedded_offset", 0) > 0)
-        object_types = Counter()
-        exported_types = Counter()
-        skip_reasons = Counter()
-        for item in archive_results:
-            object_types.update(item.get("types") or {})
-            exported_types.update(item.get("exported_types") or {})
-            skip_reasons.update(item.get("skip_reasons") or {})
-        largest = sorted(
-            [item for item in archives if os.path.isfile(item)],
-            key=lambda item: os.path.getsize(item),
-            reverse=True,
-        )[:8]
+def build_unity_diagnostics_payload(archives, direct_files, archive_results):
+    return build_payload(
+        EXTRACT_MODE,
+        INCLUDE_BUNDLES,
+        archives,
+        direct_files,
+        archive_results,
+        addressable_labels,
+        warning_count,
+        ARCHIVE_EXTENSIONS,
+        is_unity_bundle_signature,
+        format_bytes,
+        rel_path,
+    )
 
-        with open(path, "w", encoding="utf-8") as output:
-            output.write("Unity diagnostics\n")
-            output.write("Mode: {0}\n".format(EXTRACT_MODE))
-            output.write("Include bundles: {0}\n".format("yes" if INCLUDE_BUNDLES else "no"))
-            output.write("Archives: {0}\n".format(len(archives)))
-            output.write("Bundles: {0}\n".format(bundle_count))
-            output.write("Addressables/signature bundles: {0}\n".format(signature_bundle_count))
-            output.write("Unity3D: {0}\n".format(unity3d_count))
-            output.write("Assets: {0}\n".format(assets_count))
-            output.write("Direct files: {0}\n".format(len(direct_files)))
-            output.write("Archive input size: {0}\n".format(format_bytes(archive_input_size)))
-            output.write("Archives with output: {0}\n".format(max(0, len(archives) - len(zero_output))))
-            output.write("Archives with zero output: {0}\n".format(len(zero_output)))
-            output.write("Archives with errors: {0}\n".format(len(error_archives)))
-            output.write("Embedded UnityFS offsets recovered: {0}\n".format(embedded_offset_count))
-            output.write("Skipped Unity objects: {0}\n".format(sum(item.get("skipped", 0) for item in archive_results)))
-            output.write("Warnings emitted: {0}\n".format(warning_count))
-            if addressable_labels:
-                output.write("Addressables catalog labels: {0}\n".format(len(addressable_labels)))
-            if object_types:
-                output.write("Object type summary:\n")
-                for name, count in object_types.most_common(30):
-                    exported = exported_types.get(name, 0)
-                    hint = OBJECT_EXPORT_HINTS.get(name, "not currently exportable")
-                    output.write("- {0}: total={1} exported={2} profile={3}\n".format(name, count, exported, hint))
-            if skip_reasons:
-                output.write("Skipped reason summary:\n")
-                for reason, count in skip_reasons.most_common(16):
-                    output.write("- {0}: {1}\n".format(reason, count))
-            if largest:
-                output.write("Largest archives:\n")
-                for item in largest:
-                    output.write("- {0} ({1})\n".format(rel_path(item), format_bytes(os.path.getsize(item))))
-            if zero_output:
-                output.write("Zero-output archives:\n")
-                for item in zero_output[:40]:
-                    if item.get("objects", 0) == 0 and item.get("embedded_offset", 0) <= 0:
-                        reason = "no readable Unity objects, unsupported/protected wrapper, or not UnityFS"
-                    elif item.get("embedded_offset", 0) > 0:
-                        reason = "wrapped UnityFS recovered, but no profile-matching exportable payload"
-                    else:
-                        reason = "objects were filtered by profile or unsupported by exporter"
-                    output.write("- {0} | objects={1} | skipped={2} | errors={3} | reason={4}\n".format(
-                        rel_path(item.get("path", "")),
-                        item.get("objects", 0),
-                        item.get("skipped", 0),
-                        item.get("errors", 0),
-                        reason,
-                    ))
-                if len(zero_output) > 40:
-                    output.write("- ... {0} more\n".format(len(zero_output) - 40))
+
+def write_unity_diagnostics(archives, direct_files, archive_results):
+    try:
+        payload = build_unity_diagnostics_payload(archives, direct_files, archive_results)
+        write_diagnostics(OUTPUT_PATH, payload)
+        return payload
     except Exception as error:
         log_warn("WARN:Unity diagnostics failed:{0}".format(error))
-
+        return {}
 
 def main():
     if not GAME_PATH or not OUTPUT_PATH:
@@ -827,7 +793,7 @@ def main():
 
     log("PHASE:archives")
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = [executor.submit(extract_archive, path) for path in archives]
+        futures = [executor.submit(extract_archive, path, DRY_RUN) for path in archives]
         for future in as_completed(futures):
             result = future.result()
             archive_results.append(result)
@@ -844,8 +810,11 @@ def main():
             processed += 1
             log("PROGRESS:{0}:{1}:{2}".format(processed, len(archives), total_size))
 
-    write_unity_diagnostics(archives, direct_files, archive_results)
+    payload = write_unity_diagnostics(archives, direct_files, archive_results)
     save_embedded_offset_cache()
+    if DRY_RUN:
+        prediction = build_prediction_text(payload)
+        log("DRYRUN_JSON:{0}".format(json.dumps({"prediction": prediction, "diagnostics": payload}, ensure_ascii=False, sort_keys=True)))
     log("RESULT:{0}:{1}:{2}:{3}:{4}".format(total_extracted, total_size, total_errors, total_renamed, total_skipped))
     return 0 if total_errors == 0 else 1
 

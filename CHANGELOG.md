@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.5.0 - 2026-07-08
+- Split Unity diagnostics helpers into a separate embedded Python module and keep structured JSON diagnostics alongside the HTML report.
+- Added Unity dry-run object forecast so scans can show likely exportable/skipped Unity object types before extraction.
+- Improved Unity Addressables bundle folder naming by choosing stronger catalog labels instead of raw hashes where possible.
+- Trimmed wrapped UnityFS offset cache to active current-run entries to avoid stale diagnostic cache growth.
+- Added a temporary native gallery manifest index that is deleted when the gallery window closes.
+- Kept Unity diagnostics available in the HTML report while reducing reliance on loose text diagnostic files.
+
 ## 2.4.10 - 2026-07-04
 - Added a Unity `Images + Video + Audio` extraction profile for media-only exports that include AudioClip samples without pulling text, meshes or animation JSON.
 - Expanded Unity diagnostics with object-type export counts, skip reason summaries, wrapped UnityFS cache metadata and Addressables catalog label hints.

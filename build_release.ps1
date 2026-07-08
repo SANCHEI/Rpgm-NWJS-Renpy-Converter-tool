@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 $root = [IO.Path]::GetFullPath($PSScriptRoot)
-$version = "2.4.10"
+$version = "2.5.0"
 $release = [IO.Path]::GetFullPath((Join-Path $root "release"))
 $releaseExe = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v$version.exe"))
 $inspectorSource = [IO.Path]::GetFullPath((Join-Path $root "tests\ReleaseInspector.cs"))
@@ -63,6 +63,7 @@ $releaseBytes = [IO.File]::ReadAllBytes($releaseExe)
 $releaseText = [Text.Encoding]::UTF8.GetString($releaseBytes)
 foreach ($resource in @(
     "RpgmvpConverterWinForms.scripts.extract_unity.py",
+    "RpgmvpConverterWinForms.scripts.unity_diagnostics.py",
     "RpgmvpConverterWinForms.scripts.extract_godot.py",
     "RpgmvpConverterWinForms.scripts.extract_xp3.py",
     "RpgmvpConverterWinForms.scripts.extract_unreal.py",

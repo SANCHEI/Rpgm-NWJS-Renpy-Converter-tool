@@ -11,6 +11,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using RpgmvpConverterWinForms;
 
@@ -53,6 +54,7 @@ namespace GameAssetTool.ApplicationUi
         private readonly HashSet<string> queuedThumbnails = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly SemaphoreSlim thumbnailSlots = new SemaphoreSlim(4, 4);
         private readonly ToolTip controlToolTip;
+        private readonly string sessionManifestDir;
         private readonly bool russian;
 
         private CancellationTokenSource indexCts;
@@ -91,6 +93,7 @@ namespace GameAssetTool.ApplicationUi
             controlToolTip.AutoPopDelay = 12000;
             controlToolTip.InitialDelay = 400;
             controlToolTip.ReshowDelay = 120;
+            sessionManifestDir = Path.Combine(Path.GetTempPath(), "GameAssetTool", "gallery-index-" + Guid.NewGuid().ToString("N"));
 
             thumbnails = new ImageList();
             thumbnails.ColorDepth = ColorDepth.Depth32Bit;
@@ -551,6 +554,20 @@ namespace GameAssetTool.ApplicationUi
             ClearPreview(
                 russian ? "Просмотр" : "Preview",
                 russian ? "Выберите изображение, gif, webp или видео для предпросмотра." : "Select an image, gif, webp or video to preview it here.");
+            GalleryScanResult cachedResult;
+            if (TryLoadManifest(folder, out cachedResult))
+            {
+                allFiles = cachedResult.Files;
+                skippedPreviewExtensions = cachedResult.SkippedExtensions;
+                skippedPreviewCount = cachedResult.SkippedCount;
+                modelFiles = cachedResult.ModelFiles;
+                openModelsButton.Visible = modelFiles.Count > 0;
+                openModelsButton.Enabled = modelFiles.Count > 0;
+                indexing = false;
+                ApplyFilter();
+                return;
+            }
+
             statusLabel.Text = russian ? "Индексация медиафайлов..." : "Indexing media files...";
             indexing = true;
 
@@ -580,6 +597,7 @@ namespace GameAssetTool.ApplicationUi
                         }
 
                         GalleryScanResult result = task.Result ?? new GalleryScanResult();
+                        SaveManifest(folder, result);
                         allFiles = result.Files;
                         skippedPreviewExtensions = result.SkippedExtensions;
                         skippedPreviewCount = result.SkippedCount;
@@ -630,6 +648,89 @@ namespace GameAssetTool.ApplicationUi
             }
             catch (InvalidOperationException)
             {
+            }
+        }
+
+        private bool TryLoadManifest(string folder, out GalleryScanResult result)
+        {
+            result = null;
+            try
+            {
+                string path = ManifestPath(folder);
+                if (!File.Exists(path)) return false;
+                GalleryManifest manifest = new JavaScriptSerializer().Deserialize<GalleryManifest>(File.ReadAllText(path, Encoding.UTF8));
+                if (manifest == null || !string.Equals(manifest.Root, folder, StringComparison.OrdinalIgnoreCase) || manifest.Files == null)
+                    return false;
+
+                GalleryScanResult loaded = new GalleryScanResult();
+                foreach (GalleryManifestFile item in manifest.Files)
+                {
+                    if (item == null || string.IsNullOrEmpty(item.Path) || !File.Exists(item.Path)) continue;
+                    GalleryFile file = new GalleryFile();
+                    file.Path = item.Path;
+                    file.Name = item.Name;
+                    file.Extension = item.Extension;
+                    file.Kind = item.Kind;
+                    file.Size = item.Size;
+                    file.Modified = item.Modified;
+                    file.Width = item.Width;
+                    file.Height = item.Height;
+                    loaded.Files.Add(file);
+                }
+                loaded.SkippedCount = manifest.SkippedCount;
+                if (manifest.SkippedExtensions != null)
+                    loaded.SkippedExtensions = new Dictionary<string, int>(manifest.SkippedExtensions, StringComparer.OrdinalIgnoreCase);
+                if (manifest.ModelFiles != null)
+                    loaded.ModelFiles = manifest.ModelFiles.Where(File.Exists).ToList();
+                result = loaded;
+                return true;
+            }
+            catch
+            {
+                result = null;
+                return false;
+            }
+        }
+
+        private void SaveManifest(string folder, GalleryScanResult result)
+        {
+            if (result == null) return;
+            try
+            {
+                Directory.CreateDirectory(sessionManifestDir);
+                GalleryManifest manifest = new GalleryManifest();
+                manifest.Root = folder;
+                manifest.SkippedCount = result.SkippedCount;
+                manifest.SkippedExtensions = new Dictionary<string, int>(result.SkippedExtensions, StringComparer.OrdinalIgnoreCase);
+                manifest.ModelFiles = new List<string>(result.ModelFiles);
+                manifest.Files = result.Files.Select(delegate(GalleryFile file)
+                {
+                    return new GalleryManifestFile
+                    {
+                        Path = file.Path,
+                        Name = file.Name,
+                        Extension = file.Extension,
+                        Kind = file.Kind,
+                        Size = file.Size,
+                        Modified = file.Modified,
+                        Width = file.Width,
+                        Height = file.Height
+                    };
+                }).ToList();
+                File.WriteAllText(ManifestPath(folder), new JavaScriptSerializer().Serialize(manifest), Encoding.UTF8);
+            }
+            catch
+            {
+            }
+        }
+
+        private string ManifestPath(string folder)
+        {
+            string key = folder == null ? "root" : folder.ToLowerInvariant();
+            using (SHA256 sha = SHA256.Create())
+            {
+                byte[] hash = sha.ComputeHash(Encoding.UTF8.GetBytes(key));
+                return Path.Combine(sessionManifestDir, BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant() + ".json");
             }
         }
 
@@ -1907,6 +2008,19 @@ namespace GameAssetTool.ApplicationUi
             CancelFiltering();
             CancelIndexing();
             ClearPreviewImageOnly();
+            TryDeleteDirectory(sessionManifestDir);
+        }
+
+        private static void TryDeleteDirectory(string path)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(path) && Directory.Exists(path))
+                    Directory.Delete(path, true);
+            }
+            catch
+            {
+            }
         }
 
         private void CancelFiltering()
@@ -2064,10 +2178,31 @@ namespace GameAssetTool.ApplicationUi
 
         private sealed class GalleryScanResult
         {
-            public readonly List<GalleryFile> Files = new List<GalleryFile>(1024);
-            public readonly Dictionary<string, int> SkippedExtensions = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            public readonly List<string> ModelFiles = new List<string>();
+            public List<GalleryFile> Files = new List<GalleryFile>(1024);
+            public Dictionary<string, int> SkippedExtensions = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            public List<string> ModelFiles = new List<string>();
             public int SkippedCount;
+        }
+
+        private sealed class GalleryManifest
+        {
+            public string Root { get; set; }
+            public List<GalleryManifestFile> Files { get; set; }
+            public Dictionary<string, int> SkippedExtensions { get; set; }
+            public List<string> ModelFiles { get; set; }
+            public int SkippedCount { get; set; }
+        }
+
+        private sealed class GalleryManifestFile
+        {
+            public string Path { get; set; }
+            public string Name { get; set; }
+            public string Extension { get; set; }
+            public FileKind Kind { get; set; }
+            public long Size { get; set; }
+            public DateTime Modified { get; set; }
+            public int Width { get; set; }
+            public int Height { get; set; }
         }
 
         private sealed class GalleryFile

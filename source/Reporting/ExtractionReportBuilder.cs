@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Web.Script.Serialization;
 
 namespace RpgmvpConverterWinForms
 {
@@ -228,6 +229,15 @@ namespace RpgmvpConverterWinForms
 
         private static string BuildUnitySkippedHtmlTable(List<KeyValuePair<string, string>> diagnostics)
         {
+            foreach (KeyValuePair<string, string> diagnostic in diagnostics)
+            {
+                if ((diagnostic.Key ?? "").Equals("GameAssetTool-unity-diagnostics.json", StringComparison.OrdinalIgnoreCase))
+                {
+                    string html = BuildUnitySkippedHtmlTableFromJson(diagnostic.Value ?? "");
+                    if (!string.IsNullOrWhiteSpace(html)) return html;
+                }
+            }
+
             string text = "";
             foreach (KeyValuePair<string, string> diagnostic in diagnostics)
             {
@@ -269,6 +279,67 @@ namespace RpgmvpConverterWinForms
             }
             builder.AppendLine("</table>");
             return hasRows ? builder.ToString() : "";
+        }
+
+        private static string BuildUnitySkippedHtmlTableFromJson(string json)
+        {
+            try
+            {
+                Dictionary<string, object> root = new JavaScriptSerializer().DeserializeObject(json) as Dictionary<string, object>;
+                if (root == null) return "";
+                StringBuilder builder = new StringBuilder();
+                bool hasRows = false;
+                builder.AppendLine("<table class=\"diagtable\"><tr><th>Type / reason</th><th>Total</th><th>Exported</th><th>What it means</th></tr>");
+                object objectTypes;
+                if (root.TryGetValue("object_types", out objectTypes))
+                {
+                    object[] rows = objectTypes as object[];
+                    if (rows != null)
+                    {
+                        foreach (object row in rows)
+                        {
+                            Dictionary<string, object> item = row as Dictionary<string, object>;
+                            if (item == null) continue;
+                            string type = JsonString(item, "type");
+                            string total = JsonString(item, "total");
+                            string exported = JsonString(item, "exported");
+                            string profile = JsonString(item, "profile");
+                            hasRows = true;
+                            builder.AppendLine("<tr><td><button class=\"copy\" data-copy=\"" + Html(type) + "\" onclick=\"copyText(this)\">Copy</button>" + Html(type) + "</td><td>" + Html(total) + "</td><td>" + Html(exported) + "</td><td>" + Html(profile) + "</td></tr>");
+                        }
+                    }
+                }
+                object skippedReasons;
+                if (root.TryGetValue("skipped_reasons", out skippedReasons))
+                {
+                    object[] rows = skippedReasons as object[];
+                    if (rows != null)
+                    {
+                        foreach (object row in rows)
+                        {
+                            Dictionary<string, object> item = row as Dictionary<string, object>;
+                            if (item == null) continue;
+                            string reason = JsonString(item, "reason");
+                            string count = JsonString(item, "count");
+                            if (string.IsNullOrWhiteSpace(reason)) continue;
+                            hasRows = true;
+                            builder.AppendLine("<tr><td><button class=\"copy\" data-copy=\"" + Html(reason) + "\" onclick=\"copyText(this)\">Copy</button>" + Html(reason) + "</td><td>" + Html(count) + "</td><td>-</td><td>Skipped reason from Unity diagnostics JSON</td></tr>");
+                        }
+                    }
+                }
+                builder.AppendLine("</table>");
+                return hasRows ? builder.ToString() : "";
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+        private static string JsonString(Dictionary<string, object> item, string key)
+        {
+            object value;
+            return item != null && item.TryGetValue(key, out value) && value != null ? Convert.ToString(value) : "";
         }
 
         private static bool IsPositiveText(string value)
@@ -421,6 +492,7 @@ namespace RpgmvpConverterWinForms
             List<string> paths = new List<string>();
             string[] preferred = new[]
             {
+                "GameAssetTool-unity-diagnostics.json",
                 "GameAssetTool-unity-diagnostics.txt",
                 "GameAssetTool-apk-diagnostics.txt",
                 "GameAssetTool-zip-diagnostics.tsv",
@@ -632,6 +704,13 @@ namespace RpgmvpConverterWinForms
         private static string BuildUnityDiagnosticsSummary(string outputDir)
         {
             if (string.IsNullOrWhiteSpace(outputDir)) return "";
+            string jsonPath = Path.Combine(outputDir, "GameAssetTool-unity-diagnostics.json");
+            if (File.Exists(jsonPath))
+            {
+                string fromJson = BuildUnityDiagnosticsSummaryFromJson(jsonPath);
+                if (!string.IsNullOrWhiteSpace(fromJson)) return fromJson;
+            }
+
             string path = Path.Combine(outputDir, "GameAssetTool-unity-diagnostics.txt");
             if (!File.Exists(path)) return "";
             try
@@ -661,6 +740,40 @@ namespace RpgmvpConverterWinForms
             catch
             {
                 return "";
+            }
+        }
+
+        private static string BuildUnityDiagnosticsSummaryFromJson(string path)
+        {
+            try
+            {
+                Dictionary<string, object> root = new JavaScriptSerializer().DeserializeObject(File.ReadAllText(path, Encoding.UTF8)) as Dictionary<string, object>;
+                if (root == null) return "";
+                List<string> parts = new List<string>();
+                AddJsonValue(parts, root, "archives", "archives");
+                AddJsonValue(parts, root, "bundles", "bundles");
+                AddJsonValue(parts, root, "assets", "assets");
+                AddJsonValue(parts, root, "direct_files", "direct");
+                AddJsonValue(parts, root, "archive_input_size_text", "input");
+                AddJsonValue(parts, root, "archives_with_zero_output", "zero-output");
+                AddJsonValue(parts, root, "archives_with_errors", "error-archives");
+                if (parts.Count == 0) return "";
+                parts.Add("details: HTML diagnostics tab");
+                return string.Join(" | ", parts.ToArray());
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+        private static void AddJsonValue(List<string> parts, Dictionary<string, object> values, string key, string label)
+        {
+            object value;
+            if (values.TryGetValue(key, out value) && value != null)
+            {
+                string text = Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture);
+                if (!string.IsNullOrWhiteSpace(text)) parts.Add(label + ": " + text);
             }
         }
 

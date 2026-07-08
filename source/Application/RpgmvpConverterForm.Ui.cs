@@ -23,7 +23,7 @@ namespace RpgmvpConverterWinForms
             Font titleFont = new Font("Segoe UI Semibold", 14f, FontStyle.Regular);
             Font logFont = new Font("Consolas", 9.5f, FontStyle.Regular);
 
-            Text = "Game Asset Tool v2.4.10";
+            Text = "Game Asset Tool v2.5.0";
             StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
@@ -874,7 +874,7 @@ namespace RpgmvpConverterWinForms
                 statusLabel.Text = T("Dry Run: scanning", "Проверка: сканирование");
                 statsLabel.Text = T("Reading folders and archive lists...", "Чтение папок и списка архивов...");
                 ScanSummary summary;
-                string cacheKey = inputPath + "|engine=" + SelectedForcedEngine().ToString();
+                string cacheKey = inputPath + "|engine=" + SelectedForcedEngine().ToString() + "|unity=" + UnityModeValue();
                 if (dryScanCache.TryGet(cacheKey, out summary))
                 {
                     if (showLog) WriteLog("Dry run: using cached scan summary.");
@@ -882,7 +882,7 @@ namespace RpgmvpConverterWinForms
                 else
                 {
                     GameEngine forcedEngine = SelectedForcedEngine();
-                    summary = await Task.Run(delegate { return BuildScanSummaryCore(inputPath, token, forcedEngine); }, token);
+                    summary = await Task.Run(delegate { return BuildScanSummaryCore(inputPath, token, forcedEngine, UnityModeValue()); }, token);
                     dryScanCache.Store(cacheKey, summary);
                 }
                 token.ThrowIfCancellationRequested();
@@ -909,6 +909,8 @@ namespace RpgmvpConverterWinForms
                     scanSummary += T(" | Warning: collection folder?", " | Внимание: папка-коллекция?");
                 if (!string.IsNullOrWhiteSpace(summary.RouteHints))
                     scanSummary += T(" | Route: ", " | Маршрут: ") + ShortUiText(summary.RouteHints, 140);
+                if (!string.IsNullOrWhiteSpace(summary.UnityPrediction))
+                    scanSummary += T(" | Unity forecast: ", " | Unity прогноз: ") + ShortUiText(summary.UnityPrediction, 140);
                 scanSummaryLabel.Text = scanSummary;
                 string preflight = BuildPreflightSummary(inputPath, engine, summary);
                 statsLabel.Text = ShortUiText(preflight.Replace(Environment.NewLine, " | "), 150);
@@ -986,6 +988,7 @@ namespace RpgmvpConverterWinForms
                 TopExtensions = summary.TopExtensions,
                 LargestInputs = summary.LargestFiles,
                 RouteHints = summary.RouteHints,
+                UnityPrediction = summary.UnityPrediction,
                 UnityArchivePreview = engine == GameEngine.Unity ? UnityArchiveDiscovery.BuildArchiveSummary(rootPath, 4) : "",
                 ExcludedFolders = engine == GameEngine.Unity ? UnityArchiveDiscovery.BuildSkippedFolderSummary(rootPath) : "",
                 DetectionConfidence = summary.DetectionConfidence,
