@@ -65,7 +65,11 @@ namespace RpgmvpConverterWinForms
             }
             if (engine == GameEngine.Kirikiri)
             {
-                await StartPortableScriptExtractionAsync("KiriKiri XP3", "kirikiri", "extract_xp3.py", "RpgmvpConverterWinForms.scripts.extract_xp3.py", new string[0]);
+                string kirikiriRoot = InputDirectory(pathBox.Text.Trim());
+                if (KirikiriXp3Extractor.HasStandardArchives(kirikiriRoot, Path.Combine(kirikiriRoot, "extracted", "kirikiri")))
+                    await StartLocalExtractionAsync("KiriKiri XP3", "kirikiri", RunKirikiriNativeExtraction);
+                else
+                    await StartPortableScriptExtractionAsync("KiriKiri XP3", "kirikiri", "extract_xp3.py", "RpgmvpConverterWinForms.scripts.extract_xp3.py", new string[0]);
                 return;
             }
             if (engine == GameEngine.Unreal)
@@ -696,6 +700,35 @@ namespace RpgmvpConverterWinForms
             {
                 return RunLegacyRpgMakerExtraction(inputPath, outputDir);
             });
+        }
+
+        private OperationResult RunKirikiriNativeExtraction(string inputPath, string outputDir)
+        {
+            DateTime start = DateTime.UtcNow;
+            string rootPath = InputDirectory(inputPath);
+            Directory.CreateDirectory(outputDir);
+            int archiveCount = KirikiriXp3Extractor.FindArchives(rootPath, outputDir).Count;
+            BeginUi(delegate
+            {
+                progressBar.Maximum = Math.Max(archiveCount, 1);
+                progressBar.Value = 0;
+            });
+            int processed = 0;
+            Xp3ExtractionResult total = KirikiriXp3Extractor.ExtractAll(
+                rootPath,
+                outputDir,
+                delegate(string line)
+                {
+                    SafeLog(line);
+                    BeginUi(delegate
+                    {
+                        processed++;
+                        progressBar.Value = Math.Min(processed, progressBar.Maximum);
+                        statusLabel.Text = "KiriKiri XP3: " + processed;
+                    });
+                },
+                delegate { return localCopyCancellationRequested; });
+            return new OperationResult("KiriKiri XP3", outputDir, total.Extracted, total.Bytes, total.Errors, total.Renamed, 0, DateTime.UtcNow - start);
         }
 
         private async Task StartGameMakerExtractionAsync()
