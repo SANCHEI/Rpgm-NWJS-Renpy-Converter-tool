@@ -11,7 +11,6 @@ namespace RpgmvpConverterWinForms
     {
         private static readonly string[] RequiredResources =
         {
-            "RpgmvpConverterWinForms.runtime.runtime-win-x64.zip",
             "RpgmvpConverterWinForms.tools.UberWolfCli.exe",
             "RpgmvpConverterWinForms.tools.resvg.exe",
             "RpgmvpConverterWinForms.tools.SW_Decensor_v0.7.4.2.zip",
@@ -22,6 +21,8 @@ namespace RpgmvpConverterWinForms
             "RpgmvpConverterWinForms.scripts.extract_gamemaker.py",
             "RpgmvpConverterWinForms.scripts.extract_spite.py"
         };
+
+        private const string OptionalRuntimeResource = "RpgmvpConverterWinForms.runtime.runtime-win-x64.zip";
 
         public static string Run()
         {
@@ -58,7 +59,8 @@ namespace RpgmvpConverterWinForms
             if (!string.IsNullOrWhiteSpace(outputDir))
                 CheckFolder(lines, "Output", outputDir);
             CheckEmbeddedResources(lines);
-            lines.Add("INFO Python runtime: " + (PortableRuntime.IsReady ? "already extracted for this session" : "not extracted at report time"));
+            lines.Add("INFO Python runtime: " + (PortableRuntime.IsReady ? "already extracted for this session" : "not extracted at report time")
+                + (PortableRuntime.HasEmbeddedRuntime ? " (Full build)" : " (Lite build; downloads once on first use)"));
             lines.Add("INFO Tool process preflight: skipped in HTML report to avoid slowing extraction; use the Health button for the full live check.");
 
             lines.Add("");

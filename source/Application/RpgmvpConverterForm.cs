@@ -263,13 +263,27 @@ namespace RpgmvpConverterWinForms
             return Directory.Exists(rootPath) && IsRenpyGame(rootPath);
         }
 
-        private bool EnsurePortableRuntimeAvailable()
+        private static string[] GetRuntimePacks(GameEngine engine)
+        {
+            if (engine == GameEngine.Unity) return new string[] { PortableRuntime.PackUnity };
+            if (engine == GameEngine.Unreal) return new string[] { PortableRuntime.PackUnreal };
+            if (engine == GameEngine.SpakDat) return new string[] { PortableRuntime.PackSpite };
+            return new string[0];
+        }
+
+        private bool EnsurePortableRuntimeAvailable(GameEngine engine)
+        {
+            return EnsurePortableRuntimeAvailable(GetRuntimePacks(engine));
+        }
+
+        private bool EnsurePortableRuntimeAvailable(string[] packs)
         {
             try
             {
                 statusLabel.Text = T("Preparing built-in runtime...", "Подготовка встроенного runtime...");
                 SetRuntimeStatus(T("Runtime: preparing silently...", "Runtime: подготовка в фоне..."), warningColor);
                 PortableRuntime.EnsureExtracted();
+                PortableRuntime.EnsurePacks(packs);
                 SetRuntimeStatus(T("Runtime: ready", "Runtime: готов"), successColor);
                 return true;
             }
@@ -278,7 +292,8 @@ namespace RpgmvpConverterWinForms
                 SetRuntimeStatus(T("Runtime: unavailable", "Runtime: недоступен"), dangerColor);
                 WriteLog("Built-in runtime failed: " + ex.Message);
                 MessageBox.Show(
-                    "Could not prepare the built-in extraction runtime.\n\n" + ex.Message,
+                    "Could not prepare the Python extraction runtime.\n\n" + ex.Message
+                    + "\n\nNative extractors (RPG Maker MV/MZ files, NWJS, Electron, HTML, RGSS archives) work without it.",
                     "Built-in Runtime",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);

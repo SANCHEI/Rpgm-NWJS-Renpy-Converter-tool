@@ -39,6 +39,7 @@
     <Compile Include="source\Application\Dialogs\ResultsDialog.cs" />
     <Compile Include="source\Application\Dialogs\SpriteSheetPreviewForm.cs" />
     <Compile Include="source\Application\Controllers\DryScanCache.cs" />
+    <Compile Include="source\Application\Controllers\DirectorySnapshot.cs" />
     <Compile Include="source\Application\Controllers\ExtractionProfile.cs" />
     <Compile Include="source\Application\Controllers\ExtractionProgressEvent.cs" />
     <Compile Include="source\Application\Controllers\PreflightBuilder.cs" />
@@ -95,7 +96,7 @@
     <EmbeddedResource Include="source\scripts\extract_spite.py">
       <LogicalName>RpgmvpConverterWinForms.scripts.extract_spite.py</LogicalName>
     </EmbeddedResource>
-    <EmbeddedResource Include="payload\runtime-win-x64.zip">
+    <EmbeddedResource Include="payload\runtime-win-x64.zip" Condition="Exists('payload\runtime-win-x64.zip')">
       <LogicalName>RpgmvpConverterWinForms.runtime.runtime-win-x64.zip</LogicalName>
     </EmbeddedResource>
     <EmbeddedResource Include="third_party\uberwolf\UberWolfCli.exe">

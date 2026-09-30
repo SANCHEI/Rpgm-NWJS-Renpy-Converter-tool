@@ -18,7 +18,7 @@ $windowsAes = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "pyuepak_aes_windo
 $patchPyuepak = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "patch_pyuepak_offline.py"))
 $oozextractDll = [IO.Path]::GetFullPath((Join-Path $root "third_party\oozextract\GameAssetTool.OozExtract.dll"))
 
-$runtimeVersion = "python-3.12.10-unrpa-2.3.0-unitypy-1.25.0-pyuepak-0.2.7-zstandard-0.25.0-pycryptodome-3.23.0-oozextract-0.5.4-win-x64-v10"
+$runtimeVersion = "python-3.12.10-unrpa-2.3.0-unitypy-1.25.0-pyuepak-0.2.7-zstandard-0.25.0-pycryptodome-3.23.0-oozextract-0.5.4-win-x64-v11"
 $pythonUrl = "https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip"
 $pythonSha256 = "4ACBED6DD1C744B0376E3B1CF57CE906F9DC9E95E68824584C8099A63025A3C3"
 
@@ -179,4 +179,95 @@ if (Test-Path -LiteralPath $payloadZip) {
 Compress-Archive -Path (Join-Path $runtime "*") -DestinationPath $payloadZip -CompressionLevel Optimal
 Set-Content -LiteralPath $payloadVersionFile -Encoding Ascii -Value $runtimeVersion
 
+# Split packs for Lite builds: per-engine zips downloaded on demand by PortableRuntime.
+# Overlap is intentional (lz4/brotli live in two packs): overlaying is idempotent,
+# correctness beats a few hundred KB. Base keeps the interpreter + unrpa (Renpy) +
+# Pillow (XP3/GameMaker) + pyuepak shims (Godot AES, stdlib+bcrypt only).
+$packPatterns = @{
+    unity  = @("UnityPy*", "archspec*", "astc*", "attrs*", "etcpak*", "fmod*", "fsspec*", "pyfmodex*", "texture2ddecoder*", "lz4*", "brotli*", "_brotli*")
+    unreal = @("lz4*", "zstandard*")
+    spite  = @("brotli*", "_brotli*", "Crypto*")
+}
+$packStage = Join-Path $work "packstage"
+if (Test-Path -LiteralPath $packStage) {
+    Remove-Item -LiteralPath $packStage -Recurse -Force
+}
+New-Item -ItemType Directory -Path $packStage | Out-Null
+$siteEntries = Get-ChildItem -LiteralPath $sitePackages -Force
+$packSelections = @{}
+foreach ($packName in @("unity", "unreal", "spite")) {
+    $selected = @()
+    foreach ($entry in $siteEntries) {
+        foreach ($pattern in $packPatterns[$packName]) {
+            if ($entry.Name -like $pattern) {
+                $selected += $entry
+                break
+            }
+        }
+    }
+    $packSelections[$packName] = $selected
+}
+$claimedByNonBase = @()
+foreach ($packName in @("unity", "unreal", "spite")) {
+    foreach ($entry in $packSelections[$packName]) {
+        if (-not ($claimedByNonBase -contains $entry.FullName)) {
+            $claimedByNonBase += $entry.FullName
+        }
+    }
+}
+function Write-PackManifest([string]$manifestPath, [string[]]$relativePaths) {
+    $relativePaths | Sort-Object | Set-Content -LiteralPath $manifestPath -Encoding Ascii
+}
+function Write-Sha256Sidecar([string]$filePath) {
+    $hash = (Get-FileHash -LiteralPath $filePath -Algorithm SHA256).Hash.ToLowerInvariant()
+    Set-Content -LiteralPath ($filePath + ".sha256") -Encoding Ascii -Value ($hash + "  " + (Split-Path -Leaf $filePath))
+}
+foreach ($packName in @("unity", "unreal", "spite")) {
+    $stageDir = Join-Path $packStage $packName
+    New-Item -ItemType Directory -Path $stageDir | Out-Null
+    $manifest = @()
+    foreach ($entry in $packSelections[$packName]) {
+        $targetParent = Join-Path $stageDir "Lib\site-packages"
+        New-Item -ItemType Directory -Path $targetParent -Force | Out-Null
+        Copy-Item -LiteralPath $entry.FullName -Destination $targetParent -Recurse -Force
+        $manifest += ("Lib\site-packages\" + $entry.Name)
+    }
+    $packZip = Join-Path $payloadDir ("runtime-" + $packName + "-win-x64.zip")
+    if (Test-Path -LiteralPath $packZip) {
+        Remove-Item -LiteralPath $packZip -Force
+    }
+    if ($manifest.Count -eq 0) {
+        Write-Host ("WARNING: pack '" + $packName + "' is empty; skipping " + $packZip)
+        continue
+    }
+    Compress-Archive -Path (Join-Path $stageDir "*") -DestinationPath $packZip -CompressionLevel Optimal
+    Write-PackManifest (Join-Path $payloadDir ("runtime-" + $packName + "-pack-contents.txt")) $manifest
+    Write-Sha256Sidecar $packZip
+    Write-Host ("Pack ready: " + $packZip)
+}
+$baseStage = Join-Path $packStage "base"
+New-Item -ItemType Directory -Path $baseStage | Out-Null
+Copy-Item -LiteralPath (Join-Path $runtime "*") -Destination $baseStage -Recurse -Force
+$baseManifest = @()
+foreach ($claimed in $claimedByNonBase) {
+    $relative = $claimed.Substring($runtime.Length).TrimStart([IO.Path]::DirectorySeparatorChar)
+    $staged = Join-Path $baseStage $relative
+    if (Test-Path -LiteralPath $staged) {
+        Remove-Item -LiteralPath $staged -Recurse -Force
+    }
+}
+foreach ($left in (Get-ChildItem -LiteralPath (Join-Path $baseStage "Lib\site-packages") -Force)) {
+    $baseManifest += ("Lib\site-packages\" + $left.Name)
+}
+$baseZip = Join-Path $payloadDir "runtime-base-win-x64.zip"
+if (Test-Path -LiteralPath $baseZip) {
+    Remove-Item -LiteralPath $baseZip -Force
+}
+Compress-Archive -Path (Join-Path $baseStage "*") -DestinationPath $baseZip -CompressionLevel Optimal
+Write-PackManifest (Join-Path $payloadDir "runtime-base-pack-contents.txt") $baseManifest
+Write-Sha256Sidecar $baseZip
+Write-Sha256Sidecar $payloadZip
+Write-Host ("Pack ready: " + $baseZip)
+
 Write-Host "Portable runtime payload ready: $payloadZip"
+Write-Host "Publish Lite packs with: gh release upload <tag> payload/runtime-base-win-x64.zip payload/runtime-unity-win-x64.zip payload/runtime-unreal-win-x64.zip payload/runtime-spite-win-x64.zip payload/*.sha256"
