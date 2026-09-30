@@ -180,14 +180,16 @@ Compress-Archive -Path (Join-Path $runtime "*") -DestinationPath $payloadZip -Co
 Set-Content -LiteralPath $payloadVersionFile -Encoding Ascii -Value $runtimeVersion
 
 # Split packs for Lite builds: per-engine zips downloaded on demand by PortableRuntime.
-# Overlap is intentional (lz4/brotli live in two packs): overlaying is idempotent,
+# Overlap is intentional (brotli lives in unity+spite): overlaying is idempotent,
 # correctness beats a few hundred KB. Base keeps the interpreter + unrpa (Renpy) +
-# Pillow (XP3/GameMaker) + pyuepak shims (Godot AES, stdlib+bcrypt only).
+# Pillow (XP3/GameMaker) + pyuepak with its import-time deps lz4/zstandard
+# (Godot AES and Unreal both ride on base; verified: pyuepak/__init__ imports lz4).
 $packPatterns = @{
-    unity  = @("UnityPy*", "archspec*", "astc*", "attrs*", "etcpak*", "fmod*", "fsspec*", "pyfmodex*", "texture2ddecoder*", "lz4*", "brotli*", "_brotli*")
-    unreal = @("lz4*", "zstandard*")
+    unity  = @("UnityPy*", "archspec*", "astc*", "attr", "attrs*", "etcpak*", "fmod*", "fsspec*", "pyfmodex*", "texture2ddecoder*", "lz4*", "brotli*", "_brotli*")
     spite  = @("brotli*", "_brotli*", "Crypto*")
 }
+# Import-time deps of pyuepak (lz4/zstandard) must stay in base: Godot and Unreal
+# import pyuepak on base alone. Unity keeps its own copies (overlap is fine).
 $packStage = Join-Path $work "packstage"
 if (Test-Path -LiteralPath $packStage) {
     Remove-Item -LiteralPath $packStage -Recurse -Force
@@ -195,7 +197,7 @@ if (Test-Path -LiteralPath $packStage) {
 New-Item -ItemType Directory -Path $packStage | Out-Null
 $siteEntries = Get-ChildItem -LiteralPath $sitePackages -Force
 $packSelections = @{}
-foreach ($packName in @("unity", "unreal", "spite")) {
+foreach ($packName in @("unity", "spite")) {
     $selected = @()
     foreach ($entry in $siteEntries) {
         foreach ($pattern in $packPatterns[$packName]) {
@@ -207,10 +209,18 @@ foreach ($packName in @("unity", "unreal", "spite")) {
     }
     $packSelections[$packName] = $selected
 }
+$baseOnlyPatterns = @("lz4*", "zstandard*")
 $claimedByNonBase = @()
-foreach ($packName in @("unity", "unreal", "spite")) {
+foreach ($packName in @("unity", "spite")) {
     foreach ($entry in $packSelections[$packName]) {
-        if (-not ($claimedByNonBase -contains $entry.FullName)) {
+        $pinned = $false
+        foreach ($pattern in $baseOnlyPatterns) {
+            if ($entry.Name -like $pattern) {
+                $pinned = $true
+                break
+            }
+        }
+        if (-not $pinned -and -not ($claimedByNonBase -contains $entry.FullName)) {
             $claimedByNonBase += $entry.FullName
         }
     }
@@ -222,7 +232,7 @@ function Write-Sha256Sidecar([string]$filePath) {
     $hash = (Get-FileHash -LiteralPath $filePath -Algorithm SHA256).Hash.ToLowerInvariant()
     Set-Content -LiteralPath ($filePath + ".sha256") -Encoding Ascii -Value ($hash + "  " + (Split-Path -Leaf $filePath))
 }
-foreach ($packName in @("unity", "unreal", "spite")) {
+foreach ($packName in @("unity", "spite")) {
     $stageDir = Join-Path $packStage $packName
     New-Item -ItemType Directory -Path $stageDir | Out-Null
     $manifest = @()
@@ -247,7 +257,7 @@ foreach ($packName in @("unity", "unreal", "spite")) {
 }
 $baseStage = Join-Path $packStage "base"
 New-Item -ItemType Directory -Path $baseStage | Out-Null
-Copy-Item -LiteralPath (Join-Path $runtime "*") -Destination $baseStage -Recurse -Force
+Get-ChildItem -LiteralPath $runtime -Force | Copy-Item -Destination $baseStage -Recurse -Force
 $baseManifest = @()
 foreach ($claimed in $claimedByNonBase) {
     $relative = $claimed.Substring($runtime.Length).TrimStart([IO.Path]::DirectorySeparatorChar)
@@ -270,4 +280,5 @@ Write-Sha256Sidecar $payloadZip
 Write-Host ("Pack ready: " + $baseZip)
 
 Write-Host "Portable runtime payload ready: $payloadZip"
-Write-Host "Publish Lite packs with: gh release upload <tag> payload/runtime-base-win-x64.zip payload/runtime-unity-win-x64.zip payload/runtime-unreal-win-x64.zip payload/runtime-spite-win-x64.zip payload/*.sha256"
+Write-Host "Publish Lite packs with: gh release upload <tag> payload/runtime-base-win-x64.zip payload/runtime-unity-win-x64.zip payload/runtime-spite-win-x64.zip payload/*.sha256"
+

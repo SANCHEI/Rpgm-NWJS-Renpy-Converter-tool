@@ -19,18 +19,17 @@ namespace RpgmvpConverterWinForms
         private const string RuntimeVersion = "python-3.12.10-unrpa-2.3.0-unitypy-1.25.0-pyuepak-0.2.7-zstandard-0.25.0-pycryptodome-3.23.0-oozextract-0.5.4-win-x64-v11";
 
         // Pack layout (built by build_portable_runtime.ps1, published as release assets):
-        //   base   - interpreter + unrpa (Renpy) + Pillow (XP3/GameMaker) + pyuepak shims (Godot AES)
+        //   base   - interpreter + unrpa (Renpy) + Pillow (XP3/GameMaker) +
+        //            pyuepak with import-time deps lz4/zstandard (Godot AES + Unreal)
         //   unity  - UnityPy + texture/audio codec wheels (Unity only)
-        //   unreal - lz4 + zstandard (Unreal only)
         //   spite  - brotli + pycryptodome (SPITE only)
-        // Shared tiny wheels (lz4, brotli) are duplicated across packs on purpose:
+        // Shared tiny wheels (brotli) are duplicated across packs on purpose:
         // overlaying is idempotent, correctness beats a few hundred KB.
         public const string PackBase = "base";
         public const string PackUnity = "unity";
-        public const string PackUnreal = "unreal";
         public const string PackSpite = "spite";
 
-        private const string PackDownloadBaseUrl = "https://github.com/SANCHEI/Rpgm-NWJS-Renpy-Converter-tool/releases/latest/download/";
+        private const string PackDownloadBaseUrl = "https://github.com/SANCHEI/Rpgm-NWJS-Renpy-Converter-tool/releases/download/runtime-v11/";
 
         private static readonly object Sync = new object();
         private static string runtimeDirectory;
@@ -208,7 +207,7 @@ namespace RpgmvpConverterWinForms
 
         private static void ValidatePackName(string pack)
         {
-            if (pack != PackUnity && pack != PackUnreal && pack != PackSpite)
+            if (pack != PackUnity && pack != PackSpite)
                 throw new InvalidOperationException("Unknown runtime pack: " + pack);
         }
 
@@ -251,7 +250,6 @@ namespace RpgmvpConverterWinForms
         {
             string what;
             if (pack == PackUnity) what = "Unity engine pack (UnityPy + codecs)";
-            else if (pack == PackUnreal) what = "Unreal engine pack (lz4 + zstandard)";
             else what = "SPITE engine pack (brotli + pycryptodome)";
             string zipPath = DownloadPackZip(pack, what);
             try

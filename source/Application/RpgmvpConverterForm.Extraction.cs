@@ -55,7 +55,7 @@ namespace RpgmvpConverterWinForms
             }
             if (engine == GameEngine.Unreal)
             {
-                await StartPortableScriptExtractionAsync("Unreal experimental", "unreal", "extract_unreal.py", "RpgmvpConverterWinForms.scripts.extract_unreal.py", new string[] { PortableRuntime.PackUnreal });
+                await StartPortableScriptExtractionAsync("Unreal experimental", "unreal", "extract_unreal.py", "RpgmvpConverterWinForms.scripts.extract_unreal.py", new string[0]);
                 return;
             }
             if (engine == GameEngine.Nwjs)
