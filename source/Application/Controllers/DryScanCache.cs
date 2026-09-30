@@ -12,6 +12,7 @@ namespace RpgmvpConverterWinForms
 
         public bool TryGet(string inputPath, out TSummary summary)
         {
+            // NOTE: does filesystem I/O (fingerprint walk). Call only from background thread.
             if (!string.IsNullOrWhiteSpace(cachedPath)
                 && string.Equals(cachedPath, Normalize(inputPath), StringComparison.OrdinalIgnoreCase)
                 && string.Equals(cachedFingerprint, GetFingerprint(inputPath), StringComparison.Ordinal))
@@ -28,6 +29,13 @@ namespace RpgmvpConverterWinForms
         {
             cachedPath = Normalize(inputPath);
             cachedFingerprint = GetFingerprint(inputPath);
+            cachedSummary = summary;
+        }
+
+        public void StoreWithFingerprint(string inputPath, TSummary summary, string fingerprint)
+        {
+            cachedPath = Normalize(inputPath);
+            cachedFingerprint = fingerprint ?? GetFingerprint(inputPath);
             cachedSummary = summary;
         }
 
