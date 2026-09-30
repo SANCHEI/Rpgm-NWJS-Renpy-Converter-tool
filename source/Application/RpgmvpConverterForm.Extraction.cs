@@ -65,12 +65,12 @@ namespace RpgmvpConverterWinForms
             }
             if (engine == GameEngine.Kirikiri)
             {
-                await StartPortableScriptExtractionAsync("KiriKiri XP3", "kirikiri", "extract_xp3.py", "RpgmvpConverterWinForms.scripts.extract_xp3.py");
+                await StartPortableScriptExtractionAsync("KiriKiri XP3", "kirikiri", "extract_xp3.py", "RpgmvpConverterWinForms.scripts.extract_xp3.py", new string[0]);
                 return;
             }
             if (engine == GameEngine.Unreal)
             {
-                await StartPortableScriptExtractionAsync("Unreal experimental", "unreal", "extract_unreal.py", "RpgmvpConverterWinForms.scripts.extract_unreal.py");
+                await StartPortableScriptExtractionAsync("Unreal experimental", "unreal", "extract_unreal.py", "RpgmvpConverterWinForms.scripts.extract_unreal.py", new string[0]);
                 return;
             }
             if (engine == GameEngine.Nwjs)
@@ -234,7 +234,7 @@ namespace RpgmvpConverterWinForms
                 return;
             }
 
-            if (!EnsurePortableRuntimeAvailable()) return;
+            if (!EnsurePortableRuntimeAvailable(GameEngine.Renpy)) return;
 
             string outputDir = Path.Combine(rootPath, "extracted", "renpy");
             lastOutputDir = outputDir;
@@ -331,7 +331,7 @@ namespace RpgmvpConverterWinForms
                 return;
             }
 
-            if (!EnsurePortableRuntimeAvailable()) return;
+            if (!EnsurePortableRuntimeAvailable(GameEngine.Unity)) return;
 
             List<string> bundles = UnityArchiveDiscovery.FindBundleLikeArchives(rootPath);
             bool includeBundles = true;
@@ -704,7 +704,8 @@ namespace RpgmvpConverterWinForms
                 "GameMaker experimental",
                 "gamemaker",
                 "extract_gamemaker.py",
-                "RpgmvpConverterWinForms.scripts.extract_gamemaker.py");
+                "RpgmvpConverterWinForms.scripts.extract_gamemaker.py",
+                new string[0]);
         }
 
         private async Task StartAndroidApkExtractionAsync()
@@ -833,7 +834,8 @@ namespace RpgmvpConverterWinForms
                 "SPAK DAT / SPITE experimental",
                 "spak-dat",
                 "extract_spite.py",
-                "RpgmvpConverterWinForms.scripts.extract_spite.py");
+                "RpgmvpConverterWinForms.scripts.extract_spite.py",
+                new string[] { PortableRuntime.PackSpite });
         }
 
         private async Task StartLooseResourceCollectionAsync()
@@ -1395,7 +1397,7 @@ namespace RpgmvpConverterWinForms
                 WriteLog("Invalid path");
                 return;
             }
-            if (!EnsurePortableRuntimeAvailable()) return;
+            if (!EnsurePortableRuntimeAvailable(GameEngine.Godot)) return;
 
             string extractionInput = File.Exists(inputPath) ? Path.GetFullPath(inputPath) : outputRoot;
             string outputName = File.Exists(inputPath) ? SanitizeRelativePath(Path.GetFileNameWithoutExtension(inputPath)) : "godot";
@@ -1422,7 +1424,7 @@ namespace RpgmvpConverterWinForms
             CompleteExternalOperation(result);
         }
 
-        private async Task StartPortableScriptExtractionAsync(string engineName, string outputFolder, string scriptFile, string resourceName)
+        private async Task StartPortableScriptExtractionAsync(string engineName, string outputFolder, string scriptFile, string resourceName, string[] packs)
         {
             if (currentRun != null || externalRunning) return;
 
@@ -1432,7 +1434,7 @@ namespace RpgmvpConverterWinForms
                 WriteLog("Invalid path");
                 return;
             }
-            if (!EnsurePortableRuntimeAvailable()) return;
+            if (!EnsurePortableRuntimeAvailable(packs)) return;
 
             string outputDir = Path.Combine(rootPath, "extracted", outputFolder);
             lastOutputDir = outputDir;

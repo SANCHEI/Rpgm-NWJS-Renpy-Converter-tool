@@ -875,16 +875,23 @@ namespace RpgmvpConverterWinForms
                 statsLabel.Text = T("Reading folders and archive lists...", "Чтение папок и списка архивов...");
                 ScanSummary summary;
                 string cacheKey = inputPath + "|engine=" + SelectedForcedEngine().ToString() + "|unity=" + UnityModeValue();
-                if (dryScanCache.TryGet(cacheKey, out summary))
+                GameEngine forcedEngine = SelectedForcedEngine();
+                string unityMode = UnityModeValue();
+                bool usedCache = false;
+                // Cache fingerprint walk does I/O - keep it off the UI thread.
+                summary = await Task.Run(delegate
                 {
-                    if (showLog) WriteLog("Dry run: using cached scan summary.");
-                }
-                else
-                {
-                    GameEngine forcedEngine = SelectedForcedEngine();
-                    summary = await Task.Run(delegate { return BuildScanSummaryCore(inputPath, token, forcedEngine, UnityModeValue()); }, token);
-                    dryScanCache.Store(cacheKey, summary);
-                }
+                    ScanSummary cached;
+                    if (dryScanCache.TryGet(cacheKey, out cached))
+                    {
+                        usedCache = true;
+                        return cached;
+                    }
+                    ScanSummary fresh = BuildScanSummaryCore(inputPath, token, forcedEngine, unityMode);
+                    dryScanCache.Store(cacheKey, fresh);
+                    return fresh;
+                }, token);
+                if (usedCache && showLog) WriteLog("Dry run: using cached scan summary.");
                 token.ThrowIfCancellationRequested();
                 if (!string.Equals(pathBox.Text.Trim(), inputPath, StringComparison.OrdinalIgnoreCase))
                     return;
@@ -1487,7 +1494,9 @@ namespace RpgmvpConverterWinForms
             }
 
             SetRuntimeStatus(
-                T("Runtime: preparing on extraction", "Runtime: подготовится при извлечении"),
+                PortableRuntime.HasEmbeddedRuntime
+                    ? T("Runtime: preparing on extraction", "Runtime: подготовится при извлечении")
+                    : T("Runtime: downloads once on first extraction (~14 MB)", "Runtime: скачается один раз при извлечении (~14 МБ)"),
                 warningColor);
         }
 
