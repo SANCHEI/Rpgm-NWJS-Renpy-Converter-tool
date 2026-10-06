@@ -205,25 +205,29 @@ namespace RpgmvpConverterWinForms
 
         private static string ClassifyDatHeader(string path)
         {
-            byte[] header;
+            // Header-only read: the previous version loaded the whole file
+            // into memory just to inspect the first 16 bytes.
+            byte[] header = new byte[16];
+            int read = 0;
             try
             {
-                header = File.ReadAllBytes(path).Take(16).ToArray();
+                using (FileStream stream = File.OpenRead(path))
+                    read = stream.Read(header, 0, header.Length);
             }
             catch
             {
                 return "unreadable";
             }
 
-            if (header.Length >= 4 && header[0] == (byte)'S' && header[1] == (byte)'P' && header[2] == (byte)'A' && header[3] == (byte)'K')
+            if (read >= 4 && header[0] == (byte)'S' && header[1] == (byte)'P' && header[2] == (byte)'A' && header[3] == (byte)'K')
                 return "SPAK-like";
-            if (header.Length >= 4 && header[0] == 0x1a && header[1] == 0x45 && header[2] == 0xdf && header[3] == 0xa3)
+            if (read >= 4 && header[0] == 0x1a && header[1] == 0x45 && header[2] == 0xdf && header[3] == 0xa3)
                 return "WebM-like";
-            if (header.Length >= 4 && header[0] == 0x89 && header[1] == 0x50 && header[2] == 0x4e && header[3] == 0x47)
+            if (read >= 4 && header[0] == 0x89 && header[1] == 0x50 && header[2] == 0x4e && header[3] == 0x47)
                 return "PNG-like";
-            if (header.Length >= 3 && header[0] == 0xff && header[1] == 0xd8 && header[2] == 0xff)
+            if (read >= 3 && header[0] == 0xff && header[1] == 0xd8 && header[2] == 0xff)
                 return "JPEG-like";
-            if (header.Length >= 4 && header[0] == (byte)'O' && header[1] == (byte)'g' && header[2] == (byte)'g' && header[3] == (byte)'S')
+            if (read >= 4 && header[0] == (byte)'O' && header[1] == (byte)'g' && header[2] == (byte)'g' && header[3] == (byte)'S')
                 return "OGG-like";
             return "unknown/protected";
         }
