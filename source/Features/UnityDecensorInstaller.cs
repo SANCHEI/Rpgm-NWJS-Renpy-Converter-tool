@@ -528,7 +528,7 @@ namespace RpgmvpConverterWinForms
             string expected = Path.Combine(rootPath, Path.GetFileName(dataPath).Substring(0, Path.GetFileName(dataPath).Length - 5) + ".exe");
             if (File.Exists(expected)) return expected;
             string executable = Directory.EnumerateFiles(rootPath, "*.exe", SearchOption.TopDirectoryOnly)
-                .FirstOrDefault(delegate(string path) { return !Path.GetFileName(path).Equals("UnityCrashHandler64.exe", StringComparison.OrdinalIgnoreCase); });
+                .FirstOrDefault(delegate(string path) { return !Path.GetFileName(path).Equals("UnityCrashHandler64.exe", StringComparison.OrdinalIgnoreCase) && !ExtractionPathUtils.IsOwnToolFile(path); });
             if (string.IsNullOrWhiteSpace(executable))
                 throw new InvalidDataException("Unity game executable was not found.");
             return executable;

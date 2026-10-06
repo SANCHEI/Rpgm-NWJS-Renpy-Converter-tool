@@ -1,11 +1,34 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 
 namespace RpgmvpConverterWinForms
 {
     internal static class ExtractionPathUtils
     {
+        public static bool IsOwnToolFile(string path)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(path)) return false;
+                // The tool must never scan, count, copy or carve its own binaries:
+                // users often drop GameAssetTool.exe next to (or inside) a game folder,
+                // and its embedded runtime would otherwise pollute every result.
+                string fileName = Path.GetFileName(path);
+                if (!string.IsNullOrEmpty(fileName)
+                    && fileName.StartsWith("GameAssetTool", StringComparison.OrdinalIgnoreCase))
+                    return true;
+                string ownPath = null;
+                try { ownPath = Assembly.GetExecutingAssembly().Location; }
+                catch { }
+                if (!string.IsNullOrWhiteSpace(ownPath)
+                    && string.Equals(Path.GetFullPath(path), Path.GetFullPath(ownPath), StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            catch { }
+            return false;
+        }
         public static string GetSafeOutputPath(string outputDir, string relativePath)
         {
             string root = AppendDirectorySeparator(Path.GetFullPath(outputDir));

@@ -179,6 +179,9 @@ namespace RpgmvpConverterWinForms
                     // Skip previous extraction output to keep scan focused on inputs.
                     if (fullPath.StartsWith(rootWithSep + "extracted" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
                         continue;
+                    // Never count the tool's own binaries as game content.
+                    if (ExtractionPathUtils.IsOwnToolFile(fullPath))
+                        continue;
                     string ext;
                     try { ext = Path.GetExtension(fullPath).ToLowerInvariant(); }
                     catch { ext = ""; }

@@ -84,6 +84,7 @@ namespace RpgmvpConverterWinForms
                         catch { files = new string[0]; }
                         for (int i = 0; i < files.Length; i++)
                         {
+                            if (ExtractionPathUtils.IsOwnToolFile(files[i])) continue;
                             try
                             {
                                 FileInfo info = new FileInfo(files[i]);

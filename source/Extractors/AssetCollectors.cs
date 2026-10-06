@@ -68,6 +68,7 @@ namespace RpgmvpConverterWinForms
                 return Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories)
                     .Where(delegate(string path)
                     {
+                        if (ExtractionPathUtils.IsOwnToolFile(path)) return false;
                         string fullPath = Path.GetFullPath(path);
                         return !fullPath.StartsWith(outputPrefix, StringComparison.OrdinalIgnoreCase)
                             && !fullPath.StartsWith(extractedPrefix, StringComparison.OrdinalIgnoreCase)
@@ -151,7 +152,7 @@ namespace RpgmvpConverterWinForms
             string root = InputDirectory(inputPath);
             Directory.CreateDirectory(outputDir);
             List<string> files;
-            try { files = Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories).ToList(); }
+            try { files = Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories).Where(delegate(string path) { return !ExtractionPathUtils.IsOwnToolFile(path); }).ToList(); }
             catch { files = new List<string>(); }
 
             StringBuilder report = new StringBuilder();
@@ -191,7 +192,7 @@ namespace RpgmvpConverterWinForms
             report.AppendLine("DAT diagnostics:");
             try
             {
-                List<string> datFiles = Directory.EnumerateFiles(root, "*.dat", SearchOption.AllDirectories).ToList();
+                List<string> datFiles = Directory.EnumerateFiles(root, "*.dat", SearchOption.AllDirectories).Where(delegate(string path) { return !ExtractionPathUtils.IsOwnToolFile(path); }).ToList();
                 report.AppendLine("DAT files: " + datFiles.Count);
                 foreach (string file in datFiles.Take(100))
                     report.AppendLine(MakeRelativePath(root, file) + " | " + ClassifyDatHeader(file) + " | " + ReadHeader(file, 16));
