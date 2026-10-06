@@ -28,6 +28,45 @@ namespace RpgmvpConverterWinForms
                 && Directory.Exists(pygameRoot)
                 && IsPygamePyInstallerGame(pygameRoot))
                 return GameEngine.PygamePyInstaller;
+            try
+            {
+                DirectorySnapshot snapshot = DirectorySnapshot.Create(rootPath, CancellationToken.None);
+                return DetectEngineFromSnapshot(snapshot, rootPath, inputPath);
+            }
+            catch
+            {
+                return DetectEngineLegacyFallback(rootPath, inputPath);
+            }
+        }
+
+        private static GameEngine DetectEngineFromSnapshot(DirectorySnapshot snapshot, string rootPath, string inputPath)
+        {
+            if (AssetCollectors.IsGameMakerInput(rootPath)) return GameEngine.GameMaker;
+            if (IsUnityGame(rootPath)) return GameEngine.Unity;
+            if (IsRenpyGameSnapshot(snapshot, rootPath)) return GameEngine.Renpy;
+            if (IsLegacyRpgMakerGameSnapshot(snapshot, inputPath)) return GameEngine.LegacyRpgMaker;
+            if (HasRpgmFilesSnapshot(snapshot)) return GameEngine.RpgMaker;
+            if (IsGodotGameSnapshot(snapshot, rootPath)) return GameEngine.Godot;
+            if (IsKirikiriGameSnapshot(snapshot)) return GameEngine.Kirikiri;
+            if (IsWolfRpgGame(rootPath)) return GameEngine.WolfRpg;
+            if (IsTyranoScriptGame(rootPath)) return GameEngine.TyranoScript;
+            if (IsUnrealGameSnapshot(snapshot)) return GameEngine.Unreal;
+            if (IsElectronGame(rootPath)) return GameEngine.Electron;
+            if (IsNwjsGame(rootPath)) return GameEngine.Nwjs;
+            if (IsSrpgStudioGame(rootPath)) return GameEngine.SrpgStudio;
+            if (IsPixelGameMakerGameSnapshot(snapshot, rootPath)) return GameEngine.PixelGameMaker;
+            if (IsJavaJarGame(rootPath)) return GameEngine.JavaJar;
+            if (IsFlashGame(rootPath)) return GameEngine.Flash;
+            if (IsSpakDatGame(rootPath)) return GameEngine.SpakDat;
+            if (IsPygamePyInstallerGame(rootPath)) return GameEngine.PygamePyInstaller;
+            if (AssetCollectors.IsHtmlGame(rootPath)) return GameEngine.Html;
+            if (AssetCollectors.IsQspGame(rootPath)) return GameEngine.Qsp;
+            if (AssetCollectors.IsRagsInput(rootPath)) return GameEngine.Rags;
+            return GameEngine.Unknown;
+        }
+
+        private static GameEngine DetectEngineLegacyFallback(string rootPath, string inputPath)
+        {
             if (AssetCollectors.IsGameMakerInput(rootPath)) return GameEngine.GameMaker;
             if (IsUnityGame(rootPath)) return GameEngine.Unity;
             if (IsRenpyGame(rootPath)) return GameEngine.Renpy;
@@ -76,7 +115,7 @@ namespace RpgmvpConverterWinForms
             if (IsElectronGame(rootPath)) return GameEngine.Electron;
             if (IsNwjsGame(rootPath)) return GameEngine.Nwjs;
             if (IsSrpgStudioGame(rootPath)) return GameEngine.SrpgStudio;
-            if (IsPixelGameMakerGame(rootPath)) return GameEngine.PixelGameMaker;
+            if (IsPixelGameMakerGameFast(rootPath)) return GameEngine.PixelGameMaker;
             if (IsJavaJarGame(rootPath)) return GameEngine.JavaJar;
             if (IsFlashGame(rootPath)) return GameEngine.Flash;
             if (IsSpakDatGame(rootPath)) return GameEngine.SpakDat;
@@ -239,6 +278,78 @@ namespace RpgmvpConverterWinForms
             return hasPlayer && hasPgmmvMarkers;
         }
 
+        private static bool IsPixelGameMakerGameFast(string rootPath)
+        {
+            if (!Directory.Exists(rootPath)) return false;
+            if (EnumerateFilesTopLevelSafe(rootPath, "*.pgmproject").Any()
+                || EnumerateFilesTopLevelSafe(rootPath, "*.pgmexport").Any()
+                || EnumerateFilesTopLevelSafe(rootPath, "*.sspj").Any())
+                return true;
+            bool hasPlayer = File.Exists(Path.Combine(rootPath, "player.exe"))
+                || File.Exists(Path.Combine(rootPath, "Player.exe"));
+            bool hasPgmmvMarkers = Directory.Exists(Path.Combine(rootPath, "Resources"))
+                || Directory.Exists(Path.Combine(rootPath, "resources"))
+                || Directory.Exists(Path.Combine(rootPath, "fonts"));
+            return hasPlayer && hasPgmmvMarkers;
+        }
+
+        private static bool IsRenpyGameSnapshot(DirectorySnapshot snapshot, string rootPath)
+        {
+            string gameFolder = Path.Combine(rootPath, "game");
+            if (!Directory.Exists(gameFolder)) return false;
+            string prefix = gameFolder.EndsWith(Path.DirectorySeparatorChar.ToString())
+                ? gameFolder : gameFolder + Path.DirectorySeparatorChar;
+            if (snapshot.HasAnyExtensionInDirectory(prefix, ".rpa", ".rpy", ".rpyc", ".rpym", ".rpymc"))
+                return true;
+            return File.Exists(Path.Combine(rootPath, "renpy.exe"));
+        }
+
+        private static bool HasRpgmFilesSnapshot(DirectorySnapshot snapshot)
+        {
+            return snapshot.HasExtension(".rpgmvp") || snapshot.HasExtension(".png_");
+        }
+
+        private static bool IsGodotGameSnapshot(DirectorySnapshot snapshot, string rootPath)
+        {
+            if (File.Exists(Path.Combine(rootPath, "project.godot"))) return true;
+            if (snapshot.HasExtension(".pck")) return true;
+            return HasGodotEmbeddedPck(rootPath);
+        }
+
+        private static bool IsKirikiriGameSnapshot(DirectorySnapshot snapshot)
+        {
+            return snapshot.HasExtension(".xp3");
+        }
+
+        private static bool IsUnrealGameSnapshot(DirectorySnapshot snapshot)
+        {
+            return snapshot.HasExtension(".pak") || snapshot.HasExtension(".utoc");
+        }
+
+        private static bool IsLegacyRpgMakerGameSnapshot(DirectorySnapshot snapshot, string inputPath)
+        {
+            if (File.Exists(inputPath))
+            {
+                string ext = Path.GetExtension(inputPath).ToLowerInvariant();
+                if (ext == ".rgssad" || ext == ".rgss2a" || ext == ".rgss3a") return true;
+            }
+            return snapshot.HasExtension(".rgssad") || snapshot.HasExtension(".rgss2a") || snapshot.HasExtension(".rgss3a");
+        }
+
+        private static bool IsPixelGameMakerGameSnapshot(DirectorySnapshot snapshot, string rootPath)
+        {
+            if (snapshot.HasTopLevelExtension(".pgmproject") || snapshot.HasTopLevelExtension(".pgmexport"))
+                return true;
+            bool hasPlayer = File.Exists(Path.Combine(rootPath, "player.exe"))
+                || File.Exists(Path.Combine(rootPath, "Player.exe"));
+            if (!hasPlayer) return false;
+            if (Directory.Exists(Path.Combine(rootPath, "Resources"))
+                || Directory.Exists(Path.Combine(rootPath, "resources"))
+                || Directory.Exists(Path.Combine(rootPath, "fonts")))
+                return true;
+            return snapshot.HasExtension(".sspj");
+        }
+
         private static bool IsFlashGame(string rootPath)
         {
             return AssetExtractorRegistry.Find("flash-swf").CanExtract(rootPath);
@@ -368,29 +479,67 @@ namespace RpgmvpConverterWinForms
         {
             string rootPath = InputDirectory(inputPath);
             cancellationToken.ThrowIfCancellationRequested();
-            GameEngine detectedEngine = DetectEngine(inputPath);
+
+            // Single-file inputs: no directory walk at all.
+            if (File.Exists(inputPath))
+            {
+                GameEngine direct = DetectDirectFileEngine(inputPath);
+                if (direct != GameEngine.Unknown)
+                {
+                    List<string> single = new List<string> { Path.GetFullPath(inputPath) };
+                    long singleBytes = SafeFileLength(inputPath);
+                    Dictionary<string, long> singleMap = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+                    singleMap[single[0]] = singleBytes;
+                    string singleRoute = direct == GameEngine.AndroidApk
+                        ? ApkDiagnosticBuilder.BuildDryRunSummary(single, 3) : "";
+                    string singleWarning = BuildCollectionFolderWarning(inputPath, rootPath);
+                    string singleConfidence = BuildDetectionConfidence(inputPath, direct, forcedEngine, direct, 1, 1, singleWarning);
+                    string singleNotes = BuildDetectionNotes(inputPath, direct, forcedEngine, direct);
+                    string singlePrediction = direct == GameEngine.Unity ? BuildUnityDryRunPrediction(rootPath, unityMode, cancellationToken) : "";
+                    return new ScanSummary(
+                        direct, 1, 1, singleBytes,
+                        BuildUnknownExtensionSummary(single),
+                        BuildFileExtensionSummaryFromLengths(single, singleMap, 6),
+                        BuildLargestFileSummaryFromLengths(rootPath, single, singleMap, 3),
+                        singleRoute, singleConfidence, singleNotes, singleWarning, singlePrediction);
+                }
+            }
+
+            if (!Directory.Exists(rootPath))
+            {
+                string emptyWarning = BuildCollectionFolderWarning(inputPath, rootPath);
+                string emptyConfidence = BuildDetectionConfidence(inputPath, GameEngine.Unknown, forcedEngine, GameEngine.Unknown, 0, 0, emptyWarning);
+                string emptyNotes = BuildDetectionNotes(inputPath, GameEngine.Unknown, forcedEngine, GameEngine.Unknown);
+                return new ScanSummary(GameEngine.Unknown, 0, 0, 0, "", "", "", "", emptyConfidence, emptyNotes, emptyWarning, "");
+            }
+
+            // Single-pass snapshot: one filesystem walk for detect + file lists + sizes.
+            DirectorySnapshot snapshot = DirectorySnapshot.Create(rootPath, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            GameEngine detectedEngine = DetectEngineFromSnapshot(snapshot, rootPath, inputPath);
             GameEngine engine = forcedEngine == GameEngine.Unknown ? detectedEngine : forcedEngine;
             IEnumerable<string> files;
             int archives;
             string routeHints = "";
             if (engine == GameEngine.Unity)
             {
-                files = EnumerateFilesSafe(rootPath, "*.*").Where(delegate(string path)
+                List<string> unityFiles = new List<string>();
+                foreach (DirectorySnapshotFile entry in snapshot.Files)
                 {
-                    string ext = Path.GetExtension(path).ToLowerInvariant();
-                    return UnityArchiveDiscovery.IsArchiveLikeExtension(ext) || UnityArchiveDiscovery.IsBundleLikeArchive(path) || ext == ".ress"
+                    string ext = entry.ExtensionLower;
+                    if (UnityArchiveDiscovery.IsArchiveLikeExtension(ext) || UnityArchiveDiscovery.IsBundleLikeArchive(entry.FullPath) || ext == ".ress"
                         || MediaTypeRegistry.IsMedia(ext)
-                        || MediaTypeRegistry.IsText(ext);
-                }).ToList();
-                archives = files.Count(delegate(string path)
-                {
-                    string ext = Path.GetExtension(path).ToLowerInvariant();
-                    return UnityArchiveDiscovery.IsArchiveLikeExtension(ext) || UnityArchiveDiscovery.IsBundleLikeArchive(path);
-                });
+                        || MediaTypeRegistry.IsText(ext))
+                        unityFiles.Add(entry.FullPath);
+                }
+                files = unityFiles;
+                archives = 0;
+                foreach (DirectorySnapshotFile entry in snapshot.Files)
+                    if (UnityArchiveDiscovery.IsArchiveLikeExtension(entry.ExtensionLower) || UnityArchiveDiscovery.IsBundleLikeArchive(entry.FullPath)) archives++;
             }
             else if (engine == GameEngine.Renpy)
             {
-                List<string> renpyArchives = FindRenpyArchives(inputPath);
+                List<string> renpyArchives = FindRenpyArchivesFromSnapshot(snapshot, inputPath, rootPath);
                 files = renpyArchives.Count > 0
                     ? renpyArchives
                     : AssetCollectors.GetLooseResourceFiles(GetRenpyGameFolder(inputPath), Path.Combine(rootPath, "extracted", "renpy", "loose"));
@@ -398,18 +547,21 @@ namespace RpgmvpConverterWinForms
             }
             else if (engine == GameEngine.Godot)
             {
-                files = FindGodotArchives(inputPath);
-                archives = files.Count();
+                files = FindGodotArchivesFromSnapshot(snapshot, inputPath, rootPath);
+                archives = ((List<string>)files).Count;
             }
             else if (engine == GameEngine.Kirikiri)
             {
-                files = EnumerateFilesSafe(rootPath, "*.xp3").ToList();
-                archives = files.Count();
+                files = snapshot.GetFilesWithExtension(".xp3");
+                archives = ((List<string>)files).Count;
             }
             else if (engine == GameEngine.Unreal)
             {
-                files = EnumerateFilesSafe(rootPath, "*.pak").Concat(EnumerateFilesSafe(rootPath, "*.utoc")).ToList();
-                archives = files.Count();
+                List<string> pak = snapshot.GetFilesWithExtension(".pak");
+                List<string> utoc = snapshot.GetFilesWithExtension(".utoc");
+                pak.AddRange(utoc);
+                files = pak;
+                archives = pak.Count;
             }
             else if (engine == GameEngine.Nwjs)
             {
@@ -499,8 +651,8 @@ namespace RpgmvpConverterWinForms
             }
             else if (engine == GameEngine.LegacyRpgMaker)
             {
-                files = FindLegacyRpgMakerArchives(inputPath);
-                archives = files.Count();
+                files = FindLegacyRpgMakerArchivesFromSnapshot(snapshot, inputPath);
+                archives = ((List<string>)files).Count;
             }
             else if (engine == GameEngine.GameMaker)
             {
@@ -520,21 +672,29 @@ namespace RpgmvpConverterWinForms
             }
             else
             {
-                files = GetFilesToConvert(rootPath);
+                files = GetFilesToConvertFromSnapshot(snapshot, rootPath);
                 archives = 0;
             }
             cancellationToken.ThrowIfCancellationRequested();
             List<string> fileList = files.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            Dictionary<string, long> lengthMap = snapshot.BuildLengthMap(fileList);
+            // Fill lengths for loose-file branches that may contain files outside the snapshot root walk.
             long bytes = 0;
             foreach (string path in fileList)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                bytes += SafeFileLength(path);
+                long len;
+                if (!lengthMap.TryGetValue(path, out len))
+                {
+                    len = SafeFileLength(path);
+                    lengthMap[path] = len;
+                }
+                bytes += len;
             }
             string unknownExtensions = BuildUnknownExtensionSummary(fileList);
             cancellationToken.ThrowIfCancellationRequested();
-            string topExtensions = ExtractionReportBuilder.BuildFileExtensionSummary(fileList, 6);
-            string largestFiles = ExtractionReportBuilder.BuildLargestFileSummary(rootPath, fileList, 3);
+            string topExtensions = BuildFileExtensionSummaryFromLengths(fileList, lengthMap, 6);
+            string largestFiles = BuildLargestFileSummaryFromLengths(rootPath, fileList, lengthMap, 3);
             string collectionWarning = BuildCollectionFolderWarning(inputPath, rootPath);
             string confidence = BuildDetectionConfidence(inputPath, detectedEngine, forcedEngine, engine, fileList.Count, archives, collectionWarning);
             string detectionNotes = BuildDetectionNotes(inputPath, detectedEngine, forcedEngine, engine);
@@ -684,6 +844,146 @@ namespace RpgmvpConverterWinForms
                 .Take(8)
                 .Select(delegate(IGrouping<string, string> group) { return group.Key + " x" + group.Count(); })
                 .ToArray());
+        }
+
+        private static List<string> FindRenpyArchivesFromSnapshot(DirectorySnapshot snapshot, string inputPath, string rootPath)
+        {
+            if (File.Exists(inputPath) && inputPath.EndsWith(".rpa", StringComparison.OrdinalIgnoreCase))
+                return new List<string> { Path.GetFullPath(inputPath) };
+            string gameFolder = GetRenpyGameFolder(inputPath);
+            string prefix = gameFolder.EndsWith(Path.DirectorySeparatorChar.ToString())
+                ? gameFolder : gameFolder + Path.DirectorySeparatorChar;
+            List<string> result = new List<string>();
+            foreach (DirectorySnapshotFile entry in snapshot.Files)
+            {
+                if (entry.ExtensionLower != ".rpa") continue;
+                if (entry.FullPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(gameFolder, rootPath, StringComparison.OrdinalIgnoreCase))
+                    result.Add(entry.FullPath);
+            }
+            return result;
+        }
+
+        private static List<string> FindGodotArchivesFromSnapshot(DirectorySnapshot snapshot, string inputPath, string rootPath)
+        {
+            if (File.Exists(inputPath))
+                return FindGodotArchives(inputPath);
+            List<string> result = snapshot.GetFilesWithExtension(".pck");
+            foreach (string executable in snapshot.GetTopLevelFilesWithExtension(".exe"))
+            {
+                try
+                {
+                    if (IsGodotEmbeddedPckFile(executable) && !result.Contains(executable))
+                        result.Add(executable);
+                }
+                catch { }
+            }
+            return result.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        private static List<string> FindLegacyRpgMakerArchivesFromSnapshot(DirectorySnapshot snapshot, string inputPath)
+        {
+            if (File.Exists(inputPath))
+            {
+                string ext = Path.GetExtension(inputPath).ToLowerInvariant();
+                if (ext == ".rgssad" || ext == ".rgss2a" || ext == ".rgss3a")
+                    return new List<string> { Path.GetFullPath(inputPath) };
+            }
+            List<string> result = snapshot.GetFilesWithExtension(".rgssad");
+            result.AddRange(snapshot.GetFilesWithExtension(".rgss2a"));
+            result.AddRange(snapshot.GetFilesWithExtension(".rgss3a"));
+            return result.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        private static List<string> GetFilesToConvertFromSnapshot(DirectorySnapshot snapshot, string rootPath)
+        {
+            string[] skipped =
+            {
+                Path.Combine(rootPath, "www", "img", "tilesets") + Path.DirectorySeparatorChar,
+                Path.Combine(rootPath, "www", "img", "weather") + Path.DirectorySeparatorChar,
+                Path.Combine(rootPath, "img", "tilesets") + Path.DirectorySeparatorChar,
+                Path.Combine(rootPath, "img", "weather") + Path.DirectorySeparatorChar
+            };
+            List<string> result = new List<string>();
+            foreach (DirectorySnapshotFile entry in snapshot.Files)
+            {
+                if (entry.ExtensionLower != ".rpgmvp" && !entry.FullPath.EndsWith(".png_", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                bool skip = false;
+                for (int i = 0; i < skipped.Length; i++)
+                    if (entry.FullPath.StartsWith(skipped[i], StringComparison.OrdinalIgnoreCase)) { skip = true; break; }
+                if (!skip) result.Add(entry.FullPath);
+            }
+            return result;
+        }
+
+        private static string BuildFileExtensionSummaryFromLengths(IEnumerable<string> files, Dictionary<string, long> lengthMap, int limit)
+        {
+            if (files == null) return "";
+            List<string> list = files.ToList();
+            if (list.Count == 0) return "";
+            return string.Join(", ", list
+                .GroupBy(delegate(string path)
+                {
+                    string extension = Path.GetExtension(path);
+                    return string.IsNullOrWhiteSpace(extension) ? "<no extension>" : extension.ToLowerInvariant();
+                }, StringComparer.OrdinalIgnoreCase)
+                .Select(delegate(IGrouping<string, string> group)
+                {
+                    long groupBytes = 0;
+                    foreach (string path in group)
+                    {
+                        long len;
+                        if (lengthMap.TryGetValue(path, out len)) groupBytes += len;
+                    }
+                    return new KeyValuePair<string, long>(group.Key + " x" + group.Count() + " (" + FormatBytes(groupBytes) + ")", group.Count());
+                })
+                .OrderByDescending(delegate(KeyValuePair<string, long> x) { return x.Value; })
+                .Take(Math.Max(limit, 1))
+                .Select(delegate(KeyValuePair<string, long> x) { return x.Key; })
+                .ToArray());
+        }
+
+        private static string BuildLargestFileSummaryFromLengths(string rootPath, IEnumerable<string> files, Dictionary<string, long> lengthMap, int limit)
+        {
+            if (files == null) return "";
+            List<KeyValuePair<string, long>> ordered = files
+                .Select(delegate(string path)
+                {
+                    long len;
+                    if (!lengthMap.TryGetValue(path, out len)) len = 0;
+                    return new KeyValuePair<string, long>(path, len);
+                })
+                .OrderByDescending(delegate(KeyValuePair<string, long> x) { return x.Value; })
+                .Take(Math.Max(limit, 1))
+                .ToList();
+            if (ordered.Count == 0) return "";
+            return string.Join("; ", ordered.Select(delegate(KeyValuePair<string, long> x)
+            {
+                return ShortenPathLocal(MakeRelativePathSafeLocal(rootPath, x.Key), 88) + " (" + FormatBytes(x.Value) + ")";
+            }).ToArray());
+        }
+
+        private static string MakeRelativePathSafeLocal(string rootPath, string path)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(rootPath)) return path;
+                string root = rootPath.EndsWith(Path.DirectorySeparatorChar.ToString()) ? rootPath : rootPath + Path.DirectorySeparatorChar;
+                Uri rootUri = new Uri(Path.GetFullPath(root));
+                Uri fileUri = new Uri(Path.GetFullPath(path));
+                return Uri.UnescapeDataString(rootUri.MakeRelativeUri(fileUri).ToString()).Replace('/', Path.DirectorySeparatorChar);
+            }
+            catch
+            {
+                return path;
+            }
+        }
+
+        private static string ShortenPathLocal(string value, int maxLength)
+        {
+            if (string.IsNullOrWhiteSpace(value) || value.Length <= maxLength) return value;
+            return "..." + value.Substring(value.Length - Math.Max(1, maxLength - 3));
         }
 
         private static List<string> GetFilesToConvert(string rootPath)

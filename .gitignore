@@ -5,6 +5,7 @@ dist/
 payload/
 __pycache__/
 *.pyc
+*.deflated
 *.exe
 *.dll
 *.pdb

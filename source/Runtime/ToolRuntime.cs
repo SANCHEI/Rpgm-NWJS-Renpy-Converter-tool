@@ -13,6 +13,7 @@ namespace RpgmvpConverterWinForms
         private const string ResvgResourceName = "RpgmvpConverterWinForms.tools.resvg.exe";
         private const string ResvgSha256 = "433A7C744CFF561ED64FCF73C7C04E239D7A07AE5F0AADBF1BA8471D63707402";
         private static readonly object Sync = new object();
+        private static readonly byte[] DeflatedMagic = new byte[] { (byte)'G', (byte)'A', (byte)'T', (byte)'D', (byte)'E', (byte)'F', (byte)'0', (byte)'1' };
         private static string runtimeDirectory;
 
         public static string EnsureWolfCliExtracted()
@@ -104,9 +105,33 @@ namespace RpgmvpConverterWinForms
                 if (resource == null)
                     throw new InvalidOperationException("Embedded tool was not found: " + resourceName);
 
-                using (FileStream output = File.Create(destination))
-                    resource.CopyTo(output);
+                using (MemoryStream buffered = new MemoryStream())
+                {
+                    resource.CopyTo(buffered);
+                    byte[] bytes = buffered.ToArray();
+                    using (FileStream output = File.Create(destination))
+                    {
+                        if (StartsWith(bytes, DeflatedMagic))
+                        {
+                            using (MemoryStream input = new MemoryStream(bytes, DeflatedMagic.Length, bytes.Length - DeflatedMagic.Length))
+                            using (System.IO.Compression.DeflateStream deflate = new System.IO.Compression.DeflateStream(input, System.IO.Compression.CompressionMode.Decompress))
+                                deflate.CopyTo(output);
+                        }
+                        else
+                        {
+                            output.Write(bytes, 0, bytes.Length);
+                        }
+                    }
+                }
             }
+        }
+
+        private static bool StartsWith(byte[] data, byte[] prefix)
+        {
+            if (data == null || data.Length < prefix.Length) return false;
+            for (int i = 0; i < prefix.Length; i++)
+                if (data[i] != prefix[i]) return false;
+            return true;
         }
 
         private static void ValidateSha256(string path, string expected)

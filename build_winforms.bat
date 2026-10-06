@@ -4,6 +4,9 @@ setlocal
 call powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0source\scripts\build_portable_runtime.ps1"
 if errorlevel 1 exit /b 1
 
+call powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0source\scripts\build_compressed_tools.ps1"
+if errorlevel 1 exit /b 1
+
 set "MSBUILD=C:\Windows\Microsoft.NET\Framework64\v4.0.30319\MSBuild.exe"
 if not exist "%MSBUILD%" (
     echo MSBuild.exe not found at %MSBUILD%

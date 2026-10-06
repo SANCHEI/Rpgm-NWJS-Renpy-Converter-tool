@@ -65,12 +65,16 @@ namespace RpgmvpConverterWinForms
             }
             if (engine == GameEngine.Kirikiri)
             {
-                await StartPortableScriptExtractionAsync("KiriKiri XP3", "kirikiri", "extract_xp3.py", "RpgmvpConverterWinForms.scripts.extract_xp3.py");
+                string kirikiriRoot = InputDirectory(pathBox.Text.Trim());
+                if (KirikiriXp3Extractor.HasStandardArchives(kirikiriRoot, Path.Combine(kirikiriRoot, "extracted", "kirikiri")))
+                    await StartLocalExtractionAsync("KiriKiri XP3", "kirikiri", RunKirikiriNativeExtraction);
+                else
+                    await StartPortableScriptExtractionAsync("KiriKiri XP3", "kirikiri", "extract_xp3.py", "RpgmvpConverterWinForms.scripts.extract_xp3.py", new string[0]);
                 return;
             }
             if (engine == GameEngine.Unreal)
             {
-                await StartPortableScriptExtractionAsync("Unreal experimental", "unreal", "extract_unreal.py", "RpgmvpConverterWinForms.scripts.extract_unreal.py");
+                await StartPortableScriptExtractionAsync("Unreal experimental", "unreal", "extract_unreal.py", "RpgmvpConverterWinForms.scripts.extract_unreal.py", new string[0]);
                 return;
             }
             if (engine == GameEngine.Nwjs)
@@ -234,20 +238,27 @@ namespace RpgmvpConverterWinForms
                 return;
             }
 
-            if (!EnsurePortableRuntimeAvailable()) return;
-
             string outputDir = Path.Combine(rootPath, "extracted", "renpy");
             lastOutputDir = outputDir;
             if (!await TryResetExtractionRootForOutputAsync(outputDir)) return;
             SetExternalRunningState(true, "Ren'Py");
             progressBar.Maximum = Math.Max(archives.Count, 1);
             progressBar.Value = 0;
-            WriteLog("Ren'Py extraction started with unrpa 2.3.0: " + archives.Count + " archive(s)");
+            List<bool> nativeSupport = new List<bool>(archives.Count);
+            bool needPython = false;
+            foreach (string archive in archives)
+            {
+                bool supported = RpaExtractor.HasNativeSupport(archive);
+                nativeSupport.Add(supported);
+                if (!supported) needPython = true;
+            }
+            if (needPython && !EnsurePortableRuntimeAvailable(GameEngine.Renpy)) return;
+            WriteLog("Ren'Py extraction started" + (needPython ? " with unrpa 2.3.0" : " (native, no runtime needed)") + ": " + archives.Count + " archive(s)");
 
             OperationResult result;
             try
             {
-                result = await Task.Run(delegate { return RunRenpyExtraction(gameFolder, archives, outputDir); });
+                result = await Task.Run(delegate { return RunRenpyExtraction(gameFolder, archives, nativeSupport, outputDir); });
             }
             catch (Exception ex)
             {
@@ -257,7 +268,7 @@ namespace RpgmvpConverterWinForms
             CompleteExternalOperation(result);
         }
 
-        private OperationResult RunRenpyExtraction(string gameFolder, List<string> archives, string outputDir)
+        private OperationResult RunRenpyExtraction(string gameFolder, List<string> archives, List<bool> nativeSupport, string outputDir)
         {
             DateTime start = DateTime.UtcNow;
             int errors = 0;
@@ -281,6 +292,21 @@ namespace RpgmvpConverterWinForms
                     statsLabel.Text = "Archives: " + i + " / " + archives.Count;
                 });
                 SafeLog("Processing RPA: " + relative);
+
+                if (i < nativeSupport.Count && nativeSupport[i])
+                {
+                    try
+                    {
+                        RpaExtractionResult native = RpaExtractor.ExtractArchive(archive, archiveOutput, delegate(string line) { SafeLog(line); });
+                        SafeLog("Ren'Py native: " + native.Extracted + " file(s), " + FormatBytes(native.Bytes));
+                    }
+                    catch (Exception ex)
+                    {
+                        errors++;
+                        SafeLog("WARN:" + Path.GetFileName(archive) + ": " + ex.Message);
+                    }
+                    continue;
+                }
 
                 ProcessStartInfo psi = CreatePythonProcessInfo();
                 psi.Arguments = "-m unrpa -m -p " + QuoteArg(archiveOutput) + " " + QuoteArg(archive);
@@ -331,7 +357,7 @@ namespace RpgmvpConverterWinForms
                 return;
             }
 
-            if (!EnsurePortableRuntimeAvailable()) return;
+            if (!EnsurePortableRuntimeAvailable(GameEngine.Unity)) return;
 
             List<string> bundles = UnityArchiveDiscovery.FindBundleLikeArchives(rootPath);
             bool includeBundles = true;
@@ -698,13 +724,70 @@ namespace RpgmvpConverterWinForms
             });
         }
 
+        private OperationResult RunKirikiriNativeExtraction(string inputPath, string outputDir)
+        {
+            DateTime start = DateTime.UtcNow;
+            string rootPath = InputDirectory(inputPath);
+            Directory.CreateDirectory(outputDir);
+            int archiveCount = KirikiriXp3Extractor.FindArchives(rootPath, outputDir).Count;
+            BeginUi(delegate
+            {
+                progressBar.Maximum = Math.Max(archiveCount, 1);
+                progressBar.Value = 0;
+            });
+            int processed = 0;
+            Xp3ExtractionResult total = KirikiriXp3Extractor.ExtractAll(
+                rootPath,
+                outputDir,
+                delegate(string line)
+                {
+                    SafeLog(line);
+                    BeginUi(delegate
+                    {
+                        processed++;
+                        progressBar.Value = Math.Min(processed, progressBar.Maximum);
+                        statusLabel.Text = "KiriKiri XP3: " + processed;
+                    });
+                },
+                delegate { return localCopyCancellationRequested; });
+            return new OperationResult("KiriKiri XP3", outputDir, total.Extracted, total.Bytes, total.Errors, total.Renamed, 0, DateTime.UtcNow - start);
+        }
+
         private async Task StartGameMakerExtractionAsync()
         {
-            await StartPortableScriptExtractionAsync(
-                "GameMaker experimental",
-                "gamemaker",
-                "extract_gamemaker.py",
-                "RpgmvpConverterWinForms.scripts.extract_gamemaker.py");
+            string gameMakerRoot = InputDirectory(pathBox.Text.Trim());
+            if (GameMakerExtractor.HasNativeSupport(gameMakerRoot, Path.Combine(gameMakerRoot, "extracted", "gamemaker")))
+                await StartLocalExtractionAsync("GameMaker", "gamemaker", RunGameMakerNativeExtraction);
+            else
+                await StartPortableScriptExtractionAsync(
+                    "GameMaker experimental",
+                    "gamemaker",
+                    "extract_gamemaker.py",
+                    "RpgmvpConverterWinForms.scripts.extract_gamemaker.py",
+                    new string[0]);
+        }
+
+        private OperationResult RunGameMakerNativeExtraction(string inputPath, string outputDir)
+        {
+            DateTime start = DateTime.UtcNow;
+            string rootPath = InputDirectory(inputPath);
+            Directory.CreateDirectory(outputDir);
+            int processed = 0;
+            GameMakerResult total = GameMakerExtractor.ExtractAll(
+                rootPath,
+                outputDir,
+                delegate(string line)
+                {
+                    SafeLog(line);
+                    BeginUi(delegate
+                    {
+                        processed++;
+                        progressBar.Value = Math.Min(processed, progressBar.Maximum);
+                        statusLabel.Text = "GameMaker: " + processed;
+                    });
+                },
+                delegate { return localCopyCancellationRequested; });
+            return new OperationResult("GameMaker", outputDir, total.Extracted, total.Bytes, total.Errors, total.Renamed, total.Skipped, DateTime.UtcNow - start);
         }
 
         private async Task StartAndroidApkExtractionAsync()
@@ -833,7 +916,8 @@ namespace RpgmvpConverterWinForms
                 "SPAK DAT / SPITE experimental",
                 "spak-dat",
                 "extract_spite.py",
-                "RpgmvpConverterWinForms.scripts.extract_spite.py");
+                "RpgmvpConverterWinForms.scripts.extract_spite.py",
+                new string[] { PortableRuntime.PackSpite });
         }
 
         private async Task StartLooseResourceCollectionAsync()
@@ -1395,7 +1479,7 @@ namespace RpgmvpConverterWinForms
                 WriteLog("Invalid path");
                 return;
             }
-            if (!EnsurePortableRuntimeAvailable()) return;
+            if (!EnsurePortableRuntimeAvailable(GameEngine.Godot)) return;
 
             string extractionInput = File.Exists(inputPath) ? Path.GetFullPath(inputPath) : outputRoot;
             string outputName = File.Exists(inputPath) ? SanitizeRelativePath(Path.GetFileNameWithoutExtension(inputPath)) : "godot";
@@ -1422,7 +1506,7 @@ namespace RpgmvpConverterWinForms
             CompleteExternalOperation(result);
         }
 
-        private async Task StartPortableScriptExtractionAsync(string engineName, string outputFolder, string scriptFile, string resourceName)
+        private async Task StartPortableScriptExtractionAsync(string engineName, string outputFolder, string scriptFile, string resourceName, string[] packs)
         {
             if (currentRun != null || externalRunning) return;
 
@@ -1432,7 +1516,7 @@ namespace RpgmvpConverterWinForms
                 WriteLog("Invalid path");
                 return;
             }
-            if (!EnsurePortableRuntimeAvailable()) return;
+            if (!EnsurePortableRuntimeAvailable(packs)) return;
 
             string outputDir = Path.Combine(rootPath, "extracted", outputFolder);
             lastOutputDir = outputDir;

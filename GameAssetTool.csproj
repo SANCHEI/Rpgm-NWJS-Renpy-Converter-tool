@@ -39,6 +39,7 @@
     <Compile Include="source\Application\Dialogs\ResultsDialog.cs" />
     <Compile Include="source\Application\Dialogs\SpriteSheetPreviewForm.cs" />
     <Compile Include="source\Application\Controllers\DryScanCache.cs" />
+    <Compile Include="source\Application\Controllers\DirectorySnapshot.cs" />
     <Compile Include="source\Application\Controllers\ExtractionProfile.cs" />
     <Compile Include="source\Application\Controllers\ExtractionProgressEvent.cs" />
     <Compile Include="source\Application\Controllers\ExtractionProfileResolver.cs" />
@@ -63,6 +64,12 @@
     <Compile Include="source\Extractors\SpakDatExtractor.cs" />
     <Compile Include="source\Extractors\UnityExtractionConfig.cs" />
     <Compile Include="source\Extractors\UnityArchiveDiscovery.cs" />
+    <Compile Include="source\Extractors\KirikiriXp3Extractor.cs" />
+    <Compile Include="source\Extractors\GameMakerExtractor.cs" />
+    <Compile Include="source\Extractors\RpaExtractor.cs" />
+    <Compile Include="source\Extractors\PickleReader.cs" />
+    <Compile Include="source\Extractors\CompressionHelper.cs" />
+    <Compile Include="source\Extractors\PngEncoder.cs" />
     <Compile Include="source\Features\UnlockerResources.cs" />
     <Compile Include="source\Features\UnityDecensorInstaller.cs" />
     <Compile Include="source\Reporting\ApkDiagnosticBuilder.cs" />
@@ -100,13 +107,19 @@
     <EmbeddedResource Include="source\scripts\extract_spite.py">
       <LogicalName>RpgmvpConverterWinForms.scripts.extract_spite.py</LogicalName>
     </EmbeddedResource>
-    <EmbeddedResource Include="payload\runtime-win-x64.zip">
+    <EmbeddedResource Include="payload\runtime-win-x64.zip" Condition="Exists('payload\runtime-win-x64.zip') And '$(EmbedRuntime)' != 'false'">
       <LogicalName>RpgmvpConverterWinForms.runtime.runtime-win-x64.zip</LogicalName>
     </EmbeddedResource>
-    <EmbeddedResource Include="third_party\uberwolf\UberWolfCli.exe">
+    <EmbeddedResource Include="third_party\uberwolf\UberWolfCli.exe.deflated" Condition="Exists('third_party\uberwolf\UberWolfCli.exe.deflated')">
       <LogicalName>RpgmvpConverterWinForms.tools.UberWolfCli.exe</LogicalName>
     </EmbeddedResource>
-    <EmbeddedResource Include="third_party\resvg\resvg.exe">
+    <EmbeddedResource Include="third_party\uberwolf\UberWolfCli.exe" Condition="!Exists('third_party\uberwolf\UberWolfCli.exe.deflated')">
+      <LogicalName>RpgmvpConverterWinForms.tools.UberWolfCli.exe</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="third_party\resvg\resvg.exe.deflated" Condition="Exists('third_party\resvg\resvg.exe.deflated')">
+      <LogicalName>RpgmvpConverterWinForms.tools.resvg.exe</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="third_party\resvg\resvg.exe" Condition="!Exists('third_party\resvg\resvg.exe.deflated')">
       <LogicalName>RpgmvpConverterWinForms.tools.resvg.exe</LogicalName>
     </EmbeddedResource>
     <EmbeddedResource Include="third_party\sw_decensor\SW_Decensor_v0.7.4.2.zip">
