@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 $root = [IO.Path]::GetFullPath($PSScriptRoot)
-$version = "2.5.0"
+$version = "2.5.1"
 $release = [IO.Path]::GetFullPath((Join-Path $root "release"))
 $releaseExe = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v$version.exe"))
 $inspectorSource = [IO.Path]::GetFullPath((Join-Path $root "tests\ReleaseInspector.cs"))

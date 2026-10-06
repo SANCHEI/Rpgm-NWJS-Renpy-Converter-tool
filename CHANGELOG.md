@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.5.1 - 2026-10-06
+- Faster engine detection and dry-run scans: a single-pass directory snapshot replaces dozens of repeated folder walks.
+- New Lite build (~3 MB): the portable Python runtime is downloaded once on first use as versioned base/unity/spite packs instead of being embedded.
+- Native offline extractors with Python fallback: KiriKiri XP3 (including TLG5 previews), GameMaker data.win (including FIOQ textures) and Ren'Py RPA (all official versions plus ALT-1.0).
+- Faster signature recovery: Boyer-Moore-Horspool search, zero-copy chunk scanning and header-only DAT classification.
+- Smaller downloads: embedded third-party tools are deflate-compressed (Lite 5.6 MB to 2.9 MB).
+- Removed the 20 MB build artifact and 10 MB promo video from git tracking.
+
 ## 2.5.0 - 2026-07-08
 - Split Unity diagnostics helpers into a separate embedded Python module and keep structured JSON diagnostics alongside the HTML report.
 - Added Unity dry-run object forecast so scans can show likely exportable/skipped Unity object types before extraction.
