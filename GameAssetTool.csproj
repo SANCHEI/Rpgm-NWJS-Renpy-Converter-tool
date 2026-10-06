@@ -65,6 +65,8 @@
     <Compile Include="source\Extractors\UnityExtractionConfig.cs" />
     <Compile Include="source\Extractors\UnityArchiveDiscovery.cs" />
     <Compile Include="source\Extractors\KirikiriXp3Extractor.cs" />
+    <Compile Include="source\Extractors\GameMakerExtractor.cs" />
+    <Compile Include="source\Extractors\PngEncoder.cs" />
     <Compile Include="source\Features\UnlockerResources.cs" />
     <Compile Include="source\Features\UnityDecensorInstaller.cs" />
     <Compile Include="source\Reporting\ApkDiagnosticBuilder.cs" />

@@ -733,12 +733,39 @@ namespace RpgmvpConverterWinForms
 
         private async Task StartGameMakerExtractionAsync()
         {
-            await StartPortableScriptExtractionAsync(
-                "GameMaker experimental",
-                "gamemaker",
-                "extract_gamemaker.py",
-                "RpgmvpConverterWinForms.scripts.extract_gamemaker.py",
-                new string[0]);
+            string gameMakerRoot = InputDirectory(pathBox.Text.Trim());
+            if (GameMakerExtractor.HasNativeSupport(gameMakerRoot, Path.Combine(gameMakerRoot, "extracted", "gamemaker")))
+                await StartLocalExtractionAsync("GameMaker", "gamemaker", RunGameMakerNativeExtraction);
+            else
+                await StartPortableScriptExtractionAsync(
+                    "GameMaker experimental",
+                    "gamemaker",
+                    "extract_gamemaker.py",
+                    "RpgmvpConverterWinForms.scripts.extract_gamemaker.py",
+                    new string[0]);
+        }
+
+        private OperationResult RunGameMakerNativeExtraction(string inputPath, string outputDir)
+        {
+            DateTime start = DateTime.UtcNow;
+            string rootPath = InputDirectory(inputPath);
+            Directory.CreateDirectory(outputDir);
+            int processed = 0;
+            GameMakerResult total = GameMakerExtractor.ExtractAll(
+                rootPath,
+                outputDir,
+                delegate(string line)
+                {
+                    SafeLog(line);
+                    BeginUi(delegate
+                    {
+                        processed++;
+                        progressBar.Value = Math.Min(processed, progressBar.Maximum);
+                        statusLabel.Text = "GameMaker: " + processed;
+                    });
+                },
+                delegate { return localCopyCancellationRequested; });
+            return new OperationResult("GameMaker", outputDir, total.Extracted, total.Bytes, total.Errors, total.Renamed, total.Skipped, DateTime.UtcNow - start);
         }
 
         private async Task StartAndroidApkExtractionAsync()
