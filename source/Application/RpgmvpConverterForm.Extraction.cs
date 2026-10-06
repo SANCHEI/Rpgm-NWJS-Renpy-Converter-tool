@@ -238,20 +238,27 @@ namespace RpgmvpConverterWinForms
                 return;
             }
 
-            if (!EnsurePortableRuntimeAvailable(GameEngine.Renpy)) return;
-
             string outputDir = Path.Combine(rootPath, "extracted", "renpy");
             lastOutputDir = outputDir;
             if (!await TryResetExtractionRootForOutputAsync(outputDir)) return;
             SetExternalRunningState(true, "Ren'Py");
             progressBar.Maximum = Math.Max(archives.Count, 1);
             progressBar.Value = 0;
-            WriteLog("Ren'Py extraction started with unrpa 2.3.0: " + archives.Count + " archive(s)");
+            List<bool> nativeSupport = new List<bool>(archives.Count);
+            bool needPython = false;
+            foreach (string archive in archives)
+            {
+                bool supported = RpaExtractor.HasNativeSupport(archive);
+                nativeSupport.Add(supported);
+                if (!supported) needPython = true;
+            }
+            if (needPython && !EnsurePortableRuntimeAvailable(GameEngine.Renpy)) return;
+            WriteLog("Ren'Py extraction started" + (needPython ? " with unrpa 2.3.0" : " (native, no runtime needed)") + ": " + archives.Count + " archive(s)");
 
             OperationResult result;
             try
             {
-                result = await Task.Run(delegate { return RunRenpyExtraction(gameFolder, archives, outputDir); });
+                result = await Task.Run(delegate { return RunRenpyExtraction(gameFolder, archives, nativeSupport, outputDir); });
             }
             catch (Exception ex)
             {
@@ -261,7 +268,7 @@ namespace RpgmvpConverterWinForms
             CompleteExternalOperation(result);
         }
 
-        private OperationResult RunRenpyExtraction(string gameFolder, List<string> archives, string outputDir)
+        private OperationResult RunRenpyExtraction(string gameFolder, List<string> archives, List<bool> nativeSupport, string outputDir)
         {
             DateTime start = DateTime.UtcNow;
             int errors = 0;
@@ -285,6 +292,21 @@ namespace RpgmvpConverterWinForms
                     statsLabel.Text = "Archives: " + i + " / " + archives.Count;
                 });
                 SafeLog("Processing RPA: " + relative);
+
+                if (i < nativeSupport.Count && nativeSupport[i])
+                {
+                    try
+                    {
+                        RpaExtractionResult native = RpaExtractor.ExtractArchive(archive, archiveOutput, delegate(string line) { SafeLog(line); });
+                        SafeLog("Ren'Py native: " + native.Extracted + " file(s), " + FormatBytes(native.Bytes));
+                    }
+                    catch (Exception ex)
+                    {
+                        errors++;
+                        SafeLog("WARN:" + Path.GetFileName(archive) + ": " + ex.Message);
+                    }
+                    continue;
+                }
 
                 ProcessStartInfo psi = CreatePythonProcessInfo();
                 psi.Arguments = "-m unrpa -m -p " + QuoteArg(archiveOutput) + " " + QuoteArg(archive);

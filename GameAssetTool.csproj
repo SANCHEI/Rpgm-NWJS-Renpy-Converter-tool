@@ -66,6 +66,9 @@
     <Compile Include="source\Extractors\UnityArchiveDiscovery.cs" />
     <Compile Include="source\Extractors\KirikiriXp3Extractor.cs" />
     <Compile Include="source\Extractors\GameMakerExtractor.cs" />
+    <Compile Include="source\Extractors\RpaExtractor.cs" />
+    <Compile Include="source\Extractors\PickleReader.cs" />
+    <Compile Include="source\Extractors\CompressionHelper.cs" />
     <Compile Include="source\Extractors\PngEncoder.cs" />
     <Compile Include="source\Features\UnlockerResources.cs" />
     <Compile Include="source\Features\UnityDecensorInstaller.cs" />

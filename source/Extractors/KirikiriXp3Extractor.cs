@@ -154,7 +154,7 @@ namespace RpgmvpConverterWinForms
                             stream.Seek(segment.Offset, SeekOrigin.Begin);
                             byte[] stored = ReadExact(stream, segment.StoredSize);
                             if ((segment.Flags & SegmentCompressed) != 0)
-                                stored = Inflate(stored);
+                                stored = CompressionHelper.ZlibDecompress(stored);
                             if (stored.Length != (long)segment.OriginalSize)
                                 throw new InvalidDataException("XP3 segment size mismatch for " + entry.FileName);
                             assembled.Write(stored, 0, stored.Length);
@@ -218,7 +218,7 @@ namespace RpgmvpConverterWinForms
             {
                 long compressedSize = (long)ReadU64(stream);
                 long originalSize = (long)ReadU64(stream);
-                byte[] block = Inflate(ReadExact(stream, compressedSize));
+                byte[] block = CompressionHelper.ZlibDecompress(ReadExact(stream, compressedSize));
                 if (block.Length != originalSize)
                     throw new InvalidDataException("XP3 index size mismatch.");
                 return block;
@@ -492,19 +492,6 @@ namespace RpgmvpConverterWinForms
             if (outPos != outputSize)
                 throw new InvalidDataException("TLG5 LZSS output size mismatch.");
             return output;
-        }
-
-        private static byte[] Inflate(byte[] stored)
-        {
-            if (stored.Length < 2)
-                throw new InvalidDataException("XP3 zlib block is truncated.");
-            using (MemoryStream input = new MemoryStream(stored, 2, stored.Length - 2))
-            using (DeflateStream deflate = new DeflateStream(input, CompressionMode.Decompress))
-            using (MemoryStream output = new MemoryStream())
-            {
-                deflate.CopyTo(output);
-                return output.ToArray();
-            }
         }
 
         private static string NormalizeName(string value)
