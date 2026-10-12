@@ -99,7 +99,18 @@ namespace RpgmvpConverterWinForms
                         try { directories = Directory.GetDirectories(directory); }
                         catch { directories = new string[0]; }
                         for (int i = 0; i < directories.Length; i++)
+                        {
+                            try
+                            {
+                                string folderName = Path.GetFileName(directories[i]);
+                                if (string.Equals(folderName, ".git", StringComparison.OrdinalIgnoreCase)
+                                    || string.Equals(folderName, ".svn", StringComparison.OrdinalIgnoreCase)
+                                    || string.Equals(folderName, ".hg", StringComparison.OrdinalIgnoreCase))
+                                    continue;
+                            }
+                            catch { }
                             pending.Push(directories[i]);
+                        }
                     }
                     return "d:" + count + ":" + bytes + ":" + newestTicks;
                 }
