@@ -230,6 +230,16 @@ namespace RpgmvpConverterWinForms
                             continue;
                     }
                     catch { }
+                    // Version-control metadata is never game content.
+                    try
+                    {
+                        string folderName = Path.GetFileName(subdirs[i]);
+                        if (string.Equals(folderName, ".git", StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(folderName, ".svn", StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(folderName, ".hg", StringComparison.OrdinalIgnoreCase))
+                            continue;
+                    }
+                    catch { }
                     pending.Push(subdirs[i]);
                 }
             }

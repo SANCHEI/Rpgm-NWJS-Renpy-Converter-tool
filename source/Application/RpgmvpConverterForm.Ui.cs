@@ -808,11 +808,28 @@ namespace RpgmvpConverterWinForms
             string requestedPath = hasStartupArgument
                 ? startupGamePath
                 : GetStartupExecutableDirectory();
-            string initialRoot = TryFindGameRoot(requestedPath);
-            if (string.IsNullOrWhiteSpace(initialRoot) && hasStartupArgument && IsExistingInput(requestedPath))
-                initialRoot = requestedPath;
-            if (!string.IsNullOrWhiteSpace(initialRoot))
-                ApplyGamePath(hasStartupArgument ? requestedPath : initialRoot, false);
+            // Filesystem probing can take seconds on slow drives: resolve off
+            // the UI thread so the window never freezes on startup.
+            Task.Run(delegate
+            {
+                string initialRoot;
+                try
+                {
+                    initialRoot = TryFindGameRoot(requestedPath);
+                    if (string.IsNullOrWhiteSpace(initialRoot) && hasStartupArgument && IsExistingInput(requestedPath))
+                        initialRoot = requestedPath;
+                }
+                catch
+                {
+                    return;
+                }
+                if (string.IsNullOrWhiteSpace(initialRoot)) return;
+                BeginUi(delegate
+                {
+                    if (closing || IsDisposed) return;
+                    ApplyGamePath(hasStartupArgument ? requestedPath : initialRoot, false);
+                });
+            });
         }
 
         private static string GetStartupExecutableDirectory()

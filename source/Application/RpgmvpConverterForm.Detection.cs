@@ -1323,9 +1323,31 @@ namespace RpgmvpConverterWinForms
                     || File.Exists(Path.Combine(root, "app.nw"))
                     || Directory.Exists(Path.Combine(root, "app.nw"));
                 if (known) return root;
+                // A dev checkout or the tool's own folder is never a game:
+                // stop climbing instead of scanning gigabytes of sources.
+                if (LooksLikeDevFolder(root)) return null;
                 current = current.Parent;
             }
             return null;
+        }
+
+        private static bool LooksLikeDevFolder(string root)
+        {
+            try
+            {
+                if (Directory.Exists(Path.Combine(root, ".git"))
+                    || Directory.Exists(Path.Combine(root, ".svn"))
+                    || Directory.Exists(Path.Combine(root, ".hg")))
+                    return true;
+                if (Directory.EnumerateFiles(root, "GameAssetTool*.exe", SearchOption.TopDirectoryOnly).Any())
+                    return true;
+                if (Directory.EnumerateFiles(root, "*.sln", SearchOption.TopDirectoryOnly).Any())
+                    return true;
+                if (Directory.EnumerateFiles(root, "*.csproj", SearchOption.TopDirectoryOnly).Any())
+                    return true;
+            }
+            catch { }
+            return false;
         }
 
         private enum GameEngine
