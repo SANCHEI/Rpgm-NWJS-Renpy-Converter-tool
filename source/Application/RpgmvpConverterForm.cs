@@ -269,9 +269,7 @@ namespace RpgmvpConverterWinForms
 
         private static string[] GetRuntimePacks(GameEngine engine)
         {
-            if (engine == GameEngine.Unity) return new string[] { PortableRuntime.PackUnity };
-            if (engine == GameEngine.SpakDat) return new string[] { PortableRuntime.PackSpite };
-            return new string[0];
+            return EngineInfo.For(engine).RuntimePacks;
         }
 
         private bool EnsurePortableRuntimeAvailable(GameEngine engine)
@@ -425,13 +423,7 @@ namespace RpgmvpConverterWinForms
 
         private static bool UsesPortableRuntime(GameEngine engine)
         {
-            return engine == GameEngine.Renpy
-                || engine == GameEngine.Unity
-                || engine == GameEngine.Godot
-                || engine == GameEngine.Kirikiri
-                || engine == GameEngine.Unreal
-                || engine == GameEngine.GameMaker
-                || engine == GameEngine.SpakDat;
+            return EngineInfo.For(engine).UsesRuntime;
         }
 
         private void BeginUi(Action action)
@@ -576,62 +568,12 @@ namespace RpgmvpConverterWinForms
 
         private static string EngineName(GameEngine engine)
         {
-            switch (engine)
-            {
-                case GameEngine.RpgMaker: return "RPG Maker MV/MZ";
-                case GameEngine.Renpy: return "Ren'Py";
-                case GameEngine.Unity: return "Unity";
-                case GameEngine.Godot: return "Godot";
-                case GameEngine.Kirikiri: return "KiriKiri XP3";
-                case GameEngine.Unreal: return "Unreal experimental";
-                case GameEngine.Nwjs: return "NWJS";
-                case GameEngine.WolfRpg: return "WOLF RPG";
-                case GameEngine.TyranoScript: return "TyranoScript";
-                case GameEngine.JavaJar: return "Java game / JAR";
-                case GameEngine.Flash: return "Flash SWF experimental";
-                case GameEngine.Electron: return "Electron ASAR";
-                case GameEngine.Html: return "HTML game";
-                case GameEngine.Qsp: return "QSP";
-                case GameEngine.Rags: return "RAGS experimental";
-                case GameEngine.LegacyRpgMaker: return "RPG Maker XP/VX/VX Ace";
-                case GameEngine.GameMaker: return "GameMaker experimental";
-                case GameEngine.AndroidApk: return "Android APK recovery";
-                case GameEngine.SrpgStudio: return "SRPG Studio recovery";
-                case GameEngine.PixelGameMaker: return "Pixel Game Maker MV recovery";
-                case GameEngine.SpakDat: return "SPAK DAT experimental";
-                case GameEngine.PygamePyInstaller: return "Pygame / PyInstaller";
-                default: return "not detected";
-            }
+            return EngineInfo.For(engine).Name;
         }
 
         private Color EngineColor(GameEngine engine)
         {
-            switch (engine)
-            {
-                case GameEngine.Unity: return Color.FromArgb(160, 125, 255);
-                case GameEngine.Renpy: return pinkColor;
-                case GameEngine.RpgMaker: return accentColor;
-                case GameEngine.Godot: return Color.FromArgb(71, 140, 191);
-                case GameEngine.Kirikiri: return Color.FromArgb(255, 155, 95);
-                case GameEngine.Unreal: return Color.FromArgb(178, 178, 190);
-                case GameEngine.Nwjs: return Color.FromArgb(255, 183, 77);
-                case GameEngine.WolfRpg: return Color.FromArgb(110, 205, 150);
-                case GameEngine.TyranoScript: return Color.FromArgb(255, 140, 190);
-                case GameEngine.JavaJar: return Color.FromArgb(235, 155, 75);
-                case GameEngine.Flash: return Color.FromArgb(225, 80, 75);
-                case GameEngine.Electron: return Color.FromArgb(105, 190, 210);
-                case GameEngine.Html: return Color.FromArgb(85, 180, 235);
-                case GameEngine.Qsp: return Color.FromArgb(205, 165, 85);
-                case GameEngine.Rags: return Color.FromArgb(190, 120, 210);
-                case GameEngine.LegacyRpgMaker: return Color.FromArgb(85, 190, 240);
-                case GameEngine.GameMaker: return Color.FromArgb(100, 200, 190);
-                case GameEngine.AndroidApk: return Color.FromArgb(120, 205, 100);
-                case GameEngine.SrpgStudio: return Color.FromArgb(210, 180, 90);
-                case GameEngine.PixelGameMaker: return Color.FromArgb(110, 185, 235);
-                case GameEngine.SpakDat: return Color.FromArgb(195, 150, 95);
-                case GameEngine.PygamePyInstaller: return Color.FromArgb(95, 190, 130);
-                default: return mutedColor;
-            }
+            return Color.FromArgb(EngineInfo.For(engine).Argb);
         }
 
         private static string QuoteArg(string value)

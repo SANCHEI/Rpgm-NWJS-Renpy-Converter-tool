@@ -1,0 +1,41 @@
+name: PR Check
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check version stamp
+        shell: powershell
+        run: .\source\scripts\sync_version.ps1 -Check
+
+      - name: Build Lite executable
+        shell: cmd
+        run: build_lite.bat
+
+      - name: Verify Lite executable
+        shell: powershell
+        run: |
+          $exe = Get-Item -LiteralPath bin\GameAssetTool-Lite.exe
+          if ($exe.Length -lt 1MB -or $exe.Length -gt 12MB) {
+            throw "Unexpected Lite exe size: $($exe.Length) bytes."
+          }
+          $text = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($exe.FullName))
+          foreach ($required in @(
+            'RpgmvpConverterWinForms.scripts.extract_unity.py',
+            'RpgmvpConverterWinForms.tools.UberWolfCli.exe',
+            'RpgmvpConverterWinForms.tools.resvg.exe')) {
+            if (-not $text.Contains($required)) { throw "Lite resource is missing: $required" }
+          }
+          if ($text.Contains('RpgmvpConverterWinForms.runtime.runtime-win-x64.zip')) {
+            throw 'Lite exe must not embed the Python runtime.'
+          }
+          Write-Host ('Lite exe OK: {0:N1} MB' -f ($exe.Length / 1MB))

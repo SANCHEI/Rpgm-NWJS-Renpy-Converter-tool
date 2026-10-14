@@ -710,28 +710,8 @@ namespace RpgmvpConverterWinForms
             {
                 engineOverrideBox.Items.Clear();
                 engineOverrideBox.Items.Add(T("Auto engine", "Авто движок"));
-                engineOverrideBox.Items.Add("RPG Maker MV/MZ");
-                engineOverrideBox.Items.Add("Ren'Py");
-                engineOverrideBox.Items.Add("Unity");
-                engineOverrideBox.Items.Add("Godot");
-                engineOverrideBox.Items.Add("KiriKiri XP3");
-                engineOverrideBox.Items.Add("Unreal PAK");
-                engineOverrideBox.Items.Add("NWJS");
-                engineOverrideBox.Items.Add("WOLF RPG");
-                engineOverrideBox.Items.Add("TyranoScript");
-                engineOverrideBox.Items.Add("Java / JAR");
-                engineOverrideBox.Items.Add("Flash SWF");
-                engineOverrideBox.Items.Add("Electron ASAR");
-                engineOverrideBox.Items.Add("HTML");
-                engineOverrideBox.Items.Add("QSP");
-                engineOverrideBox.Items.Add("RAGS");
-                engineOverrideBox.Items.Add("RPG Maker XP/VX");
-                engineOverrideBox.Items.Add("GameMaker");
-                engineOverrideBox.Items.Add("Android APK");
-                engineOverrideBox.Items.Add("SRPG Studio");
-                engineOverrideBox.Items.Add("Pixel Game Maker");
-                engineOverrideBox.Items.Add("SPAK DAT");
-                engineOverrideBox.Items.Add("Pygame / PyInstaller");
+                for (int i = 1; i < EngineInfo.All.Length; i++)
+                    engineOverrideBox.Items.Add(EngineInfo.All[i].OverrideLabel);
                 engineOverrideBox.SelectedIndex = selected >= 0 && selected < engineOverrideBox.Items.Count ? selected : 0;
             }
             finally
@@ -753,33 +733,12 @@ namespace RpgmvpConverterWinForms
 
         private GameEngine SelectedForcedEngine()
         {
+            // Override box index 0 is Auto; engine rows follow enum order,
+            // matching EngineInfo.All (whose index 0 is the Unknown row).
             if (engineOverrideBox == null || engineOverrideBox.SelectedIndex <= 0) return GameEngine.Unknown;
-            switch (engineOverrideBox.SelectedIndex)
-            {
-                case 1: return GameEngine.RpgMaker;
-                case 2: return GameEngine.Renpy;
-                case 3: return GameEngine.Unity;
-                case 4: return GameEngine.Godot;
-                case 5: return GameEngine.Kirikiri;
-                case 6: return GameEngine.Unreal;
-                case 7: return GameEngine.Nwjs;
-                case 8: return GameEngine.WolfRpg;
-                case 9: return GameEngine.TyranoScript;
-                case 10: return GameEngine.JavaJar;
-                case 11: return GameEngine.Flash;
-                case 12: return GameEngine.Electron;
-                case 13: return GameEngine.Html;
-                case 14: return GameEngine.Qsp;
-                case 15: return GameEngine.Rags;
-                case 16: return GameEngine.LegacyRpgMaker;
-                case 17: return GameEngine.GameMaker;
-                case 18: return GameEngine.AndroidApk;
-                case 19: return GameEngine.SrpgStudio;
-                case 20: return GameEngine.PixelGameMaker;
-                case 21: return GameEngine.SpakDat;
-                case 22: return GameEngine.PygamePyInstaller;
-                default: return GameEngine.Unknown;
-            }
+            int tableIndex = engineOverrideBox.SelectedIndex;
+            if (tableIndex < 0 || tableIndex >= EngineInfo.All.Length) return GameEngine.Unknown;
+            return EngineInfo.All[tableIndex].Engine;
         }
 
         private string BuildEngineLabel(GameEngine engine)
@@ -996,13 +955,7 @@ namespace RpgmvpConverterWinForms
                 ExistingOutputPolicy = Directory.Exists(GetDefaultOutputFolder(rootPath, engine)) ? "ask-delete" : "new",
                 OutputExists = Directory.Exists(GetDefaultOutputFolder(rootPath, engine)),
                 DiagnosticsOnly = IsDiagnosticsOnlyProfile(),
-                UsesPortableRuntime = engine == GameEngine.Unity
-                    || engine == GameEngine.Renpy
-                    || engine == GameEngine.Godot
-                    || engine == GameEngine.Kirikiri
-                    || engine == GameEngine.Unreal
-                    || engine == GameEngine.GameMaker
-                    || engine == GameEngine.SpakDat,
+                UsesPortableRuntime = EngineInfo.For(engine).UsesRuntime,
                 IsRpgMaker = engine == GameEngine.RpgMaker,
                 HasManualKey = keyBox != null && !string.IsNullOrWhiteSpace(keyBox.Text),
                 IsUnreal = engine == GameEngine.Unreal,
@@ -1023,32 +976,7 @@ namespace RpgmvpConverterWinForms
 
         private static string GetDefaultOutputFolder(string rootPath, GameEngine engine)
         {
-            switch (engine)
-            {
-                case GameEngine.RpgMaker: return Path.Combine(rootPath, "extracted", "rpgm");
-                case GameEngine.Renpy: return Path.Combine(rootPath, "extracted", "renpy");
-                case GameEngine.Unity: return Path.Combine(rootPath, "extracted", "unity");
-                case GameEngine.Godot: return Path.Combine(rootPath, "extracted", "godot");
-                case GameEngine.Kirikiri: return Path.Combine(rootPath, "extracted", "kirikiri");
-                case GameEngine.Unreal: return Path.Combine(rootPath, "extracted", "unreal");
-                case GameEngine.Nwjs: return Path.Combine(rootPath, "extracted", "nwjs");
-                case GameEngine.WolfRpg: return Path.Combine(rootPath, "extracted", "wolf");
-                case GameEngine.TyranoScript: return Path.Combine(rootPath, "extracted", "tyrano");
-                case GameEngine.JavaJar: return Path.Combine(rootPath, "extracted", "java");
-                case GameEngine.AndroidApk: return Path.Combine(rootPath, "extracted", "android-apk");
-                case GameEngine.SrpgStudio: return Path.Combine(rootPath, "extracted", "srpg-studio");
-                case GameEngine.PixelGameMaker: return Path.Combine(rootPath, "extracted", "pixel-game-maker");
-                case GameEngine.Flash: return Path.Combine(rootPath, "extracted", "flash");
-                case GameEngine.Electron: return Path.Combine(rootPath, "extracted", "electron");
-                case GameEngine.Html: return Path.Combine(rootPath, "extracted", "html");
-                case GameEngine.Qsp: return Path.Combine(rootPath, "extracted", "qsp");
-                case GameEngine.Rags: return Path.Combine(rootPath, "extracted", "rags");
-                case GameEngine.LegacyRpgMaker: return Path.Combine(rootPath, "extracted", "rgss");
-                case GameEngine.GameMaker: return Path.Combine(rootPath, "extracted", "gamemaker");
-                case GameEngine.SpakDat: return Path.Combine(rootPath, "extracted", "spak-dat");
-                case GameEngine.PygamePyInstaller: return Path.Combine(rootPath, "extracted", "pygame");
-                default: return Path.Combine(rootPath, "extracted", "signature-recovery");
-            }
+            return Path.Combine(rootPath, "extracted", EngineInfo.For(engine).OutputFolder);
         }
 
         private void CancelDryScan()
@@ -1194,124 +1122,18 @@ namespace RpgmvpConverterWinForms
             UpdateModeButtonTexts();
             UpdateUnlockerControls(busy);
 
-            switch (engine)
+            EngineInfo engineInfo = EngineInfo.For(engine);
+            if (engineInfo.KeyLabelEn != null)
+                keyLabel.Text = T(engineInfo.KeyLabelEn, engineInfo.KeyLabelRu);
+            extractionHintLabel.Text = T(engineInfo.HintEn, engineInfo.HintRu);
+            if (engine == GameEngine.Renpy)
             {
-                case GameEngine.RpgMaker:
-                    keyLabel.Text = T("RPGM HEX key", "HEX-ключ RPGM");
-                    extractionHintLabel.Text = T(
-                        "Encrypted image assets. The key is detected automatically when possible.",
-                        "Зашифрованные изображения. Ключ определяется автоматически, когда это возможно.");
-                    break;
-                case GameEngine.Unity:
-                    extractionHintLabel.Text = T(
-                        "Unity extraction follows the selected Extract profile, including Text only for TextAsset/localization files.",
-                        "Unity извлекается по выбранному профилю Extract, включая «Только текст» для TextAsset/локализаций.");
-                    break;
-                case GameEngine.Renpy:
-                    extractionHintLabel.Text = FindRenpyArchives(pathBox.Text.Trim()).Count > 0
-                        ? T("RPA archives will be extracted into separate folders.", "Архивы RPA будут извлечены в отдельные папки.")
-                        : T("No RPA archives found. Open Ren'Py resources will be collected.", "Архивы RPA не найдены. Будут собраны открытые ресурсы Ren'Py.");
-                    break;
-                case GameEngine.Godot:
-                    keyLabel.Text = T("Godot PCK key", "Ключ Godot PCK");
-                    extractionHintLabel.Text = T("PCK extraction. For encrypted archives, enter the key or keep the field empty for automatic discovery.", "Извлечение PCK. Для зашифрованных архивов укажите ключ или оставьте поле пустым для автопоиска.");
-                    break;
-                case GameEngine.Kirikiri:
-                    extractionHintLabel.Text = T("Standard XP3 extraction. Supported TLG5 images also receive PNG previews.", "Извлечение стандартных XP3. Для поддерживаемых изображений TLG5 также создаются PNG-превью.");
-                    break;
-                case GameEngine.Unreal:
-                    keyLabel.Text = T("Unreal AES key", "AES-ключ Unreal");
-                    extractionHintLabel.Text = T(
-                        "Experimental PAK extraction with AES key discovery and Zlib, Gzip, LZ4, Zstd or Oodle decoding. Oodle has a built-in open-source fallback; a local official DLL is preferred when available. IoStore is reported.",
-                        "Экспериментальное извлечение PAK с поиском AES-ключа и распаковкой Zlib, Gzip, LZ4, Zstd или Oodle. Для Oodle встроен open-source fallback; локальная официальная DLL используется при наличии. IoStore отмечается в отчёте.");
-                    break;
-                case GameEngine.Nwjs:
-                    extractionHintLabel.Text = T(
-                        "NWJS files will be copied. ZIP-compatible package.nw archives will be unpacked.",
-                        "Файлы NWJS будут скопированы. ZIP-совместимые архивы package.nw будут распакованы.");
-                    break;
-                case GameEngine.WolfRpg:
-                    extractionHintLabel.Text = T(
-                        "WOLF archives use the embedded UberWolf CLI. Loose Data files are copied too.",
-                        "Архивы WOLF извлекаются встроенным UberWolf CLI. Открытые файлы Data также копируются.");
-                    break;
-                case GameEngine.TyranoScript:
-                    extractionHintLabel.Text = T(
-                        "TyranoScript project data will be copied with its original folder structure.",
-                        "Данные проекта TyranoScript будут скопированы с исходной структурой папок.");
-                    break;
-                case GameEngine.JavaJar:
-                    javaModeLabel.Text = T("Java mode", "Режим Java");
-                    extractionHintLabel.Text = T(
-                        "Choose fast images-only, cached SVG previews or all resources.",
-                        "Выберите быстрые изображения, кэшируемые PNG-превью SVG или все ресурсы.");
-                    break;
-                case GameEngine.Flash:
-                    extractionHintLabel.Text = T(
-                        "Experimental Flash inspection copies SWF files and extracts embedded JPEG, PNG, GIF and FLV video.",
-                        "Экспериментальный анализ Flash копирует SWF и извлекает встроенные JPEG, PNG, GIF и FLV-видео.");
-                    break;
-                case GameEngine.Electron:
-                    extractionHintLabel.Text = T(
-                        "Electron app.asar files will be unpacked with archive safety limits.",
-                        "Файлы Electron app.asar будут распакованы с защитными лимитами архива.");
-                    break;
-                case GameEngine.Html:
-                    extractionHintLabel.Text = T(
-                        "Static HTML game files and open media resources will be collected with their folder structure.",
-                        "Файлы статической HTML-игры и открытые медиа будут собраны с сохранением структуры.");
-                    break;
-                case GameEngine.Qsp:
-                    extractionHintLabel.Text = T(
-                        "QSP databases and open media resources will be collected without copying the bundled player.",
-                        "Базы QSP и открытые медиа будут собраны без копирования встроенного проигрывателя.");
-                    break;
-                case GameEngine.Rags:
-                    extractionHintLabel.Text = T(
-                        "Experimental RAGS recovery copies the encrypted database and carves confidently detected embedded media.",
-                        "Экспериментальное восстановление RAGS копирует зашифрованную базу и извлекает уверенно найденные медиа.");
-                    break;
-                case GameEngine.LegacyRpgMaker:
-                    extractionHintLabel.Text = T(
-                        "RGSSAD, RGSS2A and RGSS3A archives will be extracted by the built-in parser.",
-                        "Архивы RGSSAD, RGSS2A и RGSS3A будут извлечены встроенным parser-ом.");
-                    break;
-                case GameEngine.GameMaker:
-                    extractionHintLabel.Text = T(
-                        "Experimental data.win recovery preserves the original and extracts PNG, QOI and BZ2QOI texture pages.",
-                        "Экспериментальное восстановление data.win сохраняет оригинал и извлекает страницы текстур PNG, QOI и BZ2QOI.");
-                    break;
-                case GameEngine.AndroidApk:
-                    extractionHintLabel.Text = T(
-                        "APK files are unpacked as ZIP containers and scanned for embedded assets, including GPU texture containers.",
-                        "APK распаковывается как ZIP-контейнер и сканируется на встроенные ресурсы, включая контейнеры GPU-текстур.");
-                    break;
-                case GameEngine.SrpgStudio:
-                    extractionHintLabel.Text = T(
-                        "SRPG Studio resources are collected, and .rts/.dts/.srk containers are scanned by signatures.",
-                        "Ресурсы SRPG Studio собираются, а контейнеры .rts/.dts/.srk сканируются по сигнатурам.");
-                    break;
-                case GameEngine.PixelGameMaker:
-                    extractionHintLabel.Text = T(
-                        "Pixel Game Maker MV open resources are collected, encrypted or packed data is scanned by signatures.",
-                        "Открытые ресурсы Pixel Game Maker MV собираются, зашифрованные или упакованные данные сканируются по сигнатурам.");
-                    break;
-                case GameEngine.SpakDat:
-                    extractionHintLabel.Text = T(
-                        "Experimental SPAK DAT / SPITE extraction decodes resources whose runtime paths can be recovered. Remaining protected blocks stay as .dat files in protected/.",
-                        "Экспериментальное извлечение SPAK DAT / SPITE декодирует ресурсы с восстановленными runtime-путями. Остальные защищённые блоки остаются .dat-файлами в protected/.");
-                    break;
-                case GameEngine.PygamePyInstaller:
-                    extractionHintLabel.Text = T(
-                        "Pygame/PyInstaller assets will be collected. XOR-obfuscated image .dat files are decoded when recognized.",
-                        "Ресурсы Pygame/PyInstaller будут собраны. XOR-зашифрованные изображения .dat декодируются при распознавании.");
-                    break;
-                default:
-                    extractionHintLabel.Text = T(
-                        "Unknown format. Recover embedded media by signatures or collect loose resources.",
-                        "Неизвестный формат. Извлеките встроенные медиа по сигнатурам или соберите открытые ресурсы.");
-                    break;
+                extractionHintLabel.Text = FindRenpyArchives(pathBox.Text.Trim()).Count > 0
+                    ? T("RPA archives will be extracted into separate folders.", "Архивы RPA будут извлечены в отдельные папки.")
+                    : T("No RPA archives found. Open Ren'Py resources will be collected.", "Архивы RPA не найдены. Будут собраны открытые ресурсы Ren'Py.");
             }
+            if (engine == GameEngine.JavaJar)
+                javaModeLabel.Text = T("Java mode", "Режим Java");
 
             UpdateRuntimeStatusForEngine(engine);
             UpdateActionTooltips();
@@ -1330,28 +1152,7 @@ namespace RpgmvpConverterWinForms
 
         private static bool CanExtractAssets(GameEngine engine)
         {
-            return engine == GameEngine.RpgMaker
-                || engine == GameEngine.Renpy
-                || engine == GameEngine.Unity
-                || engine == GameEngine.Godot
-                || engine == GameEngine.Kirikiri
-                || engine == GameEngine.Unreal
-                || engine == GameEngine.Nwjs
-                || engine == GameEngine.WolfRpg
-                || engine == GameEngine.TyranoScript
-                || engine == GameEngine.JavaJar
-                || engine == GameEngine.Flash
-                || engine == GameEngine.Electron
-                || engine == GameEngine.Html
-                || engine == GameEngine.Qsp
-                || engine == GameEngine.Rags
-                || engine == GameEngine.LegacyRpgMaker
-                || engine == GameEngine.GameMaker
-                || engine == GameEngine.AndroidApk
-                || engine == GameEngine.SrpgStudio
-                || engine == GameEngine.PixelGameMaker
-                || engine == GameEngine.SpakDat
-                || engine == GameEngine.PygamePyInstaller;
+            return engine != GameEngine.Unknown;
         }
 
         private void UpdateUnlockerLayout(bool visible)
