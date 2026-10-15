@@ -204,6 +204,16 @@ namespace RpgmvpConverterWinForms
                 Visible = false
             };
             extractionPanel.Controls.Add(keyBox);
+            jpgCopiesBox = new CheckBox
+            {
+                Text = "Also save JPG",
+                Location = new Point(696, 38),
+                Size = new Size(172, 22),
+                ForeColor = mutedColor,
+                Font = uiFont,
+                Visible = false
+            };
+            extractionPanel.Controls.Add(jpgCopiesBox);
             javaModeLabel = new Label
             {
                 Text = "Java mode",
@@ -1183,6 +1193,9 @@ namespace RpgmvpConverterWinForms
 
             keyLabel.Visible = showKey;
             keyBox.Visible = showKey;
+            jpgCopiesBox.Visible = engine == GameEngine.RpgMaker;
+            if (engine == GameEngine.RpgMaker)
+                jpgCopiesBox.Text = T("Also save JPG copies", "Сохранять JPG-копии");
             unityDecensorButton.Visible = isUnity;
             unityDecensorButton.Enabled = !busy && isUnity && Directory.Exists(InputDirectory(pathBox.Text.Trim()));
             javaModeLabel.Visible = showJavaMode;

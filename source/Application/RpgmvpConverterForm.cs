@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -31,6 +32,7 @@ namespace RpgmvpConverterWinForms
 
         private TextBox pathBox;
         private TextBox keyBox;
+        private CheckBox jpgCopiesBox;
         private ComboBox languageBox;
         private ComboBox unlockerModeBox;
         private ComboBox javaExtractModeBox;
@@ -501,15 +503,70 @@ namespace RpgmvpConverterWinForms
 
         private string TryReconstructKey(string rootPath)
         {
-            string file = GetFilesToConvert(rootPath).FirstOrDefault(delegate(string path) { return SafeFileLength(path) > 32; });
-            if (file == null) return "";
-            byte[] bytes = File.ReadAllBytes(file);
-            byte[] expected = { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52 };
-            byte[] key = new byte[16];
-            for (int i = 0; i < key.Length; i++) key[i] = (byte)(bytes[16 + i] ^ expected[i]);
-            string value = BitConverter.ToString(key).Replace("-", "").ToLowerInvariant();
-            WriteLog("RPGM key reconstructed: " + value);
-            return value;
+            try
+            {
+                List<string> candidates = new List<string>();
+                foreach (string file in GetFilesToConvert(rootPath))
+                {
+                    if (candidates.Count >= 25) break;
+                    if (SafeFileLength(file) <= 32) continue;
+                    candidates.Add(file);
+                }
+                // PNG templates recover all 16 key bytes exactly: prefer them.
+                foreach (string file in candidates)
+                {
+                    byte[] bytes;
+                    try { bytes = File.ReadAllBytes(file); }
+                    catch { continue; }
+                    if (!RpgmCrypt.HasEncryptedHeader(bytes)) continue;
+                    byte[] key;
+                    if (RpgmCrypt.TryReconstructPngKey(bytes, out key))
+                    {
+                        string value = BitConverter.ToString(key).Replace("-", "").ToLowerInvariant();
+                        WriteLog("RPGM key reconstructed: " + value);
+                        return value;
+                    }
+                }
+                // JPEG templates cover fewer certain bytes: accept such a key
+                // only when it also decrypts other files (a wrong key corrupts
+                // non-structural bytes while keeping segment layout intact).
+                foreach (string file in candidates)
+                {
+                    byte[] bytes;
+                    try { bytes = File.ReadAllBytes(file); }
+                    catch { continue; }
+                    if (!RpgmCrypt.HasEncryptedHeader(bytes)) continue;
+                    byte[] key;
+                    if (!RpgmCrypt.TryReconstructKey(bytes, out key)) continue;
+                    if (CrossValidatesKey(candidates, file, key))
+                    {
+                        string value = BitConverter.ToString(key).Replace("-", "").ToLowerInvariant();
+                        WriteLog("RPGM key reconstructed from JPEG headers (approximate, density bytes may differ): " + value);
+                        return value;
+                    }
+                }
+            }
+            catch { }
+            return "";
+        }
+
+        private static bool CrossValidatesKey(List<string> candidates, string self, byte[] key)
+        {
+            int checkedFiles = 0;
+            int validFiles = 0;
+            foreach (string file in candidates)
+            {
+                if (string.Equals(file, self, StringComparison.OrdinalIgnoreCase)) continue;
+                if (checkedFiles >= 3) break;
+                byte[] bytes;
+                try { bytes = File.ReadAllBytes(file); }
+                catch { continue; }
+                if (!RpgmCrypt.HasEncryptedHeader(bytes)) continue;
+                checkedFiles++;
+                if (RpgmCrypt.ValidateKey(bytes, key)) validFiles++;
+                else return false;
+            }
+            return checkedFiles > 0 && validFiles == checkedFiles;
         }
 
         private static byte[] ParseKey(string input)
@@ -842,6 +899,7 @@ namespace RpgmvpConverterWinForms
             private static readonly HashSet<string> outputPathReservations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             private readonly ConcurrentQueue<string> queue;
             private readonly byte[] keyBytes;
+            private readonly bool saveExtraFormat;
             private readonly ManualResetEventSlim pauseGate = new ManualResetEventSlim(true);
             private readonly CancellationTokenSource cancellation = new CancellationTokenSource();
             private int processedCount;
@@ -849,11 +907,12 @@ namespace RpgmvpConverterWinForms
             private int renamedCount;
             private long totalBytes;
 
-            public ConversionRun(string rootPath, List<string> files, byte[] keyBytes)
+            public ConversionRun(string rootPath, List<string> files, byte[] keyBytes, bool saveExtraFormat)
             {
                 RootPath = rootPath;
                 TotalCount = files.Count;
                 this.keyBytes = keyBytes;
+                this.saveExtraFormat = saveExtraFormat;
                 queue = new ConcurrentQueue<string>(files);
                 OutputDir = Path.Combine(rootPath, "extracted", "rpgm");
                 Directory.CreateDirectory(OutputDir);
@@ -892,19 +951,33 @@ namespace RpgmvpConverterWinForms
                     try
                     {
                         byte[] bytes = File.ReadAllBytes(filePath);
-                        if (bytes.Length <= 16) throw new InvalidDataException("File too short: " + filePath);
-                        byte[] data = new byte[bytes.Length - 16];
-                        Buffer.BlockCopy(bytes, 16, data, 0, data.Length);
-                        for (int i = 0; i < 16 && i < data.Length; i++) data[i] ^= keyBytes[i];
+                        byte[] data;
+                        string extension;
+                        if (RpgmCrypt.HasEncryptedHeader(bytes))
+                        {
+                            data = RpgmCrypt.Decrypt(bytes, keyBytes);
+                            extension = RpgmCrypt.DetectImageExtension(data);
+                            if (extension == null)
+                                throw new InvalidDataException("Decrypted file has an unknown format (wrong key?): " + filePath);
+                        }
+                        else
+                        {
+                            extension = RpgmCrypt.DetectImageExtension(bytes);
+                            if (extension == null)
+                                throw new InvalidDataException("File is neither encrypted RPGM nor a plain image: " + filePath);
+                            data = bytes;
+                        }
 
                         string relative = filePath.Substring(RootPath.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                        string outputPath = Path.ChangeExtension(Path.Combine(OutputDir, relative), ".png");
+                        string outputPath = Path.ChangeExtension(Path.Combine(OutputDir, relative), extension);
                         Directory.CreateDirectory(Path.GetDirectoryName(outputPath));
                         bool renamed;
                         outputPath = GetUniqueFilePath(outputPath, out renamed);
                         if (renamed) Interlocked.Increment(ref renamedCount);
                         File.WriteAllBytes(outputPath, data);
                         Interlocked.Add(ref totalBytes, data.Length);
+                        if (saveExtraFormat)
+                            SaveExtraFormat(data, extension, outputPath);
                     }
                     catch
                     {
@@ -915,6 +988,49 @@ namespace RpgmvpConverterWinForms
                         Interlocked.Increment(ref processedCount);
                     }
                 }
+            }
+
+            private void SaveExtraFormat(byte[] data, string extension, string outputPath)
+            {
+                string siblingExtension = string.Equals(extension, ".png", StringComparison.OrdinalIgnoreCase) ? ".jpg" : ".png";
+                try
+                {
+                    bool collision;
+                    string sibling = GetUniqueFilePath(Path.ChangeExtension(outputPath, siblingExtension), out collision);
+                    using (MemoryStream input = new MemoryStream(data, false))
+                    using (Image image = Image.FromStream(input))
+                    {
+                        if (string.Equals(siblingExtension, ".jpg", StringComparison.OrdinalIgnoreCase))
+                        {
+                            ImageCodecInfo encoder = GetJpegEncoder();
+                            if (encoder == null) throw new InvalidOperationException("JPEG encoder is unavailable.");
+                            using (EncoderParameters parameters = new EncoderParameters(1))
+                            {
+                                parameters.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 90L);
+                                image.Save(sibling, encoder, parameters);
+                            }
+                        }
+                        else
+                        {
+                            image.Save(sibling, ImageFormat.Png);
+                        }
+                    }
+                    if (collision) Interlocked.Increment(ref renamedCount);
+                    try { Interlocked.Add(ref totalBytes, new FileInfo(sibling).Length); }
+                    catch { }
+                }
+                catch
+                {
+                    Interlocked.Increment(ref errorCount);
+                }
+            }
+
+            private static ImageCodecInfo GetJpegEncoder()
+            {
+                ImageCodecInfo[] encoders = ImageCodecInfo.GetImageEncoders();
+                for (int i = 0; i < encoders.Length; i++)
+                    if (encoders[i].FormatID == ImageFormat.Jpeg.Guid) return encoders[i];
+                return null;
             }
 
             private static string GetUniqueFilePath(string path, out bool renamed)
