@@ -201,6 +201,8 @@ namespace RpgmvpConverterWinForms
                 return;
             }
 
+            if (!ValidateRpgmKey(rootPath, keyBytes)) return;
+
             string outputDir = Path.Combine(rootPath, "extracted", "rpgm");
             if (!await TryResetExtractionRootForOutputAsync(outputDir)) return;
 
@@ -211,7 +213,7 @@ namespace RpgmvpConverterWinForms
                 return;
             }
 
-            currentRun = new ConversionRun(rootPath, files, keyBytes);
+            currentRun = new ConversionRun(rootPath, files, keyBytes, jpgCopiesBox != null && jpgCopiesBox.Checked);
             lastOutputDir = currentRun.OutputDir;
             SetRpgmRunningState(true);
             progressBar.Maximum = Math.Max(files.Count, 1);
@@ -232,6 +234,26 @@ namespace RpgmvpConverterWinForms
             {
                 FinishRpgmExtraction(finished);
             }
+        }
+
+        private bool ValidateRpgmKey(string rootPath, byte[] keyBytes)
+        {
+            try
+            {
+                foreach (string file in GetFilesToConvert(rootPath))
+                {
+                    if (SafeFileLength(file) <= 32) continue;
+                    byte[] bytes;
+                    try { bytes = File.ReadAllBytes(file); }
+                    catch { continue; }
+                    if (!RpgmCrypt.HasEncryptedHeader(bytes)) continue;
+                    if (RpgmCrypt.ValidateKey(bytes, keyBytes)) return true;
+                    WriteLog("RPGM key does not fit " + Path.GetFileName(file) + ": files would decrypt to garbage. Check the key or the file origins (PNG and JPG assets share one key).");
+                    return false;
+                }
+            }
+            catch { }
+            return true;
         }
 
         private async Task StartRenpyExtractionAsync()

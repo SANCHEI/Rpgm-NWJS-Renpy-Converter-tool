@@ -66,6 +66,16 @@ namespace RpgmvpConverterWinForms
             WriteU32BigEndian(output, crc);
         }
 
+        internal static uint ComputeCrc32(byte[] data, int offset, int count)
+        {
+            if (data == null || offset < 0 || count < 0 || offset + count > data.Length)
+                throw new ArgumentOutOfRangeException("count");
+            uint crc = 0xFFFFFFFF;
+            for (int i = 0; i < count; i++)
+                crc = CrcTable[(crc ^ data[offset + i]) & 0xFF] ^ (crc >> 8);
+            return crc ^ 0xFFFFFFFF;
+        }
+
         private static uint Crc32(byte[] typeBytes, byte[] data)
         {
             uint crc = 0xFFFFFFFF;
