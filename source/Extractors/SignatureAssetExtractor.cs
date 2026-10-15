@@ -95,6 +95,7 @@ namespace RpgmvpConverterWinForms
                 return Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
                     .Where(delegate(string path)
                     {
+                        if (ExtractionPathUtils.IsOwnToolFile(path)) return false;
                         string fullPath = Path.GetFullPath(path);
                         return !fullPath.StartsWith(outputPrefix, StringComparison.OrdinalIgnoreCase)
                             && !fullPath.StartsWith(extractedPrefix, StringComparison.OrdinalIgnoreCase);

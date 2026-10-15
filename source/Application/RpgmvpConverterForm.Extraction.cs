@@ -157,6 +157,11 @@ namespace RpgmvpConverterWinForms
                 await StartPygamePyInstallerExtractionAsync();
                 return;
             }
+            if (engine == GameEngine.DataArc)
+            {
+                await StartDataArcExtractionAsync();
+                return;
+            }
             if (engine != GameEngine.RpgMaker)
             {
                 await StartSignatureRecoveryAsync();
@@ -751,6 +756,34 @@ namespace RpgmvpConverterWinForms
                 },
                 delegate { return localCopyCancellationRequested; });
             return new OperationResult("KiriKiri XP3", outputDir, total.Extracted, total.Bytes, total.Errors, total.Renamed, 0, DateTime.UtcNow - start);
+        }
+
+        private async Task StartDataArcExtractionAsync()
+        {
+            await StartLocalExtractionAsync("Data ARC", "arc", RunDataArcNativeExtraction);
+        }
+
+        private OperationResult RunDataArcNativeExtraction(string inputPath, string outputDir)
+        {
+            DateTime start = DateTime.UtcNow;
+            string rootPath = InputDirectory(inputPath);
+            Directory.CreateDirectory(outputDir);
+            int processed = 0;
+            ArcExtractionResult total = ArcExtractor.ExtractAll(
+                rootPath,
+                outputDir,
+                delegate(string line)
+                {
+                    SafeLog(line);
+                    BeginUi(delegate
+                    {
+                        processed++;
+                        progressBar.Value = Math.Min(processed, progressBar.Maximum);
+                        statusLabel.Text = "Data ARC: " + processed;
+                    });
+                },
+                delegate { return localCopyCancellationRequested; });
+            return new OperationResult("Data ARC", outputDir, total.Extracted, total.Bytes, total.Errors, total.Renamed, total.Skipped, DateTime.UtcNow - start);
         }
 
         private async Task StartGameMakerExtractionAsync()

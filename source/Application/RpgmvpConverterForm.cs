@@ -600,6 +600,7 @@ namespace RpgmvpConverterWinForms
                 case GameEngine.PixelGameMaker: return "Pixel Game Maker MV recovery";
                 case GameEngine.SpakDat: return "SPAK DAT experimental";
                 case GameEngine.PygamePyInstaller: return "Pygame / PyInstaller";
+                case GameEngine.DataArc: return "Data ARC";
                 default: return "not detected";
             }
         }
@@ -630,6 +631,7 @@ namespace RpgmvpConverterWinForms
                 case GameEngine.PixelGameMaker: return Color.FromArgb(110, 185, 235);
                 case GameEngine.SpakDat: return Color.FromArgb(195, 150, 95);
                 case GameEngine.PygamePyInstaller: return Color.FromArgb(95, 190, 130);
+                case GameEngine.DataArc: return Color.FromArgb(120, 170, 220);
                 default: return mutedColor;
             }
         }
