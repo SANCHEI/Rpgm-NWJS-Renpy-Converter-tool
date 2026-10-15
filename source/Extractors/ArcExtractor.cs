@@ -159,9 +159,11 @@ namespace RpgmvpConverterWinForms
                     processed++;
                     try
                     {
-                        string relative = string.IsNullOrEmpty(currentDir)
+                        string relative = record.Name.IndexOfAny(new char[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }) >= 0
                             ? record.Name
-                            : currentDir + Path.DirectorySeparatorChar + record.Name;
+                            : string.IsNullOrEmpty(currentDir)
+                                ? record.Name
+                                : currentDir + Path.DirectorySeparatorChar + record.Name;
                         bool renamed;
                         string destination = ExtractionPathUtils.GetUniqueFilePath(
                             ExtractionPathUtils.GetSafeOutputPath(archiveOutput, relative), out renamed);

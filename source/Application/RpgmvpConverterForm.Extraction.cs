@@ -162,6 +162,11 @@ namespace RpgmvpConverterWinForms
                 await StartDataArcExtractionAsync();
                 return;
             }
+            if (engine == GameEngine.Hsp)
+            {
+                await StartHspExtractionAsync();
+                return;
+            }
             if (engine != GameEngine.RpgMaker)
             {
                 await StartSignatureRecoveryAsync();
@@ -844,6 +849,30 @@ namespace RpgmvpConverterWinForms
             });
         }
 
+
+        private async Task StartHspExtractionAsync()
+        {
+            await StartLocalExtractionAsync("HSP DPM", "hsp", RunHspExtraction);
+        }
+
+        private OperationResult RunHspExtraction(string inputPath, string outputDir)
+        {
+            DateTime start = DateTime.UtcNow;
+            string rootPath = InputDirectory(inputPath);
+            Directory.CreateDirectory(outputDir);
+            DpmManifestResult manifests = HspDpmExtractor.WriteManifests(
+                rootPath,
+                outputDir,
+                delegate(string line) { SafeLog(line); },
+                delegate { return localCopyCancellationRequested; });
+            List<string> loose = AssetCollectors.GetLooseResourceFiles(rootPath, outputDir);
+            CollectorResult copied = AssetCollectors.CopyFiles(rootPath, loose, outputDir, "loose");
+            string summary = "HSP DPM: " + manifests.Archives + " archive(s), " + manifests.Files + " file(s) listed (encrypted, kept inside archives)";
+            SafeLog(summary);
+            return new OperationResult("HSP DPM", outputDir,
+                copied.Extracted, copied.Bytes, manifests.Errors, copied.Renamed, copied.Skipped,
+                DateTime.UtcNow - start);
+        }
 
         private async Task StartPygamePyInstallerExtractionAsync()
         {

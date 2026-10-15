@@ -733,6 +733,7 @@ namespace RpgmvpConverterWinForms
                 engineOverrideBox.Items.Add("SPAK DAT");
                 engineOverrideBox.Items.Add("Pygame / PyInstaller");
                 engineOverrideBox.Items.Add("Data ARC");
+                engineOverrideBox.Items.Add("HSP DPM");
                 engineOverrideBox.SelectedIndex = selected >= 0 && selected < engineOverrideBox.Items.Count ? selected : 0;
             }
             finally
@@ -780,6 +781,7 @@ namespace RpgmvpConverterWinForms
                 case 21: return GameEngine.SpakDat;
                 case 22: return GameEngine.PygamePyInstaller;
                 case 23: return GameEngine.DataArc;
+                case 24: return GameEngine.Hsp;
                 default: return GameEngine.Unknown;
             }
         }
@@ -1050,6 +1052,7 @@ namespace RpgmvpConverterWinForms
                 case GameEngine.SpakDat: return Path.Combine(rootPath, "extracted", "spak-dat");
                 case GameEngine.PygamePyInstaller: return Path.Combine(rootPath, "extracted", "pygame");
                 case GameEngine.DataArc: return Path.Combine(rootPath, "extracted", "arc");
+                case GameEngine.Hsp: return Path.Combine(rootPath, "extracted", "hsp");
                 default: return Path.Combine(rootPath, "extracted", "signature-recovery");
             }
         }
@@ -1314,6 +1317,11 @@ namespace RpgmvpConverterWinForms
                         "Data ARC containers are extracted with original folder structure preserved.",
                         "Контейнеры Data ARC извлекаются с сохранением исходной структуры папок.");
                     break;
+                case GameEngine.Hsp:
+                    extractionHintLabel.Text = T(
+                        "HSP DPM contents are listed with loose files collected. DPM2 file data uses a closed cipher and stays inside the archive.",
+                        "Содержимое HSP DPM перечисляется, открытые файлы собираются. Данные файлов DPM2 закрыты шифром и остаются в архиве.");
+                    break;
                 default:
                     extractionHintLabel.Text = T(
                         "Unknown format. Recover embedded media by signatures or collect loose resources.",
@@ -1360,7 +1368,8 @@ namespace RpgmvpConverterWinForms
                 || engine == GameEngine.PixelGameMaker
                 || engine == GameEngine.SpakDat
                 || engine == GameEngine.PygamePyInstaller
-                || engine == GameEngine.DataArc;
+                || engine == GameEngine.DataArc
+                || engine == GameEngine.Hsp;
         }
 
         private void UpdateUnlockerLayout(bool visible)

@@ -601,6 +601,7 @@ namespace RpgmvpConverterWinForms
                 case GameEngine.SpakDat: return "SPAK DAT experimental";
                 case GameEngine.PygamePyInstaller: return "Pygame / PyInstaller";
                 case GameEngine.DataArc: return "Data ARC";
+                case GameEngine.Hsp: return "HSP DPM experimental";
                 default: return "not detected";
             }
         }
@@ -632,6 +633,7 @@ namespace RpgmvpConverterWinForms
                 case GameEngine.SpakDat: return Color.FromArgb(195, 150, 95);
                 case GameEngine.PygamePyInstaller: return Color.FromArgb(95, 190, 130);
                 case GameEngine.DataArc: return Color.FromArgb(120, 170, 220);
+                case GameEngine.Hsp: return Color.FromArgb(130, 200, 160);
                 default: return mutedColor;
             }
         }

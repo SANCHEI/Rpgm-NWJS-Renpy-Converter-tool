@@ -64,6 +64,7 @@
     <Compile Include="source\Extractors\SpakDatExtractor.cs" />
     <Compile Include="source\Extractors\UnityExtractionConfig.cs" />
     <Compile Include="source\Extractors\UnityArchiveDiscovery.cs" />
+    <Compile Include="source\Extractors\HspDpmExtractor.cs" />
     <Compile Include="source\Extractors\KirikiriXp3Extractor.cs" />
     <Compile Include="source\Extractors\ArcExtractor.cs" />
     <Compile Include="source\Extractors\GameMakerExtractor.cs" />
