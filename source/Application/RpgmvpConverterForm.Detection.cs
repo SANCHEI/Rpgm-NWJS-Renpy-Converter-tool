@@ -59,6 +59,7 @@ namespace RpgmvpConverterWinForms
             if (IsFlashGame(rootPath)) return GameEngine.Flash;
             if (IsSpakDatGame(rootPath)) return GameEngine.SpakDat;
             if (IsPygamePyInstallerGame(rootPath)) return GameEngine.PygamePyInstaller;
+            if (IsHspGame(rootPath)) return GameEngine.Hsp;
             if (AssetCollectors.IsHtmlGame(rootPath)) return GameEngine.Html;
             if (AssetCollectors.IsQspGame(rootPath)) return GameEngine.Qsp;
             if (AssetCollectors.IsRagsInput(rootPath)) return GameEngine.Rags;
@@ -85,6 +86,7 @@ namespace RpgmvpConverterWinForms
             if (IsFlashGame(rootPath)) return GameEngine.Flash;
             if (IsSpakDatGame(rootPath)) return GameEngine.SpakDat;
             if (IsPygamePyInstallerGame(rootPath)) return GameEngine.PygamePyInstaller;
+            if (IsHspGame(rootPath)) return GameEngine.Hsp;
             if (AssetCollectors.IsHtmlGame(rootPath)) return GameEngine.Html;
             if (AssetCollectors.IsQspGame(rootPath)) return GameEngine.Qsp;
             if (AssetCollectors.IsRagsInput(rootPath)) return GameEngine.Rags;
@@ -120,6 +122,7 @@ namespace RpgmvpConverterWinForms
             if (IsFlashGame(rootPath)) return GameEngine.Flash;
             if (IsSpakDatGame(rootPath)) return GameEngine.SpakDat;
             if (IsPygamePyInstallerGame(rootPath)) return GameEngine.PygamePyInstaller;
+            if (IsHspGame(rootPath)) return GameEngine.Hsp;
             if (AssetCollectors.IsHtmlGame(rootPath)) return GameEngine.Html;
             if (AssetCollectors.IsQspGame(rootPath)) return GameEngine.Qsp;
             if (AssetCollectors.IsRagsInput(rootPath)) return GameEngine.Rags;
@@ -153,11 +156,23 @@ namespace RpgmvpConverterWinForms
                 case ".rgss2a":
                 case ".rgss3a": return GameEngine.LegacyRpgMaker;
                 case ".dat": return SpakDatExtractor.IsSpakArchive(path) ? GameEngine.SpakDat : GameEngine.Unknown;
+                case ".dpm": return HspDpmExtractor.HasNativeSupport(path) ? GameEngine.Hsp : GameEngine.Unknown;
                 case ".exe": return IsGodotEmbeddedPckFile(path) ? GameEngine.Godot : GameEngine.Unknown;
                 default: return GameEngine.Unknown;
             }
         }
 
+
+        private static bool IsHspGame(string rootPath)
+        {
+            try
+            {
+                foreach (string archive in EnumerateFilesSafe(rootPath, "*.dpm"))
+                    if (HspDpmExtractor.HasNativeSupport(archive)) return true;
+            }
+            catch { }
+            return false;
+        }
 
         private static bool IsPygamePyInstallerGame(string rootPath)
         {
@@ -670,6 +685,11 @@ namespace RpgmvpConverterWinForms
                 files = GetPygamePyInstallerFiles(pygameRoot, Path.Combine(pygameRoot, "extracted", "pygame"));
                 archives = 0;
             }
+            else if (engine == GameEngine.Hsp)
+            {
+                files = HspDpmExtractor.FindArchives(rootPath, Path.Combine(rootPath, "extracted", "hsp"));
+                archives = ((List<string>)files).Count;
+            }
             else
             {
                 files = GetFilesToConvertFromSnapshot(snapshot, rootPath);
@@ -794,6 +814,7 @@ namespace RpgmvpConverterWinForms
                 case GameEngine.Godot: return "Godot markers: .pck, project.godot or embedded PCK executable";
                 case GameEngine.Renpy: return "Ren'Py markers: game folder and .rpa/.rpy resources";
                 case GameEngine.RpgMaker: return "RPG Maker markers: www/data and encrypted RPGM assets";
+                case GameEngine.Hsp: return "HSP markers: .dpm containers or hsp DLLs";
                 case GameEngine.Nwjs: return "NWJS markers: package.json/www or browser game files";
                 case GameEngine.AndroidApk: return "APK file input";
                 case GameEngine.Unknown: return "no strong engine markers found";
@@ -1007,14 +1028,14 @@ namespace RpgmvpConverterWinForms
         private static IEnumerable<string> EnumerateFilesSafe(string rootPath, string pattern)
         {
             if (!Directory.Exists(rootPath)) return Enumerable.Empty<string>();
-            try { return Directory.EnumerateFiles(rootPath, pattern, SearchOption.AllDirectories).ToList(); }
+            try { return Directory.EnumerateFiles(rootPath, pattern, SearchOption.AllDirectories).Where(delegate(string path) { return !ExtractionPathUtils.IsOwnToolFile(path); }).ToList(); }
             catch { return Enumerable.Empty<string>(); }
         }
 
         private static IEnumerable<string> EnumerateFilesTopLevelSafe(string rootPath, string pattern)
         {
             if (!Directory.Exists(rootPath)) return Enumerable.Empty<string>();
-            try { return Directory.EnumerateFiles(rootPath, pattern, SearchOption.TopDirectoryOnly).ToList(); }
+            try { return Directory.EnumerateFiles(rootPath, pattern, SearchOption.TopDirectoryOnly).Where(delegate(string path) { return !ExtractionPathUtils.IsOwnToolFile(path); }).ToList(); }
             catch { return Enumerable.Empty<string>(); }
         }
 
@@ -1277,6 +1298,7 @@ namespace RpgmvpConverterWinForms
                     || IsElectronGame(root)
                     || IsSpakDatGame(root)
                     || IsPygamePyInstallerGame(root)
+                    || IsHspGame(root)
                     || IsLegacyRpgMakerGame(root)
                     || AssetCollectors.IsHtmlGame(root)
                     || AssetCollectors.IsQspGame(root)
@@ -1341,7 +1363,8 @@ namespace RpgmvpConverterWinForms
             SrpgStudio,
             PixelGameMaker,
             SpakDat,
-            PygamePyInstaller
+            PygamePyInstaller,
+            Hsp
         }
 
         private sealed class ScanSummary
