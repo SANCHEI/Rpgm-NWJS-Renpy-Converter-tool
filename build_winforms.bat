@@ -8,8 +8,11 @@ call powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0source\scripts\bu
 if errorlevel 1 exit /b 1
 
 set "MSBUILD="
-if exist "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" (
-    for /f "usebackq delims=" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.Component.MSBuild -find "MSBuild\**\Bin\MSBuild.exe"`) do set "MSBUILD=%%i"
+set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+if exist "%VSWHERE%" (
+    "%VSWHERE%" -latest -products * -requires Microsoft.Component.MSBuild -find "MSBuild\**\Bin\MSBuild.exe" > "%TEMP%\gat_msbuild.txt"
+    for /f "usebackq delims=" %%i in ("%TEMP%\gat_msbuild.txt") do set "MSBUILD=%%i"
+    del "%TEMP%\gat_msbuild.txt" 2>nul
 )
 if not defined MSBUILD set "MSBUILD=C:\Windows\Microsoft.NET\Framework64\v4.0.30319\MSBuild.exe"
 if not exist "%MSBUILD%" (
