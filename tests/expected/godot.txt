@@ -1,0 +1,15 @@
+GODOT:game_embedded.exe:1:16:0:0
+GODOT:game_v1.pck:2:91:0:0
+GODOT:game_v2.pck:4:371:0:1
+GODOT:game_v3enc.pck:2:44:0:0
+GODOT:game_v3encdir.pck:1:9:0:0
+FILE:game_embedded\archives\game_embedded\data.bin:374708fff7719dd5979ec875d56cd2286f6d3cf7ec317a3b25632aab28ec37bb
+FILE:game_v1\archives\game_v1\icon.png:256f61d8ad9febf826f6110247dffe7754ab270a2b5e517e3a0579f236acb5bb
+FILE:game_v1\archives\game_v1\scripts\main.gd:006c373933f8e49903c974a70b81864df932f34b72076a11916696e4577e804a
+FILE:game_v2\archives\game_v2\.godot\imported\icon.png:256f61d8ad9febf826f6110247dffe7754ab270a2b5e517e3a0579f236acb5bb
+FILE:game_v2\archives\game_v2\.godot\imported\icon.png-abc123abc123abc123abc123abc123ab.ctex:256f61d8ad9febf826f6110247dffe7754ab270a2b5e517e3a0579f236acb5bb
+FILE:game_v2\archives\game_v2\audio\theme.ogg:3d2f52d644d8783c3a93382fc96d4e2f515eb31e8213f2413ed6e52dd3cd4327
+FILE:game_v2\archives\game_v2\scenes\level.tscn:4021fa2ff4aeee01428c0b79ed5646e20abfab588b30283fff4623a518f78554
+FILE:game_v3encdir\archives\game_v3encdir\inner.txt:849ae0498d4e703326cf551f740503e7f7813ee0aacf0a44137c623a2022c01e
+FILE:game_v3enc\archives\game_v3enc\open.txt:e7c5433fa1e8099b3f85842c2b731b4eaa8a8fbc40fbfd8217103da60a539a84
+FILE:game_v3enc\archives\game_v3enc\secret.bin:5492d559ded6981adfe5e57b0ebb82cd0e382738cb317766bc062e561d6ad8fe

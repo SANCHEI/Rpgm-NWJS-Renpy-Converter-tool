@@ -1563,8 +1563,6 @@ namespace RpgmvpConverterWinForms
                 WriteLog("Invalid path");
                 return;
             }
-            if (!EnsurePortableRuntimeAvailable(GameEngine.Godot)) return;
-
             string extractionInput = File.Exists(inputPath) ? Path.GetFullPath(inputPath) : outputRoot;
             string outputName = File.Exists(inputPath) ? SanitizeRelativePath(Path.GetFileNameWithoutExtension(inputPath)) : "godot";
             string outputDir = Path.Combine(outputRoot, "extracted", outputName);
@@ -1573,12 +1571,23 @@ namespace RpgmvpConverterWinForms
             SetExternalRunningState(true, "Godot");
             WriteLog("Godot extraction started: " + extractionInput);
 
+            List<string> nativeArchives = GodotExtractor.FindArchives(extractionInput, outputDir);
+            bool native = nativeArchives.Count > 0;
+            foreach (string archive in nativeArchives)
+            {
+                if (!GodotExtractor.HasNativeSupport(archive)) { native = false; break; }
+            }
+            if (!native && !EnsurePortableRuntimeAvailable(GameEngine.Godot)) return;
+            if (native) WriteLog("Godot extraction runs native (no runtime needed).");
+
             OperationResult result;
             try
             {
                 string optionalKey = keyBox.Text.Trim();
                 result = await Task.Run(delegate
                 {
+                    if (native)
+                        return RunGodotNativeExtraction(extractionInput, outputDir, optionalKey);
                     return RunPortableScriptExtraction(extractionInput, outputDir, "Godot", "extract_godot.py", "RpgmvpConverterWinForms.scripts.extract_godot.py", optionalKey);
                 });
             }
@@ -1588,6 +1597,20 @@ namespace RpgmvpConverterWinForms
             }
             SetExternalRunningState(false, "Godot");
             CompleteExternalOperation(result);
+        }
+
+        private OperationResult RunGodotNativeExtraction(string inputPath, string outputDir, string optionalKey)
+        {
+            DateTime start = DateTime.UtcNow;
+            string rootPath = InputDirectory(inputPath);
+            string gamePath = File.Exists(inputPath) ? inputPath : rootPath;
+            GodotExtractionResult total = GodotExtractor.ExtractAll(
+                gamePath,
+                outputDir,
+                optionalKey,
+                delegate(string line) { SafeLog(line); },
+                delegate { return localCopyCancellationRequested; });
+            return new OperationResult("Godot", outputDir, total.Extracted, total.Bytes, total.Errors, total.Renamed, total.Skipped, DateTime.UtcNow - start);
         }
 
         private async Task StartPortableScriptExtractionAsync(string engineName, string outputFolder, string scriptFile, string resourceName, string[] packs)
