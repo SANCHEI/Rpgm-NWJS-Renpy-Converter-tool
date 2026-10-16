@@ -841,16 +841,8 @@ namespace RpgmvpConverterWinForms
                 return "direct supported file input";
             switch (engine)
             {
-                case GameEngine.Unity: return "Unity markers: *_Data folder, .assets/.bundle/.unity3d or Unity player files";
-                case GameEngine.Godot: return "Godot markers: .pck, project.godot or embedded PCK executable";
-                case GameEngine.Renpy: return "Ren'Py markers: game folder and .rpa/.rpy resources";
-                case GameEngine.RpgMaker: return "RPG Maker markers: www/data and encrypted RPGM assets";
-                case GameEngine.DataArc: return "Data ARC markers: .arc container with file table";
-                case GameEngine.Hsp: return "HSP markers: .dpm containers or hsp DLLs";
-                case GameEngine.Nwjs: return "NWJS markers: package.json/www or browser game files";
-                case GameEngine.AndroidApk: return "APK file input";
                 case GameEngine.Unknown: return "no strong engine markers found";
-                default: return "engine-specific markers found";
+                default: return EngineInfo.For(engine).Markers;
             }
         }
 

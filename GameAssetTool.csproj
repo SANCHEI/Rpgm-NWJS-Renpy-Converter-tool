@@ -8,6 +8,7 @@
     <RootNamespace>RpgmvpConverterWinForms</RootNamespace>
     <AssemblyName>GameAssetTool</AssemblyName>
     <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <LangVersion>12.0</LangVersion>
     <FileAlignment>512</FileAlignment>
     <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
@@ -40,6 +41,7 @@
     <Compile Include="source\Application\Dialogs\SpriteSheetPreviewForm.cs" />
     <Compile Include="source\Application\Controllers\DryScanCache.cs" />
     <Compile Include="source\Application\Controllers\DirectorySnapshot.cs" />
+    <Compile Include="source\Application\Controllers\EngineInfo.cs" />
     <Compile Include="source\Application\Controllers\ExtractionProfile.cs" />
     <Compile Include="source\Application\Controllers\ExtractionProgressEvent.cs" />
     <Compile Include="source\Application\Controllers\ExtractionProfileResolver.cs" />
