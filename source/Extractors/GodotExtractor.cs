@@ -205,12 +205,7 @@ namespace RpgmvpConverterWinForms
                             }
                             else if (lowered.EndsWith(".exe") && size <= MaxScannedExeBytes)
                             {
-                                byte[] content = File.ReadAllBytes(files[i]);
-                                string text = Encoding.ASCII.GetString(content);
-                                foreach (Match match in HexKey.Matches(text))
-                                    AddKey(keys, sources, match.Value, name);
-                                foreach (Match match in Base64Key.Matches(text))
-                                    AddKey(keys, sources, match.Value, name);
+                                ScanExeForKeys(files[i], name, keys, sources);
                             }
                         }
                         catch { }
@@ -231,6 +226,55 @@ namespace RpgmvpConverterWinForms
                 }
             }
             return keys;
+        }
+
+        private static void ScanExeForKeys(string path, string source, List<byte[]> keys, List<string> sources)
+        {
+            // A 256MB game binary must not be loaded twice (bytes + decoded string)
+            // just to hunt for a 64-char key: scan 1MB windows with an overlap wider
+            // than any key pattern (64 hex / 44 base64 chars).
+            const int ChunkSize = 1024 * 1024;
+            const int Overlap = 256;
+            byte[] tail = new byte[0];
+            try
+            {
+                using (FileStream stream = File.OpenRead(path))
+                {
+                    byte[] buffer = new byte[ChunkSize];
+                    while (true)
+                    {
+                        int read = 0;
+                        while (read < buffer.Length)
+                        {
+                            int got = stream.Read(buffer, read, buffer.Length - read);
+                            if (got <= 0) break;
+                            read += got;
+                        }
+                        if (read == 0) break;
+                        string text;
+                        if (tail.Length > 0)
+                        {
+                            byte[] joined = new byte[tail.Length + read];
+                            Buffer.BlockCopy(tail, 0, joined, 0, tail.Length);
+                            Buffer.BlockCopy(buffer, 0, joined, tail.Length, read);
+                            text = Encoding.ASCII.GetString(joined);
+                        }
+                        else
+                        {
+                            text = Encoding.ASCII.GetString(buffer, 0, read);
+                        }
+                        foreach (Match match in HexKey.Matches(text))
+                            AddKey(keys, sources, match.Value, source);
+                        foreach (Match match in Base64Key.Matches(text))
+                            AddKey(keys, sources, match.Value, source);
+                        if (read < buffer.Length) break;
+                        int keep = read > Overlap ? Overlap : read;
+                        tail = new byte[keep];
+                        Buffer.BlockCopy(buffer, read - keep, tail, 0, keep);
+                    }
+                }
+            }
+            catch { }
         }
 
         private static List<string> DistinctSources(List<string> sources)
@@ -329,6 +373,52 @@ namespace RpgmvpConverterWinForms
             return true;
         }
 
+        private const long MaxPreviewBufferBytes = 64L * 1024L * 1024L;
+
+        private static long CopyStreamToFile(FileStream source, string destination, long size, byte[] digest, Action<string> log, string entryPath)
+        {
+            if (size < 0 || size > MaxEntryBytes)
+                throw new InvalidDataException("Godot PCK entry is too large: " + entryPath);
+            bool check = !IsZeroDigest(digest);
+            MD5 md5 = check ? MD5.Create() : null;
+            try
+            {
+                byte[] buffer = new byte[65536];
+                using (FileStream output = new FileStream(destination, FileMode.Create, FileAccess.Write, FileShare.None, 65536))
+                {
+                    long remaining = size;
+                    while (remaining > 0)
+                    {
+                        int want = remaining > buffer.Length ? buffer.Length : (int)remaining;
+                        int read = source.Read(buffer, 0, want);
+                        if (read <= 0) throw new EndOfStreamException("Unexpected end of PCK archive.");
+                        output.Write(buffer, 0, read);
+                        if (md5 != null) md5.TransformBlock(buffer, 0, read, buffer, 0);
+                        remaining -= read;
+                    }
+                }
+                if (md5 != null)
+                {
+                    md5.TransformFinalBlock(buffer, 0, 0);
+                    if (!DigestMatchesHash(md5.Hash, digest) && log != null)
+                        log("WARN:MD5 mismatch for " + entryPath);
+                }
+            }
+            finally
+            {
+                if (md5 != null) md5.Dispose();
+            }
+            return size;
+        }
+
+        private static byte[] LoadPreviewBytes(string destination, long size)
+        {
+            if (!IsImportedTexturePath(destination)) return null;
+            if (size < 0 || size > MaxPreviewBufferBytes) return null;
+            try { return File.ReadAllBytes(destination); }
+            catch { return null; }
+        }
+
         private static GodotExtractionResult ExtractArchive(string archive, string outputPath, List<byte[]> keys, Action<string> log, Func<bool> isCancelled)
         {
             GodotExtractionResult result = new GodotExtractionResult();
@@ -345,32 +435,44 @@ namespace RpgmvpConverterWinForms
                     if (isCancelled != null && isCancelled())
                         throw new OperationCanceledException();
                     stream.Seek(entry.Offset, SeekOrigin.Begin);
-                    byte[] data;
-                    if (entry.Encrypted)
-                    {
-                        data = DecryptWithCandidates(stream, keys);
-                        if (data.Length != entry.Size)
-                            throw new InvalidDataException("Encrypted Godot entry size mismatch for " + entry.Path);
-                    }
-                    else
-                    {
-                        data = ReadExact(stream, entry.Size);
-                    }
-                    if (!IsZeroDigest(entry.Digest) && !DigestMatches(data, entry.Digest))
-                    {
-                        if (log != null) log("WARN:MD5 mismatch for " + entry.Path);
-                    }
                     bool renamed;
                     string destination = ExtractionPathUtils.GetUniqueFilePath(
                         ExtractionPathUtils.GetSafeOutputPath(archiveOutput, NormalizeName(entry.Path)), out renamed);
                     string parent = Path.GetDirectoryName(destination);
                     if (!string.IsNullOrWhiteSpace(parent))
                         Directory.CreateDirectory(parent);
-                    File.WriteAllBytes(destination, data);
+                    byte[] data;
+                    long written;
+                    if (entry.Encrypted)
+                    {
+                        data = DecryptWithCandidates(stream, keys);
+                        if (data.Length != entry.Size)
+                            throw new InvalidDataException("Encrypted Godot entry size mismatch for " + entry.Path);
+                        File.WriteAllBytes(destination, data);
+                        written = data.Length;
+                        if (!IsZeroDigest(entry.Digest) && !DigestMatches(data, entry.Digest))
+                        {
+                            if (log != null) log("WARN:MD5 mismatch for " + entry.Path);
+                        }
+                    }
+                    else
+                    {
+                        // Plain payloads stream straight to disk: a multi-GB pack must not
+                        // sit in memory as one byte[] (plus a second copy for previews).
+                        written = CopyStreamToFile(stream, destination, entry.Size, entry.Digest, log, entry.Path);
+                        data = LoadPreviewBytes(destination, entry.Size);
+                    }
                     result.Extracted++;
-                    result.Bytes += data.Length;
+                    result.Bytes += written;
                     if (renamed) result.Renamed++;
-                    int previews = WriteImportedPreview(destination, data, result);
+                    int previews = 0;
+                    if (IsImportedTexturePath(destination))
+                    {
+                        if (data != null)
+                            previews = WriteImportedPreview(destination, data, result);
+                        else
+                            result.Skipped++;
+                    }
                     result.PreviewCount += previews;
                 }
             }
@@ -587,18 +689,18 @@ namespace RpgmvpConverterWinForms
         private static bool DigestMatches(byte[] data, byte[] expected)
         {
             if (expected == null) return true;
-            bool allZero = true;
-            for (int i = 0; i < expected.Length; i++)
-                if (expected[i] != 0) { allZero = false; break; }
-            if (allZero) return true;
+            if (IsZeroDigest(expected)) return true;
             using (MD5 md5 = MD5.Create())
-            {
-                byte[] actual = md5.ComputeHash(data);
-                if (actual.Length != expected.Length) return false;
-                for (int i = 0; i < actual.Length; i++)
-                    if (actual[i] != expected[i]) return false;
-                return true;
-            }
+                return DigestMatchesHash(md5.ComputeHash(data), expected);
+        }
+
+        private static bool DigestMatchesHash(byte[] actual, byte[] expected)
+        {
+            if (expected == null) return true;
+            if (actual == null || actual.Length != expected.Length) return false;
+            for (int i = 0; i < actual.Length; i++)
+                if (actual[i] != expected[i]) return false;
+            return true;
         }
 
         private static bool IsZeroDigest(byte[] digest)
@@ -758,7 +860,7 @@ namespace RpgmvpConverterWinForms
         private static List<int[]> CollectDimensions(byte[] data)
         {
             List<int[]> result = new List<int[]>();
-            List<string> seen = new List<string>();
+            HashSet<string> seen = new HashSet<string>();
             int[] preferred = new int[] { 8, 12, 16, 20, 24, 28, 32, 36, 40, 48, 64 };
             foreach (int offset in preferred)
             {
@@ -771,7 +873,7 @@ namespace RpgmvpConverterWinForms
             return result;
         }
 
-        private static void TryAddDimensions(List<int[]> result, List<string> seen, long width, long height)
+        private static void TryAddDimensions(List<int[]> result, HashSet<string> seen, long width, long height)
         {
             if (!PlausibleDimension(width) || !PlausibleDimension(height)) return;
             string key = width + "x" + height;
@@ -785,11 +887,12 @@ namespace RpgmvpConverterWinForms
             try
             {
                 long count = (long)width * (long)height;
+                if (bpp <= 0 || count <= 0) return null;
+                if (offset < 0 || offset + count * (long)bpp > data.Length) return null;
                 byte[] rgba = new byte[count * 4];
                 for (long pixel = 0; pixel < count; pixel++)
                 {
                     long source = offset + pixel * bpp;
-                    if (source + bpp > data.Length) return null;
                     if (bpp == 4)
                     {
                         rgba[pixel * 4] = data[source];
