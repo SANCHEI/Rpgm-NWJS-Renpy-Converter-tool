@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.5.2 - 2026-10-16
+- Never scans the tool's own binaries: GameAssetTool files inside a game folder no longer pollute detection, scans or results.
+- New Data ARC engine: native offline extraction for Raylib-style .arc containers with folder structure preserved.
+- New HSP engine: detection plus content manifests and loose-file collection for Hot Soup Processor DPM2 archives (file bytes use a closed cipher and stay inside the archive).
+- No more startup hangs outside game folders: game-root lookup bails out on dev markers and runs off the UI thread.
+- RPG Maker decryption now writes correct PNG/JPG extensions, validates keys structurally, skips undecryptable files instead of garbage output, and optionally saves JPG copies.
+- Faster signature recovery: Boyer-Moore-Horspool search, zero-copy chunk scanning and header-only DAT classification.
+- Smaller downloads: embedded third-party tools are deflate-compressed.
+
 ## 2.5.1 - 2026-10-06
 - Faster engine detection and dry-run scans: a single-pass directory snapshot replaces dozens of repeated folder walks.
 - New Lite build (~3 MB): the portable Python runtime is downloaded once on first use as versioned base/unity/spite packs instead of being embedded.
