@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.5.3 - 2026-10-16
+- New HSP engine: Hot Soup Processor DPM2 archives are detected, their full contents listed with sizes, and loose files collected. DPM2 file bytes use a closed cipher and stay inside the archives.
+- New Data ARC engine: native offline extraction for Raylib-style .arc containers with folder structure preserved.
+- No more startup hangs outside game folders: game-root lookup bails out on dev markers and runs off the UI thread.
+
 ## 2.5.2 - 2026-10-16
 - Never scans the tool's own binaries: GameAssetTool files inside a game folder no longer pollute detection, scans or results.
 - New Data ARC engine: native offline extraction for Raylib-style .arc containers with folder structure preserved.
