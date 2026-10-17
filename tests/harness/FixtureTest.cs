@@ -76,6 +76,23 @@ public static class FixtureTest
             }
             Console.WriteLine("RESULT:" + files + ":" + bytes + ":" + errors);
         }
+        else if (mode == "godot")
+        {
+            string hex = File.ReadAllText(Path.Combine(game, "key.hex.txt")).Trim();
+            List<string> archives = new List<string>(Directory.GetFiles(game));
+            archives.Sort(StringComparer.OrdinalIgnoreCase);
+            foreach (string archive in archives)
+            {
+                string lower = archive.ToLowerInvariant();
+                if (!(lower.EndsWith(".pck") || lower.EndsWith(".exe"))) continue;
+                string subfolder = Path.Combine(output, Path.GetFileNameWithoutExtension(archive));
+                Directory.CreateDirectory(subfolder);
+                GodotExtractionResult result = GodotExtractor.ExtractAll(archive, subfolder, hex, null, null);
+                Console.WriteLine("GODOT:" + Path.GetFileName(archive) + ":" + result.Extracted + ":" + result.Bytes + ":" + result.Errors + ":" + result.PreviewCount);
+            }
+            foreach (string diagnostics in Directory.GetFiles(output, "*diagnostics*", SearchOption.AllDirectories))
+                File.Delete(diagnostics);
+        }
         else
         {
             Console.WriteLine("Unknown mode: " + mode);
