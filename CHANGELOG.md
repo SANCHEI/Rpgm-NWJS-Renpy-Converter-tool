@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.5.4 - 2026-10-17
+- New Godot engine: PCK archives (v1-v4) now extract natively and offline with folder structure preserved, no portable runtime needed. Encrypted packs are decrypted when the key is supplied or found inside the game executable.
+- Godot texture previews: `.ctex`/`.stex` resources decode to viewable images, and per-file digests are verified so corrupted entries are flagged instead of silently written.
+- Faster Godot runs: plain entries stream straight to disk, key discovery scans large game executables in chunks, and large packs no longer load fully into memory.
+- The portable Godot script remains as a fallback for packs the native path does not cover.
+
 ## 2.5.3 - 2026-10-16
 - New HSP engine: Hot Soup Processor DPM2 archives are detected, their full contents listed with sizes, and loose files collected. DPM2 file bytes use a closed cipher and stay inside the archives.
 - New Data ARC engine: native offline extraction for Raylib-style .arc containers with folder structure preserved.

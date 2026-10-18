@@ -23,7 +23,7 @@ namespace RpgmvpConverterWinForms
             Font titleFont = new Font("Segoe UI Semibold", 14f, FontStyle.Regular);
             Font logFont = new Font("Consolas", 9.5f, FontStyle.Regular);
 
-            Text = "Game Asset Tool v2.5.3";
+            Text = "Game Asset Tool v2.5.4";
             StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
@@ -196,7 +196,7 @@ namespace RpgmvpConverterWinForms
             keyBox = new TextBox
             {
                 Location = new Point(112, 36),
-                Size = new Size(574, 26),
+                Size = new Size(398, 26),
                 BackColor = inputBack,
                 ForeColor = textColor,
                 BorderStyle = BorderStyle.FixedSingle,
@@ -207,7 +207,7 @@ namespace RpgmvpConverterWinForms
             jpgCopiesBox = new CheckBox
             {
                 Text = "Also save JPG",
-                Location = new Point(696, 38),
+                Location = new Point(514, 38),
                 Size = new Size(172, 22),
                 ForeColor = mutedColor,
                 Font = uiFont,
