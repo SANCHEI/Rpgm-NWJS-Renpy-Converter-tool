@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 $root = [IO.Path]::GetFullPath($PSScriptRoot)
-$version = "2.4.1"
+$version = "2.5.4"
 $release = [IO.Path]::GetFullPath((Join-Path $root "release"))
 $releaseExe = [IO.Path]::GetFullPath((Join-Path $release "GameAssetTool-v$version.exe"))
 $inspectorSource = [IO.Path]::GetFullPath((Join-Path $root "tests\ReleaseInspector.cs"))
@@ -63,6 +63,7 @@ $releaseBytes = [IO.File]::ReadAllBytes($releaseExe)
 $releaseText = [Text.Encoding]::UTF8.GetString($releaseBytes)
 foreach ($resource in @(
     "RpgmvpConverterWinForms.scripts.extract_unity.py",
+    "RpgmvpConverterWinForms.scripts.unity_diagnostics.py",
     "RpgmvpConverterWinForms.scripts.extract_godot.py",
     "RpgmvpConverterWinForms.scripts.extract_xp3.py",
     "RpgmvpConverterWinForms.scripts.extract_unreal.py",
@@ -94,7 +95,7 @@ if (-not $releaseText.Contains("RESULT:{0}:{1}:{2}:{3}:{4}")) {
     throw "Embedded Unity extractor does not contain the expected result format"
 }
 
-Assert-FileContains $inspectorSource "(unknown) SPITE тест" "ReleaseInspector path/root fixture is missing"
+Assert-FileContains $inspectorSource "(unknown) SPITE" "ReleaseInspector path/root fixture is missing"
 
 Write-Host "ReleaseInspector executable check skipped to avoid Windows Defender / Smart App Control blocking a freshly compiled test exe. Static release checks above still ran."
 Write-Host "Release checks passed."

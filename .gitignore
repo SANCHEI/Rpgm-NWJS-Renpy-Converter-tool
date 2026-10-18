@@ -5,6 +5,7 @@ dist/
 payload/
 __pycache__/
 *.pyc
+*.deflated
 *.exe
 *.dll
 *.pdb
@@ -14,3 +15,4 @@ __pycache__/
 *.log
 .vs/
 TestResults/
+release/

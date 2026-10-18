@@ -1,24 +1,32 @@
 @echo off
 setlocal
-REM Lite build: skips the portable Python runtime so the exe stays small (~5 MB).
-REM Python-backed engines (Renpy/Unity/Godot/Kirikiri/Unreal/GameMaker/SpakDat)
-REM download the runtime once on first use from GitHub Releases.
-REM Native extractors (RPG Maker MV/MZ, RGSS, NWJS, Electron, HTML, ...) work offline.
-REM Requires: payload\runtime-win-x64.zip must NOT exist (csproj embeds it only if present).
+REM Lite build: portable Python runtime is not embedded (EmbedRuntime=false),
+REM so the exe stays small (~5 MB). Compressed third-party tools are still
+REM embedded when their .deflated files exist (see build_compressed_tools.ps1).
+REM Python-backed engines (Renpy/Unity/Godot/Unreal/GameMaker/SPAK DAT)
+REM download versioned runtime packs once on first use from GitHub Releases.
+REM Native extractors (RPG Maker MV/MZ, RGSS, KiriKiri XP3, NWJS, Electron,
+REM HTML, ...) work fully offline.
 
-if exist "%~dp0payload\runtime-win-x64.zip" (
-    echo Lite build refused: payload\runtime-win-x64.zip exists.
-    echo Move it away first if you really want a Lite exe without embedded runtime.
-    exit /b 1
+call powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0source\scripts\build_compressed_tools.ps1"
+if errorlevel 1 exit /b 1
+
+set "MSBUILD="
+set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+if exist "%VSWHERE%" (
+    "%VSWHERE%" -latest -products * -requires Microsoft.Component.MSBuild -find "MSBuild\**\Bin\MSBuild.exe" > "%TEMP%\gat_msbuild.txt"
+    for /f "usebackq delims=" %%i in ("%TEMP%\gat_msbuild.txt") do set "MSBUILD=%%i"
+    del "%TEMP%\gat_msbuild.txt" 2>nul
 )
-
-set "MSBUILD=C:\Windows\Microsoft.NET\Framework64\v4.0.30319\MSBuild.exe"
+if not defined MSBUILD set "MSBUILD=C:\Windows\Microsoft.NET\Framework64\v4.0.30319\MSBuild.exe"
 if not exist "%MSBUILD%" (
-    echo MSBuild.exe not found at %MSBUILD%
+    echo MSBuild.exe not found. Install Visual Studio Build Tools or .NET Framework.
     exit /b 1
 )
+echo Using MSBuild at %MSBUILD%
+echo NOTE: the project targets C# 12, so the legacy .NET Framework compiler cannot build it.
 
-"%MSBUILD%" "%~dp0GameAssetTool.csproj" /nologo /t:Rebuild /p:Configuration=Release /p:Platform=AnyCPU
+"%MSBUILD%" "%~dp0GameAssetTool.csproj" /nologo /t:Rebuild /p:Configuration=Release /p:Platform=AnyCPU /p:EmbedRuntime=false
 if errorlevel 1 exit /b 1
 
 copy /Y "%~dp0bin\Release\GameAssetTool.exe" "%~dp0bin\GameAssetTool-Lite.exe" >nul

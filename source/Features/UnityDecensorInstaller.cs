@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Web.Script.Serialization;
 
 namespace RpgmvpConverterWinForms
@@ -84,6 +86,28 @@ namespace RpgmvpConverterWinForms
         public bool LauncherLoadsWinHttp { get; set; }
         public bool LikelyDoorstopConflict { get; set; }
         public string Details { get; set; }
+    }
+
+    internal enum BepInExLaunchOutcome
+    {
+        LogCreated,
+        ProcessExitedWithoutLog,
+        TimedOut,
+        Cancelled
+    }
+
+    internal sealed class BepInExLaunchResult
+    {
+        public BepInExLaunchOutcome Outcome { get; set; }
+        public bool ProcessStarted { get; set; }
+        public bool LogExists { get; set; }
+        public string LogPath { get; set; }
+        public string Details { get; set; }
+
+        public bool Succeeded
+        {
+            get { return Outcome == BepInExLaunchOutcome.LogCreated; }
+        }
     }
 
     internal static class UnityDecensorInstaller
@@ -168,6 +192,120 @@ namespace RpgmvpConverterWinForms
         public static bool IsBepInExLaunchConfirmed(string rootPath)
         {
             return File.Exists(Path.Combine(Path.GetFullPath(rootPath), "BepInEx", "LogOutput.log"));
+        }
+
+        public static bool IsBepInExPresent(string rootPath)
+        {
+            return IsManagedInstallPresent(rootPath)
+                || !string.IsNullOrWhiteSpace(DetectExistingBepInEx(Path.GetFullPath(rootPath)));
+        }
+
+        // Launches the game once and waits for BepInEx to create its log, so the
+        // SW_Decensor gate (IsBepInExLaunchConfirmed) can be satisfied without
+        // closing and reopening the tool. The game keeps running on success.
+        public static BepInExLaunchResult LaunchAndVerifyBepInEx(
+            UnityDecensorEnvironment environment,
+            int timeoutMs,
+            Func<bool> isCancelled,
+            Action<string> log)
+        {
+            if (environment == null)
+                throw new ArgumentNullException("environment");
+            string rootPath = Path.GetFullPath(environment.GameRoot);
+            string logPath = Path.Combine(rootPath, "BepInEx", "LogOutput.log");
+            BepInExLaunchResult result = new BepInExLaunchResult { LogPath = logPath };
+
+            if (IsBepInExLaunchConfirmed(rootPath))
+            {
+                result.Outcome = BepInExLaunchOutcome.LogCreated;
+                result.LogExists = true;
+                result.Details = "BepInEx already created its log; the game does not need to be launched again.";
+                return result;
+            }
+
+            if (!File.Exists(environment.GameExecutable))
+            {
+                result.Outcome = BepInExLaunchOutcome.TimedOut;
+                result.Details = "Game executable was not found: " + environment.GameExecutable;
+                return result;
+            }
+
+            DateTime existingLogWrite = File.Exists(logPath) ? File.GetLastWriteTimeUtc(logPath) : DateTime.MinValue;
+            Process process = null;
+            try
+            {
+                ProcessStartInfo psi = new ProcessStartInfo
+                {
+                    FileName = environment.GameExecutable,
+                    WorkingDirectory = rootPath,
+                    UseShellExecute = false
+                };
+                process = Process.Start(psi);
+                if (process == null)
+                {
+                    result.Outcome = BepInExLaunchOutcome.TimedOut;
+                    result.Details = "The game process could not be started.";
+                    return result;
+                }
+                result.ProcessStarted = true;
+                if (log != null) log("Game launched: " + environment.GameExecutable);
+            }
+            catch (Exception ex)
+            {
+                result.Outcome = BepInExLaunchOutcome.TimedOut;
+                result.Details = "Failed to launch the game: " + ex.Message;
+                return result;
+            }
+
+            DateTime deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+            DateTime exitDeadline = DateTime.MaxValue;
+            while (DateTime.UtcNow < deadline)
+            {
+                if (isCancelled != null && isCancelled())
+                {
+                    result.Outcome = BepInExLaunchOutcome.Cancelled;
+                    result.Details = "Launch verification was cancelled.";
+                    return result;
+                }
+
+                if (File.Exists(logPath))
+                {
+                    DateTime written = File.GetLastWriteTimeUtc(logPath);
+                    if (written > existingLogWrite)
+                    {
+                        result.Outcome = BepInExLaunchOutcome.LogCreated;
+                        result.LogExists = true;
+                        result.Details = "BepInEx created its log, so it loaded successfully.";
+                        return result;
+                    }
+                }
+
+                bool exited = HasExited(process);
+                if (exited && exitDeadline == DateTime.MaxValue)
+                {
+                    // Give a freshly created log a short grace period in case the
+                    // wrapper process exits before BepInEx finishes writing.
+                    exitDeadline = DateTime.UtcNow.AddSeconds(3);
+                }
+                if (exitDeadline != DateTime.MaxValue && DateTime.UtcNow > exitDeadline)
+                {
+                    result.Outcome = BepInExLaunchOutcome.ProcessExitedWithoutLog;
+                    result.Details = "The game process exited before BepInEx created its log. This usually means Doorstop was blocked (for example a custom launcher loads winhttp.dll first).";
+                    return result;
+                }
+
+                Thread.Sleep(300);
+            }
+
+            result.Outcome = BepInExLaunchOutcome.TimedOut;
+            result.Details = "BepInEx did not create its log within the timeout. Run the game manually once and use Diagnose Launch.";
+            return result;
+        }
+
+        private static bool HasExited(Process process)
+        {
+            try { return process.HasExited; }
+            catch { return false; }
         }
 
         public static string GetLauncherRiskWarning(string rootPath)
@@ -528,7 +666,7 @@ namespace RpgmvpConverterWinForms
             string expected = Path.Combine(rootPath, Path.GetFileName(dataPath).Substring(0, Path.GetFileName(dataPath).Length - 5) + ".exe");
             if (File.Exists(expected)) return expected;
             string executable = Directory.EnumerateFiles(rootPath, "*.exe", SearchOption.TopDirectoryOnly)
-                .FirstOrDefault(delegate(string path) { return !Path.GetFileName(path).Equals("UnityCrashHandler64.exe", StringComparison.OrdinalIgnoreCase); });
+                .FirstOrDefault(delegate(string path) { return !Path.GetFileName(path).Equals("UnityCrashHandler64.exe", StringComparison.OrdinalIgnoreCase) && !ExtractionPathUtils.IsOwnToolFile(path); });
             if (string.IsNullOrWhiteSpace(executable))
                 throw new InvalidDataException("Unity game executable was not found.");
             return executable;
@@ -604,7 +742,7 @@ namespace RpgmvpConverterWinForms
         private static WebClient CreateWebClient()
         {
             WebClient client = new WebClient();
-            client.Headers[HttpRequestHeader.UserAgent] = "GameAssetTool/2.4.1";
+            client.Headers[HttpRequestHeader.UserAgent] = "GameAssetTool/2.5.0";
             return client;
         }
 

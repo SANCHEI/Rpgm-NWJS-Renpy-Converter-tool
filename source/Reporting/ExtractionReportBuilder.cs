@@ -4,6 +4,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
+using System.Web.Script.Serialization;
 
 namespace RpgmvpConverterWinForms
 {
@@ -11,7 +13,7 @@ namespace RpgmvpConverterWinForms
     {
         private static readonly HashSet<string> KnownReportExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            ".aac", ".ani", ".asar", ".assets", ".avif", ".avi", ".bin", ".bmp", ".bundle", ".cfg", ".content",
+            ".aac", ".ani", ".asar", ".assets", ".avif", ".avi", ".bin", ".bmp", ".bundle", ".unity3d", ".cfg", ".content",
             ".crn", ".css", ".csv", ".dat", ".data", ".dds", ".dll", ".dts", ".exe", ".flac", ".flv", ".gif", ".html", ".htm",
             ".ico", ".ini", ".jar", ".jpeg", ".jpg", ".js", ".json", ".ks", ".ktx", ".ktx2", ".m4a", ".mid",
             ".midi", ".mkv", ".mov", ".mp3", ".mp4", ".nlch", ".ogg", ".otf", ".pak", ".pck",
@@ -93,6 +95,10 @@ namespace RpgmvpConverterWinForms
                 }
             }
 
+            string unitySkippedTable = BuildUnitySkippedHtmlTable(diagnostics);
+            if (!string.IsNullOrWhiteSpace(unitySkippedTable))
+                diagnostics.Insert(0, new KeyValuePair<string, string>("What was skipped? HTML", unitySkippedTable));
+
             string healthSnapshot = BuildHealthSnapshot(outputDir);
             if (!string.IsNullOrWhiteSpace(healthSnapshot))
                 diagnostics.Add(new KeyValuePair<string, string>("Health Check", healthSnapshot));
@@ -109,7 +115,7 @@ namespace RpgmvpConverterWinForms
             html.AppendLine(".wrap{max-width:1040px;margin:32px auto;padding:24px;background:#191d24;border:1px solid #323a46;border-radius:10px}");
             html.AppendLine("h1{margin:0 0 18px;font-size:24px;color:#44c5ff}.tabs{display:flex;gap:8px;margin:0 0 18px}.tabbtn{background:#2d3440;color:#eff3f8;border:1px solid #465268;border-radius:6px;padding:8px 12px;cursor:pointer}.tabbtn.active{background:#44c5ff;color:#0b1016;border-color:#44c5ff}.tab{display:none}.tab.active{display:block}");
             html.AppendLine("table{width:100%;border-collapse:collapse}th,td{padding:10px 12px;border-bottom:1px solid #303743;vertical-align:top}th{width:220px;text-align:left;color:#9ba7b5;font-weight:600}td{color:#f5f7fb}.value{white-space:pre-wrap;word-break:break-word}");
-            html.AppendLine(".ok{color:#46cc78}.warn{color:#ffb74d}.path{font-family:Consolas,monospace;font-size:13px;word-break:break-all}.copy{float:right;margin-left:12px;background:#26303d;color:#dce8f6;border:1px solid #4b5a70;border-radius:5px;padding:4px 8px;cursor:pointer}.copy:hover{border-color:#44c5ff}.diag{margin:0 0 18px}.diag h2{font-size:17px;color:#ffb74d;margin:0 0 8px}.diag pre{white-space:pre-wrap;word-break:break-word;background:#0a0e14;border:1px solid #303743;border-radius:8px;padding:12px;color:#dce8f6;max-height:520px;overflow:auto}.footer{margin-top:18px;color:#9ba7b5;font-size:12px}");
+            html.AppendLine(".ok{color:#46cc78}.warn{color:#ffb74d}.path{font-family:Consolas,monospace;font-size:13px;word-break:break-all}.copy{float:right;margin-left:12px;background:#26303d;color:#dce8f6;border:1px solid #4b5a70;border-radius:5px;padding:4px 8px;cursor:pointer}.copy:hover{border-color:#44c5ff}.diag{margin:0 0 18px}.diag h2{font-size:17px;color:#ffb74d;margin:0 0 8px}.diag pre{white-space:pre-wrap;word-break:break-word;background:#0a0e14;border:1px solid #303743;border-radius:8px;padding:12px;color:#dce8f6;max-height:520px;overflow:auto}.diagtable{width:100%;border-collapse:collapse;background:#0a0e14;border:1px solid #303743;border-radius:8px;overflow:hidden}.diagtable th{width:auto;color:#9ba7b5}.diagtable td,.diagtable th{border-bottom:1px solid #303743}.footer{margin-top:18px;color:#9ba7b5;font-size:12px}");
             html.AppendLine("</style><script>function copyText(b){var t=b.getAttribute('data-copy')||'';if(navigator.clipboard){navigator.clipboard.writeText(t);}else{var a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();document.execCommand('copy');document.body.removeChild(a);}}function showTab(id){var tabs=document.querySelectorAll('.tab');for(var i=0;i<tabs.length;i++)tabs[i].classList.remove('active');var buttons=document.querySelectorAll('.tabbtn');for(var j=0;j<buttons.length;j++)buttons[j].classList.remove('active');document.getElementById(id).classList.add('active');document.getElementById('btn-'+id).classList.add('active');}</script>");
             html.AppendLine("</head><body><div class=\"wrap\">");
             html.AppendLine("<h1>" + Html(title) + "</h1>");
@@ -131,7 +137,15 @@ namespace RpgmvpConverterWinForms
                 html.AppendLine("<div id=\"diagnostics\" class=\"tab\">");
                 foreach (KeyValuePair<string, string> diagnostic in diagnostics)
                 {
-                    html.AppendLine("<section class=\"diag\"><h2>" + Html(diagnostic.Key) + " <button class=\"copy\" data-copy=\"" + Html(diagnostic.Value) + "\" onclick=\"copyText(this)\">Copy</button></h2><pre>" + Html(diagnostic.Value) + "</pre></section>");
+                    if ((diagnostic.Key ?? "").EndsWith(" HTML", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string heading = diagnostic.Key.Substring(0, diagnostic.Key.Length - 5);
+                        html.AppendLine("<section class=\"diag\"><h2>" + Html(heading) + "</h2>" + diagnostic.Value + "</section>");
+                    }
+                    else
+                    {
+                        html.AppendLine("<section class=\"diag\"><h2>" + Html(diagnostic.Key) + " <button class=\"copy\" data-copy=\"" + Html(diagnostic.Value) + "\" onclick=\"copyText(this)\">Copy</button></h2><pre>" + Html(diagnostic.Value) + "</pre></section>");
+                    }
                 }
                 html.AppendLine("</div>");
             }
@@ -150,19 +164,21 @@ namespace RpgmvpConverterWinForms
 
             string reportReason = GetRowValue(rows, "Skipped diagnostics");
             if (!string.IsNullOrWhiteSpace(reportReason)) AddDistinct(reasons, reportReason);
+            AddExtractionQualityHints(GetRowValue(rows, "Engine"), GetRowValue(rows, "Extracted files"), skipped, reasons);
 
             foreach (KeyValuePair<string, string> diagnostic in diagnostics)
             {
                 string name = diagnostic.Key ?? "";
                 string text = diagnostic.Value ?? "";
+                if (name.EndsWith(" HTML", StringComparison.OrdinalIgnoreCase)) continue;
                 if (name.Equals("GameAssetTool-unity-diagnostics.txt", StringComparison.OrdinalIgnoreCase))
                 {
                     string unitySkipped = ReadDiagnosticValue(text, "Skipped Unity objects");
                     if (IsPositiveText(unitySkipped))
                     {
                         hasSkipped = true;
-                        AddDistinct(types, "Unity non-exported objects: " + unitySkipped);
-                        AddDistinct(reasons, "Unity: internal archive entries were filtered by the selected profile, unsupported by the exporter, or came from protected/zero-output archives.");
+                        AddDistinct(types, "Unity filtered/unsupported entries: " + unitySkipped);
+                        AddDistinct(reasons, "Unity: these are internal engine objects or archive entries filtered by the selected profile, unsupported by the exporter, or from protected/zero-output archives.");
                     }
                     AddUnityZeroOutputTypes(text, types);
                 }
@@ -170,6 +186,11 @@ namespace RpgmvpConverterWinForms
                 {
                     AddZipSkippedTypes(text, types, reasons);
                     if (!string.IsNullOrWhiteSpace(text)) hasSkipped = true;
+                }
+                else if (name.Equals("GameAssetTool-godot-diagnostics.txt", StringComparison.OrdinalIgnoreCase))
+                {
+                    AddGodotSkippedTypes(text, types, reasons);
+                    if (text.IndexOf("Texture cache files without embedded preview:", StringComparison.OrdinalIgnoreCase) >= 0) hasSkipped = true;
                 }
                 else if (text.IndexOf("skipped", StringComparison.OrdinalIgnoreCase) >= 0
                     || text.IndexOf("protected", StringComparison.OrdinalIgnoreCase) >= 0
@@ -205,11 +226,155 @@ namespace RpgmvpConverterWinForms
             return "";
         }
 
+
+        private static string BuildUnitySkippedHtmlTable(List<KeyValuePair<string, string>> diagnostics)
+        {
+            foreach (KeyValuePair<string, string> diagnostic in diagnostics)
+            {
+                if ((diagnostic.Key ?? "").Equals("GameAssetTool-unity-diagnostics.json", StringComparison.OrdinalIgnoreCase))
+                {
+                    string html = BuildUnitySkippedHtmlTableFromJson(diagnostic.Value ?? "");
+                    if (!string.IsNullOrWhiteSpace(html)) return html;
+                }
+            }
+
+            string text = "";
+            foreach (KeyValuePair<string, string> diagnostic in diagnostics)
+            {
+                if ((diagnostic.Key ?? "").Equals("GameAssetTool-unity-diagnostics.txt", StringComparison.OrdinalIgnoreCase))
+                {
+                    text = diagnostic.Value ?? "";
+                    break;
+                }
+            }
+            if (string.IsNullOrWhiteSpace(text)) return "";
+
+            StringBuilder builder = new StringBuilder();
+            bool hasRows = false;
+            builder.AppendLine("<table class=\"diagtable\"><tr><th>Type / reason</th><th>Total</th><th>Exported</th><th>What it means</th></tr>");
+            foreach (string raw in text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None))
+            {
+                string line = raw.Trim();
+                Match objectMatch = Regex.Match(line, @"^- (?<type>[^:]+): total=(?<total>\d+) exported=(?<exported>\d+) profile=(?<profile>.*)$");
+                if (objectMatch.Success)
+                {
+                    hasRows = true;
+                    string type = objectMatch.Groups["type"].Value;
+                    string total = objectMatch.Groups["total"].Value;
+                    string exported = objectMatch.Groups["exported"].Value;
+                    string profile = objectMatch.Groups["profile"].Value;
+                    builder.AppendLine("<tr><td><button class=\"copy\" data-copy=\"" + Html(type) + "\" onclick=\"copyText(this)\">Copy</button>" + Html(type) + "</td><td>" + Html(total) + "</td><td>" + Html(exported) + "</td><td>" + Html(profile) + "</td></tr>");
+                    continue;
+                }
+
+                Match reasonMatch = Regex.Match(line, @"^- (?<reason>.*): (?<count>\d+)$");
+                if (reasonMatch.Success && line.IndexOf("| objects=", StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    string reason = reasonMatch.Groups["reason"].Value;
+                    if (reason.IndexOf("archive", StringComparison.OrdinalIgnoreCase) >= 0 && reason.IndexOf("zero", StringComparison.OrdinalIgnoreCase) < 0)
+                        continue;
+                    hasRows = true;
+                    builder.AppendLine("<tr><td><button class=\"copy\" data-copy=\"" + Html(reason) + "\" onclick=\"copyText(this)\">Copy</button>" + Html(reason) + "</td><td>" + Html(reasonMatch.Groups["count"].Value) + "</td><td>-</td><td>Skipped reason from Unity diagnostics</td></tr>");
+                }
+            }
+            builder.AppendLine("</table>");
+            return hasRows ? builder.ToString() : "";
+        }
+
+        private static string BuildUnitySkippedHtmlTableFromJson(string json)
+        {
+            try
+            {
+                Dictionary<string, object> root = new JavaScriptSerializer().DeserializeObject(json) as Dictionary<string, object>;
+                if (root == null) return "";
+                StringBuilder builder = new StringBuilder();
+                bool hasRows = false;
+                builder.AppendLine("<table class=\"diagtable\"><tr><th>Type / reason</th><th>Total</th><th>Exported</th><th>What it means</th></tr>");
+                object objectTypes;
+                if (root.TryGetValue("object_types", out objectTypes))
+                {
+                    object[] rows = objectTypes as object[];
+                    if (rows != null)
+                    {
+                        foreach (object row in rows)
+                        {
+                            Dictionary<string, object> item = row as Dictionary<string, object>;
+                            if (item == null) continue;
+                            string type = JsonString(item, "type");
+                            string total = JsonString(item, "total");
+                            string exported = JsonString(item, "exported");
+                            string profile = JsonString(item, "profile");
+                            hasRows = true;
+                            builder.AppendLine("<tr><td><button class=\"copy\" data-copy=\"" + Html(type) + "\" onclick=\"copyText(this)\">Copy</button>" + Html(type) + "</td><td>" + Html(total) + "</td><td>" + Html(exported) + "</td><td>" + Html(profile) + "</td></tr>");
+                        }
+                    }
+                }
+                object skippedReasons;
+                if (root.TryGetValue("skipped_reasons", out skippedReasons))
+                {
+                    object[] rows = skippedReasons as object[];
+                    if (rows != null)
+                    {
+                        foreach (object row in rows)
+                        {
+                            Dictionary<string, object> item = row as Dictionary<string, object>;
+                            if (item == null) continue;
+                            string reason = JsonString(item, "reason");
+                            string count = JsonString(item, "count");
+                            if (string.IsNullOrWhiteSpace(reason)) continue;
+                            hasRows = true;
+                            builder.AppendLine("<tr><td><button class=\"copy\" data-copy=\"" + Html(reason) + "\" onclick=\"copyText(this)\">Copy</button>" + Html(reason) + "</td><td>" + Html(count) + "</td><td>-</td><td>Skipped reason from Unity diagnostics JSON</td></tr>");
+                        }
+                    }
+                }
+                builder.AppendLine("</table>");
+                return hasRows ? builder.ToString() : "";
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+        private static string JsonString(Dictionary<string, object> item, string key)
+        {
+            object value;
+            return item != null && item.TryGetValue(key, out value) && value != null ? Convert.ToString(value) : "";
+        }
+
         private static bool IsPositiveText(string value)
         {
-            if (string.IsNullOrWhiteSpace(value)) return false;
+            return ParseLeadingInt(value) > 0;
+        }
+
+        private static int ParseLeadingInt(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return 0;
+            Match match = Regex.Match(value.Trim(), @"^\d+");
             int number;
-            return int.TryParse(value.Trim().Split(' ')[0], out number) && number > 0;
+            return match.Success && int.TryParse(match.Value, out number) ? number : 0;
+        }
+
+        private static void AddExtractionQualityHints(string engine, string extractedText, string skippedText, List<string> reasons)
+        {
+            int extracted = ParseLeadingInt(extractedText);
+            int skipped = ParseLeadingInt(skippedText);
+            if (skipped <= 0 && extracted > 0) return;
+
+            if (extracted == 0)
+                AddDistinct(reasons, "No files were extracted. Try Dry Run / Scan, verify the selected engine, and check whether the archive is encrypted or protected.");
+            else if (skipped > Math.Max(100, extracted * 3))
+                AddDistinct(reasons, "Many entries were skipped compared with extracted files. This can be normal for filtered profiles; try Everything or Force engine if the output looks too small.");
+
+            string value = engine ?? "";
+            if (value.IndexOf("Unity", StringComparison.OrdinalIgnoreCase) >= 0)
+                AddDistinct(reasons, "Unity: media profiles intentionally skip scripts, shaders, materials, meshes, animation clips and internal metadata unless Everything is selected.");
+            else if (value.IndexOf("Godot", StringComparison.OrdinalIgnoreCase) >= 0)
+                AddDistinct(reasons, "Godot: imported cache files may remain as .ctex/.stex when no embedded image preview can be recovered; encrypted PCKs need a valid key.");
+            else if (value.IndexOf("Unreal", StringComparison.OrdinalIgnoreCase) >= 0)
+                AddDistinct(reasons, "Unreal: encrypted PAK/IoStore, protected blocks or unsupported compression can be skipped; provide AES keys through the key field or keys.txt when required.");
+            else if (value.IndexOf("NWJS", StringComparison.OrdinalIgnoreCase) >= 0)
+                AddDistinct(reasons, "NWJS: media profiles skip scripts and data files; use Loose: All if you also need JSON, JS or other loose resources.");
         }
 
         private static string ReadDiagnosticValue(string text, string key)
@@ -243,6 +408,21 @@ namespace RpgmvpConverterWinForms
                 AddDistinct(types, "Unity zero-output " + item.Key + ": " + item.Value);
         }
 
+        private static void AddGodotSkippedTypes(string text, List<string> types, List<string> reasons)
+        {
+            string textureContainers = ReadDiagnosticValue(text, "Texture cache files without embedded preview");
+            string previews = ReadDiagnosticValue(text, "Recovered imported previews");
+            string audio = ReadDiagnosticValue(text, "Imported audio stream/cache files");
+            if (IsPositiveText(textureContainers))
+            {
+                AddDistinct(types, "Godot texture cache containers without embedded preview: " + textureContainers);
+                AddDistinct(reasons, "Godot: some .ctex/.stex cache files do not contain an embedded PNG/JPG/WebP preview; full decoding can require Godot import metadata or engine-specific texture decoding.");
+            }
+            if (IsPositiveText(previews))
+                AddDistinct(types, "Godot recovered imported image previews: " + previews);
+            if (IsPositiveText(audio))
+                AddDistinct(types, "Godot imported audio stream/cache files: " + audio);
+        }
         private static void AddZipSkippedTypes(string text, List<string> types, List<string> reasons)
         {
             Dictionary<string, int> extensionCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -312,10 +492,12 @@ namespace RpgmvpConverterWinForms
             List<string> paths = new List<string>();
             string[] preferred = new[]
             {
+                "GameAssetTool-unity-diagnostics.json",
                 "GameAssetTool-unity-diagnostics.txt",
                 "GameAssetTool-apk-diagnostics.txt",
                 "GameAssetTool-zip-diagnostics.tsv",
-                "GameAssetTool-wolf-diagnostics.txt"
+                "GameAssetTool-wolf-diagnostics.txt",
+                "GameAssetTool-godot-diagnostics.txt"
             };
             foreach (string name in preferred)
             {
@@ -399,6 +581,7 @@ namespace RpgmvpConverterWinForms
             if (files == null || files.Count == 0) return "";
             int images = 0;
             int svg = 0;
+            int text = 0;
             int audio = 0;
             int video = 0;
             int other = 0;
@@ -408,6 +591,7 @@ namespace RpgmvpConverterWinForms
                 string extension = info.Extension.ToLowerInvariant();
                 if (extension == ".svg") svg++;
                 else if (MediaTypeRegistry.IsImage(extension)) images++;
+                else if (MediaTypeRegistry.IsText(extension)) text++;
                 else if (MediaTypeRegistry.IsAudio(extension)) audio++;
                 else if (MediaTypeRegistry.IsVideo(extension)) video++;
                 else other++;
@@ -415,11 +599,11 @@ namespace RpgmvpConverterWinForms
 
             return "Images: " + images
                 + " | SVG: " + svg
+                + " | Text: " + text
                 + " | Audio: " + audio
                 + " | Video: " + video
                 + " | Other: " + other;
         }
-
         private static string BuildUnknownExtensionSummary(List<FileInfo> files)
         {
             if (files == null || files.Count == 0) return "";
@@ -520,6 +704,13 @@ namespace RpgmvpConverterWinForms
         private static string BuildUnityDiagnosticsSummary(string outputDir)
         {
             if (string.IsNullOrWhiteSpace(outputDir)) return "";
+            string jsonPath = Path.Combine(outputDir, "GameAssetTool-unity-diagnostics.json");
+            if (File.Exists(jsonPath))
+            {
+                string fromJson = BuildUnityDiagnosticsSummaryFromJson(jsonPath);
+                if (!string.IsNullOrWhiteSpace(fromJson)) return fromJson;
+            }
+
             string path = Path.Combine(outputDir, "GameAssetTool-unity-diagnostics.txt");
             if (!File.Exists(path)) return "";
             try
@@ -549,6 +740,40 @@ namespace RpgmvpConverterWinForms
             catch
             {
                 return "";
+            }
+        }
+
+        private static string BuildUnityDiagnosticsSummaryFromJson(string path)
+        {
+            try
+            {
+                Dictionary<string, object> root = new JavaScriptSerializer().DeserializeObject(File.ReadAllText(path, Encoding.UTF8)) as Dictionary<string, object>;
+                if (root == null) return "";
+                List<string> parts = new List<string>();
+                AddJsonValue(parts, root, "archives", "archives");
+                AddJsonValue(parts, root, "bundles", "bundles");
+                AddJsonValue(parts, root, "assets", "assets");
+                AddJsonValue(parts, root, "direct_files", "direct");
+                AddJsonValue(parts, root, "archive_input_size_text", "input");
+                AddJsonValue(parts, root, "archives_with_zero_output", "zero-output");
+                AddJsonValue(parts, root, "archives_with_errors", "error-archives");
+                if (parts.Count == 0) return "";
+                parts.Add("details: HTML diagnostics tab");
+                return string.Join(" | ", parts.ToArray());
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+        private static void AddJsonValue(List<string> parts, Dictionary<string, object> values, string key, string label)
+        {
+            object value;
+            if (values.TryGetValue(key, out value) && value != null)
+            {
+                string text = Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture);
+                if (!string.IsNullOrWhiteSpace(text)) parts.Add(label + ": " + text);
             }
         }
 

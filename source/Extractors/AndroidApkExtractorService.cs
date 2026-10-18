@@ -165,6 +165,7 @@ namespace RpgmvpConverterWinForms
                 || extension.Equals(".sspj", StringComparison.OrdinalIgnoreCase)
                 || extension.Equals(".assets", StringComparison.OrdinalIgnoreCase)
                 || extension.Equals(".bundle", StringComparison.OrdinalIgnoreCase)
+                                || extension.Equals(".unity3d", StringComparison.OrdinalIgnoreCase)
                 || extension.Equals(".ress", StringComparison.OrdinalIgnoreCase)
                 || extension.Equals(".resource", StringComparison.OrdinalIgnoreCase)
                 || extension.Equals(".pck", StringComparison.OrdinalIgnoreCase)

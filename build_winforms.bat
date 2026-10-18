@@ -4,11 +4,23 @@ setlocal
 call powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0source\scripts\build_portable_runtime.ps1"
 if errorlevel 1 exit /b 1
 
-set "MSBUILD=C:\Windows\Microsoft.NET\Framework64\v4.0.30319\MSBuild.exe"
+call powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0source\scripts\build_compressed_tools.ps1"
+if errorlevel 1 exit /b 1
+
+set "MSBUILD="
+set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+if exist "%VSWHERE%" (
+    "%VSWHERE%" -latest -products * -requires Microsoft.Component.MSBuild -find "MSBuild\**\Bin\MSBuild.exe" > "%TEMP%\gat_msbuild.txt"
+    for /f "usebackq delims=" %%i in ("%TEMP%\gat_msbuild.txt") do set "MSBUILD=%%i"
+    del "%TEMP%\gat_msbuild.txt" 2>nul
+)
+if not defined MSBUILD set "MSBUILD=C:\Windows\Microsoft.NET\Framework64\v4.0.30319\MSBuild.exe"
 if not exist "%MSBUILD%" (
-    echo MSBuild.exe not found at %MSBUILD%
+    echo MSBuild.exe not found. Install Visual Studio Build Tools or .NET Framework.
     exit /b 1
 )
+echo Using MSBuild at %MSBUILD%
+echo NOTE: the project targets C# 12, so the legacy .NET Framework compiler cannot build it.
 
 "%MSBUILD%" "%~dp0GameAssetTool.csproj" /nologo /t:Rebuild /p:Configuration=Release /p:Platform=AnyCPU
 if errorlevel 1 exit /b 1

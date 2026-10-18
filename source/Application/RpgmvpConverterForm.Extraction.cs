@@ -32,7 +32,22 @@ namespace RpgmvpConverterWinForms
                 return;
             }
 
-            GameEngine engine = EffectiveEngine(DetectEngine(inputPath));
+            GameEngine detectedEngine = DetectEngine(inputPath);
+            GameEngine engine = EffectiveEngine(detectedEngine);
+            if (SelectedForcedEngine() == GameEngine.Unknown)
+            {
+                string warning = BuildCollectionFolderWarning(inputPath, rootPath);
+                if (!string.IsNullOrWhiteSpace(warning))
+                {
+                    DialogResult choice = MessageBox.Show(
+                        warning + Environment.NewLine + Environment.NewLine +
+                        T("Continue extraction from this folder?", "Продолжить извлечение из этой папки?"),
+                        T("Possible collection folder", "Возможно выбрана папка-коллекция"),
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Warning);
+                    if (choice != DialogResult.Yes) return;
+                }
+            }
             if (engine == GameEngine.Unity)
             {
                 await StartUnityExtractionAsync();
@@ -45,12 +60,16 @@ namespace RpgmvpConverterWinForms
             }
             if (engine == GameEngine.Godot)
             {
-                await StartPortableScriptExtractionAsync("Godot", "godot", "extract_godot.py", "RpgmvpConverterWinForms.scripts.extract_godot.py", new string[0]);
+                await StartGodotExtractionAsync();
                 return;
             }
             if (engine == GameEngine.Kirikiri)
             {
-                await StartPortableScriptExtractionAsync("KiriKiri XP3", "kirikiri", "extract_xp3.py", "RpgmvpConverterWinForms.scripts.extract_xp3.py", new string[0]);
+                string kirikiriRoot = InputDirectory(pathBox.Text.Trim());
+                if (KirikiriXp3Extractor.HasStandardArchives(kirikiriRoot, Path.Combine(kirikiriRoot, "extracted", "kirikiri")))
+                    await StartLocalExtractionAsync("KiriKiri XP3", "kirikiri", RunKirikiriNativeExtraction);
+                else
+                    await StartPortableScriptExtractionAsync("KiriKiri XP3", "kirikiri", "extract_xp3.py", "RpgmvpConverterWinForms.scripts.extract_xp3.py", new string[0]);
                 return;
             }
             if (engine == GameEngine.Unreal)
@@ -138,6 +157,16 @@ namespace RpgmvpConverterWinForms
                 await StartPygamePyInstallerExtractionAsync();
                 return;
             }
+            if (engine == GameEngine.DataArc)
+            {
+                await StartDataArcExtractionAsync();
+                return;
+            }
+            if (engine == GameEngine.Hsp)
+            {
+                await StartHspExtractionAsync();
+                return;
+            }
             if (engine != GameEngine.RpgMaker)
             {
                 await StartSignatureRecoveryAsync();
@@ -172,8 +201,10 @@ namespace RpgmvpConverterWinForms
                 return;
             }
 
+            if (!ValidateRpgmKey(rootPath, keyBytes)) return;
+
             string outputDir = Path.Combine(rootPath, "extracted", "rpgm");
-            if (!TryResetExtractionRootForOutput(outputDir)) return;
+            if (!await TryResetExtractionRootForOutputAsync(outputDir)) return;
 
             List<string> files = GetFilesToConvert(rootPath);
             if (files.Count == 0)
@@ -182,7 +213,7 @@ namespace RpgmvpConverterWinForms
                 return;
             }
 
-            currentRun = new ConversionRun(rootPath, files, keyBytes);
+            currentRun = new ConversionRun(rootPath, files, keyBytes, jpgCopiesBox != null && jpgCopiesBox.Checked);
             lastOutputDir = currentRun.OutputDir;
             SetRpgmRunningState(true);
             progressBar.Maximum = Math.Max(files.Count, 1);
@@ -205,6 +236,26 @@ namespace RpgmvpConverterWinForms
             }
         }
 
+        private bool ValidateRpgmKey(string rootPath, byte[] keyBytes)
+        {
+            try
+            {
+                foreach (string file in GetFilesToConvert(rootPath))
+                {
+                    if (SafeFileLength(file) <= 32) continue;
+                    byte[] bytes;
+                    try { bytes = File.ReadAllBytes(file); }
+                    catch { continue; }
+                    if (!RpgmCrypt.HasEncryptedHeader(bytes)) continue;
+                    if (RpgmCrypt.ValidateKey(bytes, keyBytes)) return true;
+                    WriteLog("RPGM key does not fit " + Path.GetFileName(file) + ": files would decrypt to garbage. Check the key or the file origins (PNG and JPG assets share one key).");
+                    return false;
+                }
+            }
+            catch { }
+            return true;
+        }
+
         private async Task StartRenpyExtractionAsync()
         {
             if (currentRun != null || externalRunning) return;
@@ -219,20 +270,27 @@ namespace RpgmvpConverterWinForms
                 return;
             }
 
-            if (!EnsurePortableRuntimeAvailable(GameEngine.Renpy)) return;
-
             string outputDir = Path.Combine(rootPath, "extracted", "renpy");
             lastOutputDir = outputDir;
-            if (!TryResetExtractionRootForOutput(outputDir)) return;
+            if (!await TryResetExtractionRootForOutputAsync(outputDir)) return;
             SetExternalRunningState(true, "Ren'Py");
             progressBar.Maximum = Math.Max(archives.Count, 1);
             progressBar.Value = 0;
-            WriteLog("Ren'Py extraction started with unrpa 2.3.0: " + archives.Count + " archive(s)");
+            List<bool> nativeSupport = new List<bool>(archives.Count);
+            bool needPython = false;
+            foreach (string archive in archives)
+            {
+                bool supported = RpaExtractor.HasNativeSupport(archive);
+                nativeSupport.Add(supported);
+                if (!supported) needPython = true;
+            }
+            if (needPython && !EnsurePortableRuntimeAvailable(GameEngine.Renpy)) return;
+            WriteLog("Ren'Py extraction started" + (needPython ? " with unrpa 2.3.0" : " (native, no runtime needed)") + ": " + archives.Count + " archive(s)");
 
             OperationResult result;
             try
             {
-                result = await Task.Run(delegate { return RunRenpyExtraction(gameFolder, archives, outputDir); });
+                result = await Task.Run(delegate { return RunRenpyExtraction(gameFolder, archives, nativeSupport, outputDir); });
             }
             catch (Exception ex)
             {
@@ -242,7 +300,7 @@ namespace RpgmvpConverterWinForms
             CompleteExternalOperation(result);
         }
 
-        private OperationResult RunRenpyExtraction(string gameFolder, List<string> archives, string outputDir)
+        private OperationResult RunRenpyExtraction(string gameFolder, List<string> archives, List<bool> nativeSupport, string outputDir)
         {
             DateTime start = DateTime.UtcNow;
             int errors = 0;
@@ -267,6 +325,21 @@ namespace RpgmvpConverterWinForms
                 });
                 SafeLog("Processing RPA: " + relative);
 
+                if (i < nativeSupport.Count && nativeSupport[i])
+                {
+                    try
+                    {
+                        RpaExtractionResult native = RpaExtractor.ExtractArchive(archive, archiveOutput, delegate(string line) { SafeLog(line); });
+                        SafeLog("Ren'Py native: " + native.Extracted + " file(s), " + FormatBytes(native.Bytes));
+                    }
+                    catch (Exception ex)
+                    {
+                        errors++;
+                        SafeLog("WARN:" + Path.GetFileName(archive) + ": " + ex.Message);
+                    }
+                    continue;
+                }
+
                 ProcessStartInfo psi = CreatePythonProcessInfo();
                 psi.Arguments = "-m unrpa -m -p " + QuoteArg(archiveOutput) + " " + QuoteArg(archive);
                 int exitCode = RunExternalProcess(psi, delegate(string line) { SafeLog(line); });
@@ -281,7 +354,7 @@ namespace RpgmvpConverterWinForms
         {
             string outputDir = Path.Combine(rootPath, "extracted", "renpy", "loose");
             lastOutputDir = outputDir;
-            if (!TryResetExtractionRootForOutput(outputDir)) return;
+            if (!await TryResetExtractionRootForOutputAsync(outputDir)) return;
             SetExternalRunningState(true, "Ren'Py loose files");
             WriteLog("Ren'Py resources are already open. Collecting loose files.");
             OperationResult result;
@@ -290,9 +363,11 @@ namespace RpgmvpConverterWinForms
                 result = await Task.Run(delegate
                 {
                     DateTime start = DateTime.UtcNow;
+                    string mode = LooseModeValue();
                     List<string> files = AssetCollectors.GetLooseResourceFiles(gameFolder, outputDir);
+                    files = FilterLooseCollectionFiles(files, mode);
                     CollectorResult copied = AssetCollectors.CopyFiles(gameFolder, files, outputDir, "");
-                    return new OperationResult("Ren'Py loose resources", outputDir, copied.Extracted, copied.Bytes, 0, copied.Renamed, copied.Skipped, DateTime.UtcNow - start);
+                    return new OperationResult("Ren'Py loose resources (" + mode + ")", outputDir, copied.Extracted, copied.Bytes, 0, copied.Renamed, copied.Skipped, DateTime.UtcNow - start);
                 });
             }
             catch (Exception ex)
@@ -316,13 +391,13 @@ namespace RpgmvpConverterWinForms
 
             if (!EnsurePortableRuntimeAvailable(GameEngine.Unity)) return;
 
-            List<string> bundles = FindUnityBundleFiles(rootPath);
+            List<string> bundles = UnityArchiveDiscovery.FindBundleLikeArchives(rootPath);
             bool includeBundles = true;
             if (bundles.Count > 0)
             {
                 long bytes = bundles.Sum(delegate(string file) { return SafeFileLength(file); });
                 includeBundles = MessageBox.Show(
-                    "Found " + bundles.Count + " bundle file(s), " + FormatBytes(bytes) + ".\n\nExtract bundles too?",
+                    "Found " + bundles.Count + " Unity bundle-like file(s), " + FormatBytes(bytes) + ".\n\nExtract .bundle/.unity3d and Addressables UnityFS archives too?",
                     "Unity Bundles",
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Question) == DialogResult.Yes;
@@ -332,7 +407,7 @@ namespace RpgmvpConverterWinForms
             UnityExtractionConfig config = UnityExtractionConfig.Create(mode, includeBundles);
             string outputDir = Path.Combine(rootPath, "extracted", "unity");
             lastOutputDir = outputDir;
-            if (!TryResetExtractionRootForOutput(outputDir)) return;
+            if (!await TryResetExtractionRootForOutputAsync(outputDir)) return;
             SetExternalRunningState(true, "Unity");
             WriteLog("Unity extraction started: " + mode + (includeBundles ? " with bundles" : " without bundles"));
 
@@ -349,12 +424,20 @@ namespace RpgmvpConverterWinForms
             CompleteExternalOperation(result);
         }
 
+        private static void WriteUnityPythonScripts(string entryScriptPath)
+        {
+            string directory = Path.GetDirectoryName(entryScriptPath);
+            if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
+            File.WriteAllText(entryScriptPath, EmbeddedScripts.ReadText("RpgmvpConverterWinForms.scripts.extract_unity.py"), new UTF8Encoding(false));
+            File.WriteAllText(Path.Combine(directory, "unity_diagnostics.py"), EmbeddedScripts.ReadText("RpgmvpConverterWinForms.scripts.unity_diagnostics.py"), new UTF8Encoding(false));
+        }
+
         private OperationResult RunUnityExtraction(string rootPath, string outputDir, UnityExtractionConfig config)
         {
             DateTime start = DateTime.UtcNow;
             Directory.CreateDirectory(outputDir);
             string scriptPath = PortableRuntime.CreateSessionFilePath("extract_unity.py");
-            File.WriteAllText(scriptPath, EmbeddedScripts.ReadText("RpgmvpConverterWinForms.scripts.extract_unity.py"), new UTF8Encoding(false));
+            WriteUnityPythonScripts(scriptPath);
 
             int extracted = 0;
             long bytes = 0;
@@ -389,7 +472,7 @@ namespace RpgmvpConverterWinForms
                         {
                             progressBar.Value = 0;
                             statusLabel.Text = T("Unity: scanning files", "Unity: поиск файлов");
-                            statsLabel.Text = T("Looking for .assets, .bundle and direct media files...", "Поиск .assets, .bundle и открытых медиа...");
+                            statsLabel.Text = T("Looking for .assets, .bundle, .unity3d and direct media files...", "Поиск .assets, .bundle, .unity3d и открытых медиа...");
                         }
                         else if (unityPhase == "direct")
                         {
@@ -462,7 +545,7 @@ namespace RpgmvpConverterWinForms
 
             string outputDir = Path.Combine(rootPath, "extracted", "nwjs");
             lastOutputDir = outputDir;
-            if (!TryResetExtractionRootForOutput(outputDir)) return;
+            if (!await TryResetExtractionRootForOutputAsync(outputDir)) return;
             localCopyCancellationRequested = false;
             SetExternalRunningState(true, "NWJS");
             WriteLog("NWJS file extraction started");
@@ -673,14 +756,98 @@ namespace RpgmvpConverterWinForms
             });
         }
 
+        private OperationResult RunKirikiriNativeExtraction(string inputPath, string outputDir)
+        {
+            DateTime start = DateTime.UtcNow;
+            string rootPath = InputDirectory(inputPath);
+            Directory.CreateDirectory(outputDir);
+            int archiveCount = KirikiriXp3Extractor.FindArchives(rootPath, outputDir).Count;
+            BeginUi(delegate
+            {
+                progressBar.Maximum = Math.Max(archiveCount, 1);
+                progressBar.Value = 0;
+            });
+            int processed = 0;
+            Xp3ExtractionResult total = KirikiriXp3Extractor.ExtractAll(
+                rootPath,
+                outputDir,
+                delegate(string line)
+                {
+                    SafeLog(line);
+                    BeginUi(delegate
+                    {
+                        processed++;
+                        progressBar.Value = Math.Min(processed, progressBar.Maximum);
+                        statusLabel.Text = "KiriKiri XP3: " + processed;
+                    });
+                },
+                delegate { return localCopyCancellationRequested; });
+            return new OperationResult("KiriKiri XP3", outputDir, total.Extracted, total.Bytes, total.Errors, total.Renamed, 0, DateTime.UtcNow - start);
+        }
+
+        private async Task StartDataArcExtractionAsync()
+        {
+            await StartLocalExtractionAsync("Data ARC", "arc", RunDataArcNativeExtraction);
+        }
+
+        private OperationResult RunDataArcNativeExtraction(string inputPath, string outputDir)
+        {
+            DateTime start = DateTime.UtcNow;
+            string rootPath = InputDirectory(inputPath);
+            Directory.CreateDirectory(outputDir);
+            int processed = 0;
+            ArcExtractionResult total = ArcExtractor.ExtractAll(
+                rootPath,
+                outputDir,
+                delegate(string line)
+                {
+                    SafeLog(line);
+                    BeginUi(delegate
+                    {
+                        processed++;
+                        progressBar.Value = Math.Min(processed, progressBar.Maximum);
+                        statusLabel.Text = "Data ARC: " + processed;
+                    });
+                },
+                delegate { return localCopyCancellationRequested; });
+            return new OperationResult("Data ARC", outputDir, total.Extracted, total.Bytes, total.Errors, total.Renamed, total.Skipped, DateTime.UtcNow - start);
+        }
+
         private async Task StartGameMakerExtractionAsync()
         {
-            await StartPortableScriptExtractionAsync(
-                "GameMaker experimental",
-                "gamemaker",
-                "extract_gamemaker.py",
-                "RpgmvpConverterWinForms.scripts.extract_gamemaker.py",
-                new string[0]);
+            string gameMakerRoot = InputDirectory(pathBox.Text.Trim());
+            if (GameMakerExtractor.HasNativeSupport(gameMakerRoot, Path.Combine(gameMakerRoot, "extracted", "gamemaker")))
+                await StartLocalExtractionAsync("GameMaker", "gamemaker", RunGameMakerNativeExtraction);
+            else
+                await StartPortableScriptExtractionAsync(
+                    "GameMaker experimental",
+                    "gamemaker",
+                    "extract_gamemaker.py",
+                    "RpgmvpConverterWinForms.scripts.extract_gamemaker.py",
+                    new string[0]);
+        }
+
+        private OperationResult RunGameMakerNativeExtraction(string inputPath, string outputDir)
+        {
+            DateTime start = DateTime.UtcNow;
+            string rootPath = InputDirectory(inputPath);
+            Directory.CreateDirectory(outputDir);
+            int processed = 0;
+            GameMakerResult total = GameMakerExtractor.ExtractAll(
+                rootPath,
+                outputDir,
+                delegate(string line)
+                {
+                    SafeLog(line);
+                    BeginUi(delegate
+                    {
+                        processed++;
+                        progressBar.Value = Math.Min(processed, progressBar.Maximum);
+                        statusLabel.Text = "GameMaker: " + processed;
+                    });
+                },
+                delegate { return localCopyCancellationRequested; });
+            return new OperationResult("GameMaker", outputDir, total.Extracted, total.Bytes, total.Errors, total.Renamed, total.Skipped, DateTime.UtcNow - start);
         }
 
         private async Task StartAndroidApkExtractionAsync()
@@ -705,21 +872,69 @@ namespace RpgmvpConverterWinForms
         }
 
 
+        private async Task StartHspExtractionAsync()
+        {
+            await StartLocalExtractionAsync("HSP DPM", "hsp", RunHspExtraction);
+        }
+
+        private OperationResult RunHspExtraction(string inputPath, string outputDir)
+        {
+            DateTime start = DateTime.UtcNow;
+            string rootPath = InputDirectory(inputPath);
+            Directory.CreateDirectory(outputDir);
+            DpmManifestResult manifests = HspDpmExtractor.WriteManifests(
+                rootPath,
+                outputDir,
+                delegate(string line) { SafeLog(line); },
+                delegate { return localCopyCancellationRequested; });
+            List<string> loose = AssetCollectors.GetLooseResourceFiles(rootPath, outputDir);
+            CollectorResult copied = AssetCollectors.CopyFiles(rootPath, loose, outputDir, "loose");
+            string summary = "HSP DPM: " + manifests.Archives + " archive(s), " + manifests.Files + " file(s) listed (encrypted, kept inside archives)";
+            SafeLog(summary);
+            return new OperationResult("HSP DPM", outputDir,
+                copied.Extracted, copied.Bytes, manifests.Errors, copied.Renamed, copied.Skipped,
+                DateTime.UtcNow - start);
+        }
+
         private async Task StartPygamePyInstallerExtractionAsync()
         {
-            await StartLocalExtractionAsync("Pygame / PyInstaller", "pygame", RunPygamePyInstallerExtraction);
+            if (currentRun != null || externalRunning) return;
+
+            string rootPath = GetPygamePyInstallerRoot(pathBox.Text.Trim());
+            if (!Directory.Exists(rootPath) || !IsPygamePyInstallerGame(rootPath))
+            {
+                WriteLog("Invalid Pygame / PyInstaller path");
+                return;
+            }
+
+            string outputDir = Path.Combine(rootPath, "extracted", "pygame");
+            lastOutputDir = outputDir;
+            if (!await TryResetExtractionRootForOutputAsync(outputDir)) return;
+            SetExternalRunningState(true, "Pygame / PyInstaller");
+            WriteLog("Pygame / PyInstaller extraction started");
+
+            OperationResult result;
+            try
+            {
+                result = await Task.Run(delegate { return RunPygamePyInstallerExtraction(rootPath, outputDir); });
+            }
+            catch (Exception ex)
+            {
+                result = OperationResult.Failed("Pygame / PyInstaller", outputDir, ex.Message);
+            }
+            SetExternalRunningState(false, "Pygame / PyInstaller");
+            CompleteExternalOperation(result);
         }
 
         private OperationResult RunPygamePyInstallerExtraction(string inputPath, string outputDir)
         {
             DateTime start = DateTime.UtcNow;
-            string root = InputDirectory(inputPath);
+            string root = GetPygamePyInstallerRoot(inputPath);
             List<string> loose = AssetCollectors.GetLooseResourceFiles(root, outputDir);
             CollectorResult copied = AssetCollectors.CopyFiles(root, loose, outputDir, "loose");
             CollectorResult decoded = DecodePygameDatImages(root, Path.Combine(outputDir, "decoded-dat"));
             return new OperationResult("Pygame / PyInstaller", outputDir, copied.Extracted + decoded.Extracted, copied.Bytes + decoded.Bytes, 0, copied.Renamed + decoded.Renamed, copied.Skipped + decoded.Skipped, DateTime.UtcNow - start);
         }
-
         private CollectorResult DecodePygameDatImages(string rootPath, string outputDir)
         {
             int extracted = 0, renamed = 0, skipped = 0;
@@ -801,7 +1016,7 @@ namespace RpgmvpConverterWinForms
 
         private string LooseModeValue()
         {
-            return CurrentExtractionProfile().LooseMode(selectedLooseModeIndex);
+            return CurrentProfileModes().LooseMode;
         }
 
         private static List<string> FilterLooseCollectionFiles(IEnumerable<string> files, string mode)
@@ -810,14 +1025,17 @@ namespace RpgmvpConverterWinForms
                 return files.ToList();
 
             bool imagesOnly = string.Equals(mode, "images", StringComparison.OrdinalIgnoreCase);
+            bool textOnly = string.Equals(mode, "text", StringComparison.OrdinalIgnoreCase);
+            bool imagesText = string.Equals(mode, "images-text", StringComparison.OrdinalIgnoreCase);
             return files.Where(delegate(string path)
             {
                 string extension = Path.GetExtension(path);
+                if (textOnly) return MediaTypeRegistry.IsText(extension);
+                if (imagesText) return MediaTypeRegistry.IsImageLike(extension) || MediaTypeRegistry.IsText(extension);
                 if (MediaTypeRegistry.IsImageLike(extension)) return true;
                 return !imagesOnly && MediaTypeRegistry.IsVideo(extension);
             }).ToList();
         }
-
         private async Task StartSignatureRecoveryAsync()
         {
             await StartLocalExtractionAsync("Signature recovery", "signature-recovery", delegate(string inputPath, string outputDir)
@@ -891,7 +1109,7 @@ namespace RpgmvpConverterWinForms
 
             string outputDir = Path.Combine(rootPath, "extracted", outputFolder);
             lastOutputDir = outputDir;
-            if (!TryResetExtractionRootForOutput(outputDir)) return;
+            if (!await TryResetExtractionRootForOutputAsync(outputDir)) return;
             localCopyCancellationRequested = false;
             if (localExtractionContext != null)
             {
@@ -947,6 +1165,8 @@ namespace RpgmvpConverterWinForms
             Directory.CreateDirectory(outputDir);
             List<string> archives = FindJavaArchives(inputPath);
             bool allResources = string.Equals(mode, "all", StringComparison.OrdinalIgnoreCase);
+            bool textOnly = string.Equals(mode, "text", StringComparison.OrdinalIgnoreCase);
+            bool imagesText = string.Equals(mode, "images-text", StringComparison.OrdinalIgnoreCase);
             bool renderPreviews = string.Equals(mode, "images-svg", StringComparison.OrdinalIgnoreCase);
             List<string> looseFiles = GetJavaLooseFiles(rootPath, outputDir, mode);
             List<string> extractedPaths = new List<string>();
@@ -971,7 +1191,7 @@ namespace RpgmvpConverterWinForms
                         archive,
                         outputDir,
                         Path.Combine("archives", Path.GetFileNameWithoutExtension(archive)),
-                        allResources ? null : (Func<string, bool>)IsJavaImageFile,
+                        allResources ? null : (textOnly ? (Func<string, bool>)IsJavaTextFile : (imagesText ? (Func<string, bool>)IsJavaImageOrTextFile : (Func<string, bool>)IsJavaImageFile)),
                         extractedPaths,
                         true);
                     extracted += stats.Extracted;
@@ -1332,6 +1552,67 @@ namespace RpgmvpConverterWinForms
             catch { }
         }
 
+        private async Task StartGodotExtractionAsync()
+        {
+            if (currentRun != null || externalRunning) return;
+
+            string inputPath = pathBox.Text.Trim();
+            string outputRoot = InputDirectory(inputPath);
+            if (!Directory.Exists(outputRoot))
+            {
+                WriteLog("Invalid path");
+                return;
+            }
+            string extractionInput = File.Exists(inputPath) ? Path.GetFullPath(inputPath) : outputRoot;
+            string outputName = File.Exists(inputPath) ? SanitizeRelativePath(Path.GetFileNameWithoutExtension(inputPath)) : "godot";
+            string outputDir = Path.Combine(outputRoot, "extracted", outputName);
+            lastOutputDir = outputDir;
+            if (!await TryResetExtractionRootForOutputAsync(outputDir)) return;
+            SetExternalRunningState(true, "Godot");
+            WriteLog("Godot extraction started: " + extractionInput);
+
+            List<string> nativeArchives = GodotExtractor.FindArchives(extractionInput, outputDir);
+            bool native = nativeArchives.Count > 0;
+            foreach (string archive in nativeArchives)
+            {
+                if (!GodotExtractor.HasNativeSupport(archive)) { native = false; break; }
+            }
+            if (!native && !EnsurePortableRuntimeAvailable(GameEngine.Godot)) return;
+            if (native) WriteLog("Godot extraction runs native (no runtime needed).");
+
+            OperationResult result;
+            try
+            {
+                string optionalKey = keyBox.Text.Trim();
+                result = await Task.Run(delegate
+                {
+                    if (native)
+                        return RunGodotNativeExtraction(extractionInput, outputDir, optionalKey);
+                    return RunPortableScriptExtraction(extractionInput, outputDir, "Godot", "extract_godot.py", "RpgmvpConverterWinForms.scripts.extract_godot.py", optionalKey);
+                });
+            }
+            catch (Exception ex)
+            {
+                result = OperationResult.Failed("Godot", outputDir, ex.Message);
+            }
+            SetExternalRunningState(false, "Godot");
+            CompleteExternalOperation(result);
+        }
+
+        private OperationResult RunGodotNativeExtraction(string inputPath, string outputDir, string optionalKey)
+        {
+            DateTime start = DateTime.UtcNow;
+            string rootPath = InputDirectory(inputPath);
+            string gamePath = File.Exists(inputPath) ? inputPath : rootPath;
+            GodotExtractionResult total = GodotExtractor.ExtractAll(
+                gamePath,
+                outputDir,
+                optionalKey,
+                delegate(string line) { SafeLog(line); },
+                delegate { return localCopyCancellationRequested; });
+            return new OperationResult("Godot", outputDir, total.Extracted, total.Bytes, total.Errors, total.Renamed, total.Skipped, DateTime.UtcNow - start);
+        }
+
         private async Task StartPortableScriptExtractionAsync(string engineName, string outputFolder, string scriptFile, string resourceName, string[] packs)
         {
             if (currentRun != null || externalRunning) return;
@@ -1346,7 +1627,7 @@ namespace RpgmvpConverterWinForms
 
             string outputDir = Path.Combine(rootPath, "extracted", outputFolder);
             lastOutputDir = outputDir;
-            if (!TryResetExtractionRootForOutput(outputDir)) return;
+            if (!await TryResetExtractionRootForOutputAsync(outputDir)) return;
             SetExternalRunningState(true, engineName);
             WriteLog(engineName + " extraction started");
 
@@ -1600,60 +1881,59 @@ namespace RpgmvpConverterWinForms
             CompleteExternalOperation(result);
         }
 
-        private bool TryResetExtractionRootForOutput(string outputDir)
+        private async Task<bool> TryResetExtractionRootForOutputAsync(string outputDir)
         {
             try
             {
                 string fullOutput = Path.GetFullPath(outputDir);
-                DirectoryInfo output = new DirectoryInfo(fullOutput);
-                DirectoryInfo extractedRoot = output;
-                while (extractedRoot != null && !extractedRoot.Name.Equals("extracted", StringComparison.OrdinalIgnoreCase))
-                    extractedRoot = extractedRoot.Parent;
-
-                if (extractedRoot == null || extractedRoot.Parent == null)
-                {
-                    if (Directory.Exists(fullOutput))
-                        Directory.Delete(fullOutput, true);
-                    Directory.CreateDirectory(fullOutput);
-                    return true;
-                }
-
-                if (extractedRoot.Exists)
+                if (Directory.Exists(fullOutput))
                 {
                     DialogResult answer = MessageBox.Show(
-                        "Existing extracted folder will be deleted before extraction:\n\n"
-                        + extractedRoot.FullName
+                        "Existing output folder will be deleted before extraction:\n\n"
+                        + fullOutput
                         + "\n\nContinue?",
-                        "Clean extracted",
+                        "Clean output",
                         MessageBoxButtons.YesNo,
                         MessageBoxIcon.Warning,
                         MessageBoxDefaultButton.Button2);
                     if (answer != DialogResult.Yes)
                     {
-                        WriteLog("Extraction cancelled before clearing extracted folder.");
+                        WriteLog("Extraction cancelled before clearing output folder.");
                         return false;
                     }
 
-                    WriteLog("Clearing previous extracted folder: " + extractedRoot.FullName);
+                    WriteLog("Clearing previous output folder: " + fullOutput);
+                    string previousStatus = statusLabel.Text;
+                    string previousStats = statsLabel.Text;
+                    Cursor previousCursor = Cursor;
+                    statusLabel.Text = T("Preparing output", "Подготовка результата");
+                    statsLabel.Text = T("Deleting previous extracted folder in background...", "Удаление предыдущей папки extracted в фоне...");
+                    Cursor = Cursors.WaitCursor;
                     try
                     {
-                        DeleteDirectoryRobust(extractedRoot.FullName);
+                        await Task.Run(delegate { DeleteDirectoryRobust(fullOutput); });
                     }
                     catch (Exception deleteError)
                     {
-                        List<string> lockedFiles = FindLockedFiles(extractedRoot.FullName, 8);
+                        List<string> lockedFiles = FindLockedFiles(fullOutput, 8);
                         string details = lockedFiles.Count > 0
                             ? "\n\nPossible locked files:\n" + string.Join("\n", lockedFiles.ToArray()) + (lockedFiles.Count >= 8 ? "\n..." : "")
                             : "";
                         MessageBox.Show(
-                            "Could not clear existing extracted folder:\n"
+                            "Could not clear existing output folder:\n"
                             + deleteError.Message
                             + details,
                             "Extraction",
                             MessageBoxButtons.OK,
                             MessageBoxIcon.Warning);
-                        WriteLog("Could not clear extracted folder: " + deleteError.Message);
+                        WriteLog("Could not clear output folder: " + deleteError.Message);
                         return false;
+                    }
+                    finally
+                    {
+                        Cursor = previousCursor;
+                        statusLabel.Text = previousStatus;
+                        statsLabel.Text = previousStats;
                     }
                 }
 
@@ -1662,9 +1942,9 @@ namespace RpgmvpConverterWinForms
             }
             catch (Exception ex)
             {
-                WriteLog("Could not clear extracted folder: " + ex.Message);
+                WriteLog("Could not prepare output folder: " + ex.Message);
                 MessageBox.Show(
-                    "Could not clear existing extracted folder:\n" + ex.Message,
+                    "Could not prepare output folder:\n" + ex.Message,
                     "Extraction",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);
@@ -1738,8 +2018,14 @@ namespace RpgmvpConverterWinForms
             UpdateActionTooltips();
             if (!string.IsNullOrWhiteSpace(htmlReportPath))
                 WriteLog("HTML report: " + htmlReportPath);
-            int galleryFiles = ResultsGalleryForm.PrepareIndexCache(result.OutputDir);
-            if (galleryFiles > 0) WriteLog("Gallery index: " + galleryFiles + " file(s)");
+            if (skipGalleryIndexCheckBox != null && skipGalleryIndexCheckBox.Checked)
+            {
+                WriteLog("Gallery index skipped by user option.");
+            }
+            else
+            {
+                StartBackgroundGalleryIndex(result.OutputDir);
+            }
             using (ResultsDialog dialog = new ResultsDialog(result, htmlReportPath, reportText, russianUi, RunApkFollowup))
                 dialog.ShowDialog(this);
         }

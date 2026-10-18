@@ -1,0 +1,2 @@
+# Normalize line endings on commit; checked-out files keep native endings.
+* text=auto

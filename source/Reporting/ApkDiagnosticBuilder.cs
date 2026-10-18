@@ -34,7 +34,7 @@ namespace RpgmvpConverterWinForms
             report.AppendLine(string.IsNullOrWhiteSpace(summary.TopExtensions) ? "unknown" : summary.TopExtensions);
             report.AppendLine();
             report.AppendLine("Route notes:");
-            report.AppendLine("- APK recovery keeps common inner engine containers such as Unity .assets/.bundle/.ress, Godot .pck and GameMaker data.win when they are present.");
+            report.AppendLine("- APK recovery keeps common inner engine containers such as Unity .assets/.bundle/.unity3d/.ress, Godot .pck and GameMaker data.win when they are present.");
             report.AppendLine("- After extraction, run the suggested extractor on the extracted APK folder/file when the direct media output is not enough.");
             return report.ToString();
         }
@@ -109,7 +109,8 @@ namespace RpgmvpConverterWinForms
                 return name.IndexOf("libunity", StringComparison.OrdinalIgnoreCase) >= 0
                     || name.IndexOf("globalgamemanagers", StringComparison.OrdinalIgnoreCase) >= 0
                     || name.EndsWith(".assets", StringComparison.OrdinalIgnoreCase)
-                    || name.EndsWith(".bundle", StringComparison.OrdinalIgnoreCase);
+                    || name.EndsWith(".bundle", StringComparison.OrdinalIgnoreCase)
+                    || name.EndsWith(".unity3d", StringComparison.OrdinalIgnoreCase);
             }))
                 hints.Add("Unity");
             if (names.Any(delegate(string name) { return name.EndsWith(".pck", StringComparison.OrdinalIgnoreCase) || name.IndexOf("libgodot", StringComparison.OrdinalIgnoreCase) >= 0; }))
@@ -187,6 +188,7 @@ namespace RpgmvpConverterWinForms
             string target = string.IsNullOrWhiteSpace(outputDir)
                 ? normalized
                 : Path.GetFullPath(Path.Combine(outputDir, normalized));
+            if (!string.IsNullOrWhiteSpace(outputDir) && !Directory.Exists(target) && !File.Exists(target)) return null;
             return new ApkFollowupAction(engine, normalized, target);
         }
 

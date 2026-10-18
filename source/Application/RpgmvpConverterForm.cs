@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -31,9 +32,12 @@ namespace RpgmvpConverterWinForms
 
         private TextBox pathBox;
         private TextBox keyBox;
+        private CheckBox jpgCopiesBox;
         private ComboBox languageBox;
         private ComboBox unlockerModeBox;
         private ComboBox javaExtractModeBox;
+        private ComboBox engineOverrideBox;
+        private CheckBox skipGalleryIndexCheckBox;
         private Label subtitleLabel;
         private Label folderSectionLabel;
         private Label extractSectionLabel;
@@ -71,6 +75,7 @@ namespace RpgmvpConverterWinForms
         private ContextMenuStrip looseModeMenu;
         private int selectedExtractionProfileIndex;
         private int selectedLooseModeIndex;
+        private bool updatingEngineOverrideItems;
 
         private readonly object processSync = new object();
         private readonly object externalOutputSync = new object();
@@ -90,6 +95,7 @@ namespace RpgmvpConverterWinForms
         private bool localCopyCancellationRequested;
         private bool russianUi;
         private CancellationTokenSource dryScanCancellation;
+        private CancellationTokenSource galleryIndexCancellation;
         private ExtractionRunContext localExtractionContext;
         private string lastOutputDir = "";
         private OperationResult lastOperationResult;
@@ -265,9 +271,7 @@ namespace RpgmvpConverterWinForms
 
         private static string[] GetRuntimePacks(GameEngine engine)
         {
-            if (engine == GameEngine.Unity) return new string[] { PortableRuntime.PackUnity };
-            if (engine == GameEngine.SpakDat) return new string[] { PortableRuntime.PackSpite };
-            return new string[0];
+            return EngineInfo.For(engine).RuntimePacks;
         }
 
         private bool EnsurePortableRuntimeAvailable(GameEngine engine)
@@ -374,6 +378,11 @@ namespace RpgmvpConverterWinForms
                 dryScanCancellation.Dispose();
                 dryScanCancellation = null;
             }
+            if (galleryIndexCancellation != null)
+            {
+                galleryIndexCancellation.Cancel();
+                galleryIndexCancellation = null;
+            }
             if (localExtractionContext != null)
             {
                 localExtractionContext.Dispose();
@@ -383,15 +392,40 @@ namespace RpgmvpConverterWinForms
             ToolRuntime.Cleanup();
         }
 
+        private void StartBackgroundGalleryIndex(string outputDir)
+        {
+            if (string.IsNullOrWhiteSpace(outputDir) || !Directory.Exists(outputDir)) return;
+
+            CancellationTokenSource previous = galleryIndexCancellation;
+            if (previous != null)
+                previous.Cancel();
+
+            CancellationTokenSource cts = new CancellationTokenSource();
+            CancellationToken token = cts.Token;
+            galleryIndexCancellation = cts;
+            WriteLog("Gallery index: preparing in background...");
+
+            Task.Run(delegate
+            {
+                int count = ResultsGalleryForm.PrepareIndexCache(outputDir, token);
+                BeginUi(delegate
+                {
+                    if (!token.IsCancellationRequested)
+                        WriteLog("Gallery index ready: " + count + " file(s)");
+                });
+            }, token).ContinueWith(delegate(Task task)
+            {
+                if (task.IsFaulted && !task.IsCanceled)
+                    SafeLog("Gallery index failed: " + task.Exception.GetBaseException().Message);
+                if (ReferenceEquals(galleryIndexCancellation, cts))
+                    galleryIndexCancellation = null;
+                cts.Dispose();
+            });
+        }
+
         private static bool UsesPortableRuntime(GameEngine engine)
         {
-            return engine == GameEngine.Renpy
-                || engine == GameEngine.Unity
-                || engine == GameEngine.Godot
-                || engine == GameEngine.Kirikiri
-                || engine == GameEngine.Unreal
-                || engine == GameEngine.GameMaker
-                || engine == GameEngine.SpakDat;
+            return EngineInfo.For(engine).UsesRuntime;
         }
 
         private void BeginUi(Action action)
@@ -461,15 +495,70 @@ namespace RpgmvpConverterWinForms
 
         private string TryReconstructKey(string rootPath)
         {
-            string file = GetFilesToConvert(rootPath).FirstOrDefault(delegate(string path) { return SafeFileLength(path) > 32; });
-            if (file == null) return "";
-            byte[] bytes = File.ReadAllBytes(file);
-            byte[] expected = { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52 };
-            byte[] key = new byte[16];
-            for (int i = 0; i < key.Length; i++) key[i] = (byte)(bytes[16 + i] ^ expected[i]);
-            string value = BitConverter.ToString(key).Replace("-", "").ToLowerInvariant();
-            WriteLog("RPGM key reconstructed: " + value);
-            return value;
+            try
+            {
+                List<string> candidates = new List<string>();
+                foreach (string file in GetFilesToConvert(rootPath))
+                {
+                    if (candidates.Count >= 25) break;
+                    if (SafeFileLength(file) <= 32) continue;
+                    candidates.Add(file);
+                }
+                // PNG templates recover all 16 key bytes exactly: prefer them.
+                foreach (string file in candidates)
+                {
+                    byte[] bytes;
+                    try { bytes = File.ReadAllBytes(file); }
+                    catch { continue; }
+                    if (!RpgmCrypt.HasEncryptedHeader(bytes)) continue;
+                    byte[] key;
+                    if (RpgmCrypt.TryReconstructPngKey(bytes, out key))
+                    {
+                        string value = BitConverter.ToString(key).Replace("-", "").ToLowerInvariant();
+                        WriteLog("RPGM key reconstructed: " + value);
+                        return value;
+                    }
+                }
+                // JPEG templates cover fewer certain bytes: accept such a key
+                // only when it also decrypts other files (a wrong key corrupts
+                // non-structural bytes while keeping segment layout intact).
+                foreach (string file in candidates)
+                {
+                    byte[] bytes;
+                    try { bytes = File.ReadAllBytes(file); }
+                    catch { continue; }
+                    if (!RpgmCrypt.HasEncryptedHeader(bytes)) continue;
+                    byte[] key;
+                    if (!RpgmCrypt.TryReconstructKey(bytes, out key)) continue;
+                    if (CrossValidatesKey(candidates, file, key))
+                    {
+                        string value = BitConverter.ToString(key).Replace("-", "").ToLowerInvariant();
+                        WriteLog("RPGM key reconstructed from JPEG headers (approximate, density bytes may differ): " + value);
+                        return value;
+                    }
+                }
+            }
+            catch { }
+            return "";
+        }
+
+        private static bool CrossValidatesKey(List<string> candidates, string self, byte[] key)
+        {
+            int checkedFiles = 0;
+            int validFiles = 0;
+            foreach (string file in candidates)
+            {
+                if (string.Equals(file, self, StringComparison.OrdinalIgnoreCase)) continue;
+                if (checkedFiles >= 3) break;
+                byte[] bytes;
+                try { bytes = File.ReadAllBytes(file); }
+                catch { continue; }
+                if (!RpgmCrypt.HasEncryptedHeader(bytes)) continue;
+                checkedFiles++;
+                if (RpgmCrypt.ValidateKey(bytes, key)) validFiles++;
+                else return false;
+            }
+            return checkedFiles > 0 && validFiles == checkedFiles;
         }
 
         private static byte[] ParseKey(string input)
@@ -485,12 +574,12 @@ namespace RpgmvpConverterWinForms
 
         private string UnityModeValue()
         {
-            return CurrentExtractionProfile().UnityMode(0);
+            return CurrentProfileModes().UnityMode;
         }
 
         private string JavaModeValue()
         {
-            return CurrentExtractionProfile().JavaMode(javaExtractModeBox == null ? 1 : javaExtractModeBox.SelectedIndex);
+            return CurrentProfileModes().JavaMode;
         }
 
         private bool IsImagesOnlyProfile()
@@ -525,67 +614,23 @@ namespace RpgmvpConverterWinForms
 
         private ExtractionProfile CurrentExtractionProfile()
         {
-            return ExtractionProfile.FromIndex(selectedExtractionProfileIndex, ExtractionProfileDisplayName(selectedExtractionProfileIndex));
+            return CurrentProfileModes().Profile;
+        }
+
+        private ExtractionProfileModes CurrentProfileModes()
+        {
+            int javaModeIndex = javaExtractModeBox == null ? 1 : javaExtractModeBox.SelectedIndex;
+            return ExtractionProfileResolver.Resolve(selectedExtractionProfileIndex, ExtractionProfileDisplayName(selectedExtractionProfileIndex), javaModeIndex, selectedLooseModeIndex);
         }
 
         private static string EngineName(GameEngine engine)
         {
-            switch (engine)
-            {
-                case GameEngine.RpgMaker: return "RPG Maker MV/MZ";
-                case GameEngine.Renpy: return "Ren'Py";
-                case GameEngine.Unity: return "Unity";
-                case GameEngine.Godot: return "Godot";
-                case GameEngine.Kirikiri: return "KiriKiri XP3";
-                case GameEngine.Unreal: return "Unreal experimental";
-                case GameEngine.Nwjs: return "NWJS";
-                case GameEngine.WolfRpg: return "WOLF RPG";
-                case GameEngine.TyranoScript: return "TyranoScript";
-                case GameEngine.JavaJar: return "Java game / JAR";
-                case GameEngine.Flash: return "Flash SWF experimental";
-                case GameEngine.Electron: return "Electron ASAR";
-                case GameEngine.Html: return "HTML game";
-                case GameEngine.Qsp: return "QSP";
-                case GameEngine.Rags: return "RAGS experimental";
-                case GameEngine.LegacyRpgMaker: return "RPG Maker XP/VX/VX Ace";
-                case GameEngine.GameMaker: return "GameMaker experimental";
-                case GameEngine.AndroidApk: return "Android APK recovery";
-                case GameEngine.SrpgStudio: return "SRPG Studio recovery";
-                case GameEngine.PixelGameMaker: return "Pixel Game Maker MV recovery";
-                case GameEngine.SpakDat: return "SPAK DAT experimental";
-                case GameEngine.PygamePyInstaller: return "Pygame / PyInstaller";
-                default: return "not detected";
-            }
+            return EngineInfo.For(engine).Name;
         }
 
         private Color EngineColor(GameEngine engine)
         {
-            switch (engine)
-            {
-                case GameEngine.Unity: return Color.FromArgb(160, 125, 255);
-                case GameEngine.Renpy: return pinkColor;
-                case GameEngine.RpgMaker: return accentColor;
-                case GameEngine.Godot: return Color.FromArgb(71, 140, 191);
-                case GameEngine.Kirikiri: return Color.FromArgb(255, 155, 95);
-                case GameEngine.Unreal: return Color.FromArgb(178, 178, 190);
-                case GameEngine.Nwjs: return Color.FromArgb(255, 183, 77);
-                case GameEngine.WolfRpg: return Color.FromArgb(110, 205, 150);
-                case GameEngine.TyranoScript: return Color.FromArgb(255, 140, 190);
-                case GameEngine.JavaJar: return Color.FromArgb(235, 155, 75);
-                case GameEngine.Flash: return Color.FromArgb(225, 80, 75);
-                case GameEngine.Electron: return Color.FromArgb(105, 190, 210);
-                case GameEngine.Html: return Color.FromArgb(85, 180, 235);
-                case GameEngine.Qsp: return Color.FromArgb(205, 165, 85);
-                case GameEngine.Rags: return Color.FromArgb(190, 120, 210);
-                case GameEngine.LegacyRpgMaker: return Color.FromArgb(85, 190, 240);
-                case GameEngine.GameMaker: return Color.FromArgb(100, 200, 190);
-                case GameEngine.AndroidApk: return Color.FromArgb(120, 205, 100);
-                case GameEngine.SrpgStudio: return Color.FromArgb(210, 180, 90);
-                case GameEngine.PixelGameMaker: return Color.FromArgb(110, 185, 235);
-                case GameEngine.SpakDat: return Color.FromArgb(195, 150, 95);
-                case GameEngine.PygamePyInstaller: return Color.FromArgb(95, 190, 130);
-                default: return mutedColor;
-            }
+            return Color.FromArgb(EngineInfo.For(engine).Argb);
         }
 
         private static string QuoteArg(string value)
@@ -796,6 +841,7 @@ namespace RpgmvpConverterWinForms
             private static readonly HashSet<string> outputPathReservations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             private readonly ConcurrentQueue<string> queue;
             private readonly byte[] keyBytes;
+            private readonly bool saveExtraFormat;
             private readonly ManualResetEventSlim pauseGate = new ManualResetEventSlim(true);
             private readonly CancellationTokenSource cancellation = new CancellationTokenSource();
             private int processedCount;
@@ -803,11 +849,12 @@ namespace RpgmvpConverterWinForms
             private int renamedCount;
             private long totalBytes;
 
-            public ConversionRun(string rootPath, List<string> files, byte[] keyBytes)
+            public ConversionRun(string rootPath, List<string> files, byte[] keyBytes, bool saveExtraFormat)
             {
                 RootPath = rootPath;
                 TotalCount = files.Count;
                 this.keyBytes = keyBytes;
+                this.saveExtraFormat = saveExtraFormat;
                 queue = new ConcurrentQueue<string>(files);
                 OutputDir = Path.Combine(rootPath, "extracted", "rpgm");
                 Directory.CreateDirectory(OutputDir);
@@ -846,19 +893,33 @@ namespace RpgmvpConverterWinForms
                     try
                     {
                         byte[] bytes = File.ReadAllBytes(filePath);
-                        if (bytes.Length <= 16) throw new InvalidDataException("File too short: " + filePath);
-                        byte[] data = new byte[bytes.Length - 16];
-                        Buffer.BlockCopy(bytes, 16, data, 0, data.Length);
-                        for (int i = 0; i < 16 && i < data.Length; i++) data[i] ^= keyBytes[i];
+                        byte[] data;
+                        string extension;
+                        if (RpgmCrypt.HasEncryptedHeader(bytes))
+                        {
+                            data = RpgmCrypt.Decrypt(bytes, keyBytes);
+                            extension = RpgmCrypt.DetectImageExtension(data);
+                            if (extension == null)
+                                throw new InvalidDataException("Decrypted file has an unknown format (wrong key?): " + filePath);
+                        }
+                        else
+                        {
+                            extension = RpgmCrypt.DetectImageExtension(bytes);
+                            if (extension == null)
+                                throw new InvalidDataException("File is neither encrypted RPGM nor a plain image: " + filePath);
+                            data = bytes;
+                        }
 
                         string relative = filePath.Substring(RootPath.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                        string outputPath = Path.ChangeExtension(Path.Combine(OutputDir, relative), ".png");
+                        string outputPath = Path.ChangeExtension(Path.Combine(OutputDir, relative), extension);
                         Directory.CreateDirectory(Path.GetDirectoryName(outputPath));
                         bool renamed;
                         outputPath = GetUniqueFilePath(outputPath, out renamed);
                         if (renamed) Interlocked.Increment(ref renamedCount);
                         File.WriteAllBytes(outputPath, data);
                         Interlocked.Add(ref totalBytes, data.Length);
+                        if (saveExtraFormat)
+                            SaveExtraFormat(data, extension, outputPath);
                     }
                     catch
                     {
@@ -869,6 +930,49 @@ namespace RpgmvpConverterWinForms
                         Interlocked.Increment(ref processedCount);
                     }
                 }
+            }
+
+            private void SaveExtraFormat(byte[] data, string extension, string outputPath)
+            {
+                string siblingExtension = string.Equals(extension, ".png", StringComparison.OrdinalIgnoreCase) ? ".jpg" : ".png";
+                try
+                {
+                    bool collision;
+                    string sibling = GetUniqueFilePath(Path.ChangeExtension(outputPath, siblingExtension), out collision);
+                    using (MemoryStream input = new MemoryStream(data, false))
+                    using (Image image = Image.FromStream(input))
+                    {
+                        if (string.Equals(siblingExtension, ".jpg", StringComparison.OrdinalIgnoreCase))
+                        {
+                            ImageCodecInfo encoder = GetJpegEncoder();
+                            if (encoder == null) throw new InvalidOperationException("JPEG encoder is unavailable.");
+                            using (EncoderParameters parameters = new EncoderParameters(1))
+                            {
+                                parameters.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 90L);
+                                image.Save(sibling, encoder, parameters);
+                            }
+                        }
+                        else
+                        {
+                            image.Save(sibling, ImageFormat.Png);
+                        }
+                    }
+                    if (collision) Interlocked.Increment(ref renamedCount);
+                    try { Interlocked.Add(ref totalBytes, new FileInfo(sibling).Length); }
+                    catch { }
+                }
+                catch
+                {
+                    Interlocked.Increment(ref errorCount);
+                }
+            }
+
+            private static ImageCodecInfo GetJpegEncoder()
+            {
+                ImageCodecInfo[] encoders = ImageCodecInfo.GetImageEncoders();
+                for (int i = 0; i < encoders.Length; i++)
+                    if (encoders[i].FormatID == ImageFormat.Jpeg.Guid) return encoders[i];
+                return null;
             }
 
             private static string GetUniqueFilePath(string path, out bool renamed)

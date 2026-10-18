@@ -10,6 +10,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
 namespace RpgmvpConverterWinForms
@@ -22,6 +23,11 @@ namespace RpgmvpConverterWinForms
             if (direct != GameEngine.Unknown) return direct;
             string rootPath = InputDirectory(inputPath);
             if (!Directory.Exists(rootPath)) return GameEngine.Unknown;
+            string pygameRoot = GetPygamePyInstallerRoot(inputPath);
+            if (!string.Equals(pygameRoot, rootPath, StringComparison.OrdinalIgnoreCase)
+                && Directory.Exists(pygameRoot)
+                && IsPygamePyInstallerGame(pygameRoot))
+                return GameEngine.PygamePyInstaller;
             try
             {
                 DirectorySnapshot snapshot = DirectorySnapshot.Create(rootPath, CancellationToken.None);
@@ -53,6 +59,8 @@ namespace RpgmvpConverterWinForms
             if (IsFlashGame(rootPath)) return GameEngine.Flash;
             if (IsSpakDatGame(rootPath)) return GameEngine.SpakDat;
             if (IsPygamePyInstallerGame(rootPath)) return GameEngine.PygamePyInstaller;
+            if (IsDataArcGame(rootPath)) return GameEngine.DataArc;
+            if (IsHspGame(rootPath)) return GameEngine.Hsp;
             if (AssetCollectors.IsHtmlGame(rootPath)) return GameEngine.Html;
             if (AssetCollectors.IsQspGame(rootPath)) return GameEngine.Qsp;
             if (AssetCollectors.IsRagsInput(rootPath)) return GameEngine.Rags;
@@ -79,6 +87,8 @@ namespace RpgmvpConverterWinForms
             if (IsFlashGame(rootPath)) return GameEngine.Flash;
             if (IsSpakDatGame(rootPath)) return GameEngine.SpakDat;
             if (IsPygamePyInstallerGame(rootPath)) return GameEngine.PygamePyInstaller;
+            if (IsDataArcGame(rootPath)) return GameEngine.DataArc;
+            if (IsHspGame(rootPath)) return GameEngine.Hsp;
             if (AssetCollectors.IsHtmlGame(rootPath)) return GameEngine.Html;
             if (AssetCollectors.IsQspGame(rootPath)) return GameEngine.Qsp;
             if (AssetCollectors.IsRagsInput(rootPath)) return GameEngine.Rags;
@@ -91,6 +101,11 @@ namespace RpgmvpConverterWinForms
             if (direct != GameEngine.Unknown) return direct;
             string rootPath = InputDirectory(inputPath);
             if (!Directory.Exists(rootPath)) return GameEngine.Unknown;
+            string pygameRoot = GetPygamePyInstallerRoot(inputPath);
+            if (!string.Equals(pygameRoot, rootPath, StringComparison.OrdinalIgnoreCase)
+                && Directory.Exists(pygameRoot)
+                && IsPygamePyInstallerGame(pygameRoot))
+                return GameEngine.PygamePyInstaller;
             if (AssetCollectors.IsGameMakerInput(rootPath)) return GameEngine.GameMaker;
             if (IsUnityGame(rootPath)) return GameEngine.Unity;
             if (IsRenpyGameFast(rootPath)) return GameEngine.Renpy;
@@ -109,6 +124,8 @@ namespace RpgmvpConverterWinForms
             if (IsFlashGame(rootPath)) return GameEngine.Flash;
             if (IsSpakDatGame(rootPath)) return GameEngine.SpakDat;
             if (IsPygamePyInstallerGame(rootPath)) return GameEngine.PygamePyInstaller;
+            if (IsDataArcGameFast(rootPath)) return GameEngine.DataArc;
+            if (IsHspGame(rootPath)) return GameEngine.Hsp;
             if (AssetCollectors.IsHtmlGame(rootPath)) return GameEngine.Html;
             if (AssetCollectors.IsQspGame(rootPath)) return GameEngine.Qsp;
             if (AssetCollectors.IsRagsInput(rootPath)) return GameEngine.Rags;
@@ -142,10 +159,46 @@ namespace RpgmvpConverterWinForms
                 case ".rgss2a":
                 case ".rgss3a": return GameEngine.LegacyRpgMaker;
                 case ".dat": return SpakDatExtractor.IsSpakArchive(path) ? GameEngine.SpakDat : GameEngine.Unknown;
+                case ".arc": return ArcExtractor.HasNativeSupport(path) ? GameEngine.DataArc : GameEngine.Unknown;
+                case ".dpm": return HspDpmExtractor.HasNativeSupport(path) ? GameEngine.Hsp : GameEngine.Unknown;
+                case ".exe": return IsGodotEmbeddedPckFile(path) ? GameEngine.Godot : GameEngine.Unknown;
                 default: return GameEngine.Unknown;
             }
         }
 
+
+        private static bool IsDataArcGame(string rootPath)
+        {
+            try
+            {
+                foreach (string archive in EnumerateFilesSafe(rootPath, "*.arc"))
+                    if (ArcExtractor.HasNativeSupport(archive)) return true;
+            }
+            catch { }
+            return false;
+        }
+
+        private static bool IsDataArcGameFast(string rootPath)
+        {
+            try
+            {
+                foreach (string archive in EnumerateFilesTopLevelSafe(rootPath, "*.arc"))
+                    if (ArcExtractor.HasNativeSupport(archive)) return true;
+            }
+            catch { }
+            return false;
+        }
+
+        private static bool IsHspGame(string rootPath)
+        {
+            try
+            {
+                foreach (string archive in EnumerateFilesSafe(rootPath, "*.dpm"))
+                    if (HspDpmExtractor.HasNativeSupport(archive)) return true;
+            }
+            catch { }
+            return false;
+        }
 
         private static bool IsPygamePyInstallerGame(string rootPath)
         {
@@ -386,18 +439,28 @@ namespace RpgmvpConverterWinForms
             {
                 foreach (string executable in Directory.EnumerateFiles(rootPath, "*.exe", SearchOption.TopDirectoryOnly))
                 {
-                    using (FileStream stream = File.OpenRead(executable))
-                    {
-                        if (stream.Length < 4) continue;
-                        stream.Seek(-4, SeekOrigin.End);
-                        byte[] footer = new byte[4];
-                        if (stream.Read(footer, 0, footer.Length) == footer.Length && Encoding.ASCII.GetString(footer) == "GDPC")
-                            return true;
-                    }
+                    if (IsGodotEmbeddedPckFile(executable)) return true;
                 }
             }
             catch { }
             return false;
+        }
+
+        private static bool IsGodotEmbeddedPckFile(string executable)
+        {
+            try
+            {
+                if (!File.Exists(executable)) return false;
+                using (FileStream stream = File.OpenRead(executable))
+                {
+                    if (stream.Length < 4) return false;
+                    stream.Seek(-4, SeekOrigin.End);
+                    byte[] footer = new byte[4];
+                    return stream.Read(footer, 0, footer.Length) == footer.Length
+                        && Encoding.ASCII.GetString(footer) == "GDPC";
+                }
+            }
+            catch { return false; }
         }
 
         private static bool IsKirikiriGame(string rootPath)
@@ -445,10 +508,15 @@ namespace RpgmvpConverterWinForms
 
         private static ScanSummary BuildScanSummary(string inputPath)
         {
-            return BuildScanSummaryCore(inputPath, CancellationToken.None);
+            return BuildScanSummaryCore(inputPath, CancellationToken.None, GameEngine.Unknown, "media");
         }
 
         private static ScanSummary BuildScanSummaryCore(string inputPath, CancellationToken cancellationToken)
+        {
+            return BuildScanSummaryCore(inputPath, cancellationToken, GameEngine.Unknown, "media");
+        }
+
+        private static ScanSummary BuildScanSummaryCore(string inputPath, CancellationToken cancellationToken, GameEngine forcedEngine, string unityMode)
         {
             string rootPath = InputDirectory(inputPath);
             cancellationToken.ThrowIfCancellationRequested();
@@ -465,24 +533,32 @@ namespace RpgmvpConverterWinForms
                     singleMap[single[0]] = singleBytes;
                     string singleRoute = direct == GameEngine.AndroidApk
                         ? ApkDiagnosticBuilder.BuildDryRunSummary(single, 3) : "";
+                    string singleWarning = BuildCollectionFolderWarning(inputPath, rootPath);
+                    string singleConfidence = BuildDetectionConfidence(inputPath, direct, forcedEngine, direct, 1, 1, singleWarning);
+                    string singleNotes = BuildDetectionNotes(inputPath, direct, forcedEngine, direct);
+                    string singlePrediction = direct == GameEngine.Unity ? BuildUnityDryRunPrediction(rootPath, unityMode, cancellationToken) : "";
                     return new ScanSummary(
                         direct, 1, 1, singleBytes,
                         BuildUnknownExtensionSummary(single),
                         BuildFileExtensionSummaryFromLengths(single, singleMap, 6),
                         BuildLargestFileSummaryFromLengths(rootPath, single, singleMap, 3),
-                        singleRoute);
+                        singleRoute, singleConfidence, singleNotes, singleWarning, singlePrediction);
                 }
             }
 
             if (!Directory.Exists(rootPath))
             {
-                return new ScanSummary(GameEngine.Unknown, 0, 0, 0, "", "", "", "");
+                string emptyWarning = BuildCollectionFolderWarning(inputPath, rootPath);
+                string emptyConfidence = BuildDetectionConfidence(inputPath, GameEngine.Unknown, forcedEngine, GameEngine.Unknown, 0, 0, emptyWarning);
+                string emptyNotes = BuildDetectionNotes(inputPath, GameEngine.Unknown, forcedEngine, GameEngine.Unknown);
+                return new ScanSummary(GameEngine.Unknown, 0, 0, 0, "", "", "", "", emptyConfidence, emptyNotes, emptyWarning, "");
             }
 
             // Single-pass snapshot: one filesystem walk for detect + file lists + sizes.
             DirectorySnapshot snapshot = DirectorySnapshot.Create(rootPath, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            GameEngine engine = DetectEngineFromSnapshot(snapshot, rootPath, inputPath);
+            GameEngine detectedEngine = DetectEngineFromSnapshot(snapshot, rootPath, inputPath);
+            GameEngine engine = forcedEngine == GameEngine.Unknown ? detectedEngine : forcedEngine;
             IEnumerable<string> files;
             int archives;
             string routeHints = "";
@@ -492,15 +568,15 @@ namespace RpgmvpConverterWinForms
                 foreach (DirectorySnapshotFile entry in snapshot.Files)
                 {
                     string ext = entry.ExtensionLower;
-                    if (ext == ".assets" || ext == ".bundle" || ext == ".ress"
-                        || ext == ".png" || ext == ".jpg" || ext == ".jpeg"
-                        || ext == ".mp4" || ext == ".webm" || ext == ".ogg" || ext == ".wav")
+                    if (UnityArchiveDiscovery.IsArchiveLikeExtension(ext) || UnityArchiveDiscovery.IsBundleLikeArchive(entry.FullPath) || ext == ".ress"
+                        || MediaTypeRegistry.IsMedia(ext)
+                        || MediaTypeRegistry.IsText(ext))
                         unityFiles.Add(entry.FullPath);
                 }
                 files = unityFiles;
                 archives = 0;
                 foreach (DirectorySnapshotFile entry in snapshot.Files)
-                    if (entry.ExtensionLower == ".assets" || entry.ExtensionLower == ".bundle") archives++;
+                    if (UnityArchiveDiscovery.IsArchiveLikeExtension(entry.ExtensionLower) || UnityArchiveDiscovery.IsBundleLikeArchive(entry.FullPath)) archives++;
             }
             else if (engine == GameEngine.Renpy)
             {
@@ -512,7 +588,7 @@ namespace RpgmvpConverterWinForms
             }
             else if (engine == GameEngine.Godot)
             {
-                files = snapshot.GetFilesWithExtension(".pck");
+                files = FindGodotArchivesFromSnapshot(snapshot, inputPath, rootPath);
                 archives = ((List<string>)files).Count;
             }
             else if (engine == GameEngine.Kirikiri)
@@ -554,7 +630,7 @@ namespace RpgmvpConverterWinForms
             else if (engine == GameEngine.JavaJar)
             {
                 List<string> javaArchives = FindJavaArchives(inputPath);
-                files = GetJavaLooseFiles(rootPath, Path.Combine(rootPath, "extracted", "java"))
+                files = GetJavaLooseFiles(rootPath, Path.Combine(rootPath, "extracted", "java"), "images-svg")
                     .Concat(javaArchives)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList();
@@ -629,6 +705,22 @@ namespace RpgmvpConverterWinForms
                 archives = SpakDatExtractor.FindArchives(inputPath).Count;
                 files = SpakDatExtractor.FindSourceFiles(inputPath);
             }
+            else if (engine == GameEngine.PygamePyInstaller)
+            {
+                string pygameRoot = GetPygamePyInstallerRoot(inputPath);
+                files = GetPygamePyInstallerFiles(pygameRoot, Path.Combine(pygameRoot, "extracted", "pygame"));
+                archives = 0;
+            }
+            else if (engine == GameEngine.DataArc)
+            {
+                files = ArcExtractor.FindArchives(rootPath, Path.Combine(rootPath, "extracted", "arc"));
+                archives = ((List<string>)files).Count;
+            }
+            else if (engine == GameEngine.Hsp)
+            {
+                files = HspDpmExtractor.FindArchives(rootPath, Path.Combine(rootPath, "extracted", "hsp"));
+                archives = ((List<string>)files).Count;
+            }
             else
             {
                 files = GetFilesToConvertFromSnapshot(snapshot, rootPath);
@@ -654,7 +746,149 @@ namespace RpgmvpConverterWinForms
             cancellationToken.ThrowIfCancellationRequested();
             string topExtensions = BuildFileExtensionSummaryFromLengths(fileList, lengthMap, 6);
             string largestFiles = BuildLargestFileSummaryFromLengths(rootPath, fileList, lengthMap, 3);
-            return new ScanSummary(engine, fileList.Count, archives, bytes, unknownExtensions, topExtensions, largestFiles, routeHints);
+            string collectionWarning = BuildCollectionFolderWarning(inputPath, rootPath);
+            string confidence = BuildDetectionConfidence(inputPath, detectedEngine, forcedEngine, engine, fileList.Count, archives, collectionWarning);
+            string detectionNotes = BuildDetectionNotes(inputPath, detectedEngine, forcedEngine, engine);
+            string unityPrediction = engine == GameEngine.Unity ? BuildUnityDryRunPrediction(rootPath, unityMode, cancellationToken) : "";
+            return new ScanSummary(engine, fileList.Count, archives, bytes, unknownExtensions, topExtensions, largestFiles, routeHints, confidence, detectionNotes, collectionWarning, unityPrediction);
+        }
+
+        private static string BuildUnityDryRunPrediction(string rootPath, string unityMode, CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath)) return "";
+            string outputDir = null;
+            try
+            {
+                string scriptPath = PortableRuntime.CreateSessionFilePath("extract_unity_dryrun.py");
+                WriteUnityPythonScripts(scriptPath);
+                outputDir = PortableRuntime.CreateSessionFilePath("unity-dryrun-output-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(outputDir);
+
+                ProcessStartInfo psi = PortableRuntime.CreatePythonProcessInfo();
+                psi.Arguments = QuoteArg(scriptPath);
+                psi.EnvironmentVariables["GAME_PATH"] = rootPath;
+                psi.EnvironmentVariables["OUTPUT_PATH"] = outputDir;
+                psi.EnvironmentVariables["EXTRACT_MODE"] = string.IsNullOrWhiteSpace(unityMode) ? "media" : unityMode;
+                psi.EnvironmentVariables["INCLUDE_BUNDLES"] = "1";
+                psi.EnvironmentVariables["DRY_RUN"] = "1";
+                psi.EnvironmentVariables["MAX_WARNINGS"] = "0";
+
+                List<string> lines = new List<string>();
+                using (Process process = new Process())
+                {
+                    process.StartInfo = psi;
+                    process.OutputDataReceived += delegate(object sender, DataReceivedEventArgs e) { if (e.Data != null) lines.Add(e.Data); };
+                    process.ErrorDataReceived += delegate(object sender, DataReceivedEventArgs e) { };
+                    process.Start();
+                    process.BeginOutputReadLine();
+                    process.BeginErrorReadLine();
+                    using (cancellationToken.Register(delegate { try { if (!process.HasExited) process.Kill(); } catch { } }))
+                    {
+                        if (!process.WaitForExit(45000))
+                        {
+                            try { process.Kill(); } catch { }
+                            return "forecast timed out; extraction can still run normally";
+                        }
+                    }
+                    process.WaitForExit();
+                }
+
+                foreach (string line in lines)
+                {
+                    if (!line.StartsWith("DRYRUN_JSON:", StringComparison.OrdinalIgnoreCase)) continue;
+                    string json = line.Substring("DRYRUN_JSON:".Length);
+                    Dictionary<string, object> root = new JavaScriptSerializer().DeserializeObject(json) as Dictionary<string, object>;
+                    object prediction;
+                    if (root != null && root.TryGetValue("prediction", out prediction) && prediction != null)
+                        return Convert.ToString(prediction);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch
+            {
+                return "forecast unavailable";
+            }
+            finally
+            {
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(outputDir) && Directory.Exists(outputDir)) Directory.Delete(outputDir, true);
+                }
+                catch { }
+            }
+            return "forecast unavailable";
+        }
+
+        private static string BuildDetectionConfidence(string inputPath, GameEngine detectedEngine, GameEngine forcedEngine, GameEngine engine, int fileCount, int archiveCount, string collectionWarning)
+        {
+            if (forcedEngine != GameEngine.Unknown) return "forced";
+            if (DetectDirectFileEngine(inputPath) != GameEngine.Unknown) return "high";
+            if (engine == GameEngine.Unknown) return "low";
+            if (!string.IsNullOrWhiteSpace(collectionWarning)) return "low";
+            if (archiveCount > 0) return "high";
+            if (fileCount > 0) return "medium";
+            return detectedEngine == GameEngine.Unknown ? "low" : "medium";
+        }
+
+        private static string BuildDetectionNotes(string inputPath, GameEngine detectedEngine, GameEngine forcedEngine, GameEngine engine)
+        {
+            if (forcedEngine != GameEngine.Unknown)
+                return "user selected " + EngineName(engine) + " in Force engine";
+            if (DetectDirectFileEngine(inputPath) != GameEngine.Unknown)
+                return "direct supported file input";
+            switch (engine)
+            {
+                case GameEngine.Unknown: return "no strong engine markers found";
+                default: return EngineInfo.For(engine).Markers;
+            }
+        }
+
+        private static string BuildCollectionFolderWarning(string inputPath, string rootPath)
+        {
+            if (string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath) || File.Exists(inputPath)) return "";
+            try
+            {
+                int detectedFolders = 0;
+                foreach (string folder in Directory.EnumerateDirectories(rootPath, "*", SearchOption.TopDirectoryOnly).Take(12))
+                {
+                    string name = Path.GetFileName(folder);
+                    if (name.Equals("extracted", StringComparison.OrdinalIgnoreCase) || name.Equals("tools", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (DetectEngineFast(folder) != GameEngine.Unknown) detectedFolders++;
+                    if (detectedFolders >= 2) return "selected folder looks like a collection with multiple games; choose the exact game folder or force the engine before extraction.";
+                }
+                int executableCount = Directory.EnumerateFiles(rootPath, "*.exe", SearchOption.TopDirectoryOnly).Take(5).Count();
+                if (executableCount >= 4)
+                    return "selected folder contains several executables; verify this is the exact game root before extraction.";
+            }
+            catch { }
+            return "";
+        }
+        private static string BuildUnknownExtensionSummary(IEnumerable<string> files)
+        {
+            List<string> unknown = files
+                .Select(delegate(string path)
+                {
+                    string extension = Path.GetExtension(path);
+                    return string.IsNullOrWhiteSpace(extension) ? "<no extension>" : extension.ToLowerInvariant();
+                })
+                .Where(delegate(string extension)
+                {
+                    return extension.Equals("<no extension>", StringComparison.OrdinalIgnoreCase)
+                        || !MediaTypeRegistry.IsKnownDryRunExtension(extension);
+                })
+                .ToList();
+
+            if (unknown.Count == 0) return "";
+            return string.Join(", ", unknown
+                .GroupBy(delegate(string extension) { return extension; }, StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(delegate(IGrouping<string, string> group) { return group.Count(); })
+                .ThenBy(delegate(IGrouping<string, string> group) { return group.Key; }, StringComparer.OrdinalIgnoreCase)
+                .Take(8)
+                .Select(delegate(IGrouping<string, string> group) { return group.Key + " x" + group.Count(); })
+                .ToArray());
         }
 
         private static List<string> FindRenpyArchivesFromSnapshot(DirectorySnapshot snapshot, string inputPath, string rootPath)
@@ -673,6 +907,23 @@ namespace RpgmvpConverterWinForms
                     result.Add(entry.FullPath);
             }
             return result;
+        }
+
+        private static List<string> FindGodotArchivesFromSnapshot(DirectorySnapshot snapshot, string inputPath, string rootPath)
+        {
+            if (File.Exists(inputPath))
+                return FindGodotArchives(inputPath);
+            List<string> result = snapshot.GetFilesWithExtension(".pck");
+            foreach (string executable in snapshot.GetTopLevelFilesWithExtension(".exe"))
+            {
+                try
+                {
+                    if (IsGodotEmbeddedPckFile(executable) && !result.Contains(executable))
+                        result.Add(executable);
+                }
+                catch { }
+            }
+            return result.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         }
 
         private static List<string> FindLegacyRpgMakerArchivesFromSnapshot(DirectorySnapshot snapshot, string inputPath)
@@ -780,31 +1031,6 @@ namespace RpgmvpConverterWinForms
             return "..." + value.Substring(value.Length - Math.Max(1, maxLength - 3));
         }
 
-        private static string BuildUnknownExtensionSummary(IEnumerable<string> files)
-        {
-            List<string> unknown = files
-                .Select(delegate(string path)
-                {
-                    string extension = Path.GetExtension(path);
-                    return string.IsNullOrWhiteSpace(extension) ? "<no extension>" : extension.ToLowerInvariant();
-                })
-                .Where(delegate(string extension)
-                {
-                    return extension.Equals("<no extension>", StringComparison.OrdinalIgnoreCase)
-                        || !MediaTypeRegistry.IsKnownDryRunExtension(extension);
-                })
-                .ToList();
-
-            if (unknown.Count == 0) return "";
-            return string.Join(", ", unknown
-                .GroupBy(delegate(string extension) { return extension; }, StringComparer.OrdinalIgnoreCase)
-                .OrderByDescending(delegate(IGrouping<string, string> group) { return group.Count(); })
-                .ThenBy(delegate(IGrouping<string, string> group) { return group.Key; }, StringComparer.OrdinalIgnoreCase)
-                .Take(8)
-                .Select(delegate(IGrouping<string, string> group) { return group.Key + " x" + group.Count(); })
-                .ToArray());
-        }
-
         private static List<string> GetFilesToConvert(string rootPath)
         {
             string[] skipped =
@@ -826,20 +1052,20 @@ namespace RpgmvpConverterWinForms
         private static IEnumerable<string> EnumerateFilesSafe(string rootPath, string pattern)
         {
             if (!Directory.Exists(rootPath)) return Enumerable.Empty<string>();
-            try { return Directory.EnumerateFiles(rootPath, pattern, SearchOption.AllDirectories).ToList(); }
+            try { return Directory.EnumerateFiles(rootPath, pattern, SearchOption.AllDirectories).Where(delegate(string path) { return !ExtractionPathUtils.IsOwnToolFile(path); }).ToList(); }
             catch { return Enumerable.Empty<string>(); }
         }
 
         private static IEnumerable<string> EnumerateFilesTopLevelSafe(string rootPath, string pattern)
         {
             if (!Directory.Exists(rootPath)) return Enumerable.Empty<string>();
-            try { return Directory.EnumerateFiles(rootPath, pattern, SearchOption.TopDirectoryOnly).ToList(); }
+            try { return Directory.EnumerateFiles(rootPath, pattern, SearchOption.TopDirectoryOnly).Where(delegate(string path) { return !ExtractionPathUtils.IsOwnToolFile(path); }).ToList(); }
             catch { return Enumerable.Empty<string>(); }
         }
 
         private static List<string> FindUnityBundleFiles(string rootPath)
         {
-            return EnumerateFilesSafe(rootPath, "*.bundle").Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            return UnityArchiveDiscovery.FindBundleLikeArchives(rootPath);
         }
 
         private static List<string> FindNwjsPackageArchives(string rootPath)
@@ -857,6 +1083,25 @@ namespace RpgmvpConverterWinForms
             string rootPath = InputDirectory(inputPath);
             string gameFolder = Path.Combine(rootPath, "game");
             return Directory.Exists(gameFolder) ? gameFolder : rootPath;
+        }
+
+        private static List<string> FindGodotArchives(string inputPath)
+        {
+            if (File.Exists(inputPath))
+            {
+                string fullPath = Path.GetFullPath(inputPath);
+                string extension = Path.GetExtension(fullPath);
+                if (extension.Equals(".pck", StringComparison.OrdinalIgnoreCase)
+                    || extension.Equals(".exe", StringComparison.OrdinalIgnoreCase) && IsGodotEmbeddedPckFile(fullPath))
+                    return new List<string> { fullPath };
+                return new List<string>();
+            }
+
+            string rootPath = InputDirectory(inputPath);
+            return EnumerateFilesSafe(rootPath, "*.pck")
+                .Concat(EnumerateFilesTopLevelSafe(rootPath, "*.exe").Where(IsGodotEmbeddedPckFile))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
         }
 
         private static List<string> FindRenpyArchives(string inputPath)
@@ -951,26 +1196,31 @@ namespace RpgmvpConverterWinForms
             catch { return false; }
         }
 
-        private static List<string> GetJavaLooseFiles(string rootPath, string outputDir)
-        {
-            return GetJavaLooseFiles(rootPath, outputDir, "images-svg");
-        }
-
         private static List<string> GetJavaLooseFiles(string rootPath, string outputDir, string mode)
         {
             string resources = Path.Combine(rootPath, "res");
             if (!IsJavaLooseResourceGame(rootPath)) return new List<string>();
             List<string> files = GetLooseFiles(resources, outputDir);
-            return string.Equals(mode, "all", StringComparison.OrdinalIgnoreCase)
-                ? files
-                : files.Where(IsJavaImageFile).ToList();
+            if (string.Equals(mode, "all", StringComparison.OrdinalIgnoreCase)) return files;
+            if (string.Equals(mode, "text", StringComparison.OrdinalIgnoreCase)) return files.Where(IsJavaTextFile).ToList();
+            if (string.Equals(mode, "images-text", StringComparison.OrdinalIgnoreCase)) return files.Where(IsJavaImageOrTextFile).ToList();
+            return files.Where(IsJavaImageFile).ToList();
         }
-
         private static bool IsJavaImageFile(string path)
         {
             return MediaTypeRegistry.IsImageLike(Path.GetExtension(path));
         }
 
+        private static bool IsJavaTextFile(string path)
+        {
+            return MediaTypeRegistry.IsText(Path.GetExtension(path));
+        }
+
+        private static bool IsJavaImageOrTextFile(string path)
+        {
+            string extension = Path.GetExtension(path);
+            return MediaTypeRegistry.IsImageLike(extension) || MediaTypeRegistry.IsText(extension);
+        }
         private static List<string> FindFlashFiles(string rootPath)
         {
             return FlashSwfExtractor.FindFiles(rootPath);
@@ -1036,10 +1286,27 @@ namespace RpgmvpConverterWinForms
                 .ToList();
         }
 
+        private static string GetPygamePyInstallerRoot(string inputPath)
+        {
+            if (string.IsNullOrWhiteSpace(inputPath)) return inputPath;
+            string root = InputDirectory(inputPath);
+            if (Path.GetFileName(root).Equals("_internal", StringComparison.OrdinalIgnoreCase))
+                root = Directory.GetParent(root) != null ? Directory.GetParent(root).FullName : root;
+            return root;
+        }
+
+        private static List<string> GetPygamePyInstallerFiles(string rootPath, string outputDir)
+        {
+            return IsPygamePyInstallerGame(rootPath)
+                ? AssetCollectors.GetLooseResourceFiles(rootPath, outputDir)
+                : new List<string>();
+        }
+
         private static string TryFindGameRoot(string path)
         {
             if (string.IsNullOrWhiteSpace(path)) return null;
             DirectoryInfo current = Directory.Exists(path) ? new DirectoryInfo(path) : new FileInfo(path).Directory;
+            if (current != null && current.Name.Equals("_internal", StringComparison.OrdinalIgnoreCase)) current = current.Parent;
             int remainingParents = 6;
             while (current != null && remainingParents-- > 0)
             {
@@ -1054,6 +1321,9 @@ namespace RpgmvpConverterWinForms
                     || IsFlashGame(root)
                     || IsElectronGame(root)
                     || IsSpakDatGame(root)
+                    || IsPygamePyInstallerGame(root)
+                    || IsDataArcGameFast(root)
+                    || IsHspGame(root)
                     || IsLegacyRpgMakerGame(root)
                     || AssetCollectors.IsHtmlGame(root)
                     || AssetCollectors.IsQspGame(root)
@@ -1067,9 +1337,31 @@ namespace RpgmvpConverterWinForms
                     || File.Exists(Path.Combine(root, "app.nw"))
                     || Directory.Exists(Path.Combine(root, "app.nw"));
                 if (known) return root;
+                // A dev checkout or the tool's own folder is never a game:
+                // stop climbing instead of scanning gigabytes of sources.
+                if (LooksLikeDevFolder(root)) return null;
                 current = current.Parent;
             }
             return null;
+        }
+
+        private static bool LooksLikeDevFolder(string root)
+        {
+            try
+            {
+                if (Directory.Exists(Path.Combine(root, ".git"))
+                    || Directory.Exists(Path.Combine(root, ".svn"))
+                    || Directory.Exists(Path.Combine(root, ".hg")))
+                    return true;
+                if (Directory.EnumerateFiles(root, "GameAssetTool*.exe", SearchOption.TopDirectoryOnly).Any())
+                    return true;
+                if (Directory.EnumerateFiles(root, "*.sln", SearchOption.TopDirectoryOnly).Any())
+                    return true;
+                if (Directory.EnumerateFiles(root, "*.csproj", SearchOption.TopDirectoryOnly).Any())
+                    return true;
+            }
+            catch { }
+            return false;
         }
 
         private enum GameEngine
@@ -1096,12 +1388,14 @@ namespace RpgmvpConverterWinForms
             SrpgStudio,
             PixelGameMaker,
             SpakDat,
-            PygamePyInstaller
+            PygamePyInstaller,
+            DataArc,
+            Hsp
         }
 
         private sealed class ScanSummary
         {
-            public ScanSummary(GameEngine engine, int fileCount, int archiveCount, long totalBytes, string unknownExtensions, string topExtensions, string largestFiles, string routeHints)
+            public ScanSummary(GameEngine engine, int fileCount, int archiveCount, long totalBytes, string unknownExtensions, string topExtensions, string largestFiles, string routeHints, string detectionConfidence, string detectionNotes, string collectionWarning, string unityPrediction)
             {
                 Engine = engine;
                 FileCount = fileCount;
@@ -1111,6 +1405,10 @@ namespace RpgmvpConverterWinForms
                 TopExtensions = topExtensions ?? "";
                 LargestFiles = largestFiles ?? "";
                 RouteHints = routeHints ?? "";
+                DetectionConfidence = detectionConfidence ?? "";
+                DetectionNotes = detectionNotes ?? "";
+                CollectionWarning = collectionWarning ?? "";
+                UnityPrediction = unityPrediction ?? "";
             }
 
             public GameEngine Engine { get; private set; }
@@ -1121,6 +1419,10 @@ namespace RpgmvpConverterWinForms
             public string TopExtensions { get; private set; }
             public string LargestFiles { get; private set; }
             public string RouteHints { get; private set; }
+            public string DetectionConfidence { get; private set; }
+            public string DetectionNotes { get; private set; }
+            public string CollectionWarning { get; private set; }
+            public string UnityPrediction { get; private set; }
         }
 
     }

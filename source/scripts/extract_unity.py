@@ -2,10 +2,12 @@
 from __future__ import print_function
 
 import io
+import json
 import os
 import shutil
 import sys
 import threading
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 if sys.version_info[0] >= 3:
@@ -13,6 +15,14 @@ if sys.version_info[0] >= 3:
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 import UnityPy
+
+from unity_diagnostics import (
+    OBJECT_EXPORT_HINTS,
+    build_payload,
+    build_prediction_text,
+    skip_reason_for_type,
+    write_diagnostics,
+)
 
 
 GAME_PATH = os.environ.get("GAME_PATH", "")
@@ -22,24 +32,50 @@ INCLUDE_BUNDLES = os.environ.get("INCLUDE_BUNDLES", "1") == "1"
 MAX_WORKERS = max(1, min(int(os.environ.get("MAX_WORKERS", "4")), 12))
 PNG_COMPRESSION_LEVEL = max(0, min(int(os.environ.get("PNG_COMPRESSION_LEVEL", "1")), 9))
 MAX_WARNINGS = int(os.environ.get("MAX_WARNINGS", "120"))
+DRY_RUN = os.environ.get("DRY_RUN", "0") == "1"
 SAVE_WORKERS = max(1, min(int(os.environ.get("SAVE_WORKERS", "2")), 4))
 SAVE_BACKLOG = max(SAVE_WORKERS * 4, 4)
 
 IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tga", ".tiff")
 VIDEO_EXTENSIONS = (".mp4", ".webm", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".3gp")
 AUDIO_EXTENSIONS = (".ogg", ".wav", ".mp3", ".flac")
-DIRECT_EXTENSIONS = IMAGE_EXTENSIONS + VIDEO_EXTENSIONS + AUDIO_EXTENSIONS
+TEXT_EXTENSIONS = (
+    ".txt", ".json", ".xml", ".csv", ".tsv", ".ini", ".cfg", ".conf", ".yaml", ".yml",
+    ".po", ".pot", ".mo", ".tmx", ".strings", ".lang", ".loc", ".rpy", ".rpym", ".ks",
+    ".js", ".css", ".html", ".htm", ".bytes"
+)
+DIRECT_EXTENSIONS = IMAGE_EXTENSIONS + VIDEO_EXTENSIONS + AUDIO_EXTENSIONS + TEXT_EXTENSIONS
+ARCHIVE_EXTENSIONS = (".assets", ".bundle", ".unity3d")
+OPTIONAL_BUNDLE_EXTENSIONS = (".bundle", ".unity3d")
+UNITY_BUNDLE_SIGNATURES = (b"UnityFS", b"UnityWeb", b"UnityRaw")
+UNITY_BUNDLE_SCAN_BYTES = 1024 * 1024
+ADDRESSABLE_HINTS = (
+    "/streamingassets/aa/",
+    "\\streamingassets\\aa\\",
+    "/assetbundles/",
+    "\\assetbundles\\",
+    "/bundles/",
+    "\\bundles\\",
+)
+SKIP_DIR_NAMES = ("bepinex", "dotnet", "mono", "crashpad", "logs")
 TEXTURE_TYPES = ("Texture2D", "Sprite", "Cubemap", "Texture3D", "Texture2DArray")
-MODE_TEXTURES = EXTRACT_MODE in ("textures", "media", "all")
-MODE_VIDEOS = EXTRACT_MODE in ("videos", "media", "all")
-MODE_AUDIOS = EXTRACT_MODE in ("audios", "all")
+MODE_TEXTURES = EXTRACT_MODE in ("textures", "media", "media-audio", "textures-text", "all")
+MODE_VIDEOS = EXTRACT_MODE in ("videos", "media", "media-audio", "all")
+MODE_AUDIOS = EXTRACT_MODE in ("audios", "media-audio", "all")
+MODE_TEXT = EXTRACT_MODE in ("text", "textures-text", "all")
 MODE_MESHES = EXTRACT_MODE in ("meshes", "all")
+MODE_ANIMATIONS = EXTRACT_MODE in ("animations", "all")
 
 reserved_paths = set()
 path_lock = threading.Lock()
 warning_lock = threading.Lock()
 warning_count = 0
 warning_suppressed = False
+embedded_offset_cache = {}
+embedded_offset_cache_touched = set()
+MAX_EMBEDDED_CACHE_ENTRIES = int(os.environ.get("MAX_EMBEDDED_CACHE_ENTRIES", "5000") or "5000")
+addressable_labels = {}
+
 
 
 def log(message):
@@ -68,6 +104,13 @@ def safe_component(value, fallback):
     cleaned = "".join(c for c in str(value or "") if c.isalnum() or c in "._- ")
     cleaned = cleaned.strip(" .")
     return cleaned or fallback
+
+
+def short_component(value, fallback, limit=72):
+    cleaned = safe_component(value, fallback)
+    if len(cleaned) <= limit:
+        return cleaned
+    return cleaned[:limit].rstrip(" ._-") or fallback
 
 
 def safe_getattr(value, name, fallback=None):
@@ -99,7 +142,148 @@ def archive_output_dir(file_path):
     relative = os.path.relpath(file_path, GAME_PATH)
     stem = os.path.splitext(relative)[0]
     parts = [safe_component(part, "archive") for part in stem.replace("\\", "/").split("/")]
+    if parts:
+        key = os.path.splitext(os.path.basename(file_path))[0].lower()
+        label = addressable_labels.get(key)
+        if label:
+            parts[-1] = short_component(parts[-1] + "__" + label, parts[-1])
     return os.path.join(OUTPUT_PATH, "archives", *parts)
+
+
+def cache_dir():
+    return os.path.join(OUTPUT_PATH, "diagnostics", "cache")
+
+
+def embedded_cache_path():
+    return os.path.join(cache_dir(), "wrapped-unityfs-offsets.json")
+
+
+def file_cache_key(path):
+    try:
+        stat = os.stat(path)
+        relative = rel_path(path)
+        mtime = getattr(stat, "st_mtime_ns", int(stat.st_mtime * 1000000000))
+        return "{0}|{1}|{2}".format(relative, stat.st_size, mtime)
+    except Exception:
+        return rel_path(path)
+
+
+def load_embedded_offset_cache():
+    global embedded_offset_cache
+    path = embedded_cache_path()
+    if not os.path.isfile(path):
+        embedded_offset_cache = {}
+        return
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        embedded_offset_cache = data if isinstance(data, dict) else {}
+    except Exception:
+        embedded_offset_cache = {}
+
+
+def save_embedded_offset_cache():
+    try:
+        os.makedirs(cache_dir(), exist_ok=True)
+        active = {}
+        for key in embedded_offset_cache_touched:
+            value = embedded_offset_cache.get(key)
+            if isinstance(value, int) and value > 0:
+                active[key] = value
+        if len(active) > MAX_EMBEDDED_CACHE_ENTRIES:
+            active = dict(list(sorted(active.items()))[-MAX_EMBEDDED_CACHE_ENTRIES:])
+        with open(embedded_cache_path(), "w", encoding="utf-8") as handle:
+            json.dump(active, handle, ensure_ascii=False, indent=2, sort_keys=True)
+    except Exception as error:
+        log_warn("WARN:Unity cache save failed:{0}".format(error))
+
+
+def flatten_json_strings(value, output):
+    if isinstance(value, str):
+        output.append(value)
+    elif isinstance(value, list):
+        for item in value:
+            flatten_json_strings(item, output)
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            if isinstance(key, str):
+                output.append(key)
+            flatten_json_strings(item, output)
+
+
+def is_hexish(value):
+    cleaned = str(value or "").replace("-", "").replace("_", "")
+    return len(cleaned) >= 16 and all(ch in "0123456789abcdefABCDEF" for ch in cleaned)
+
+
+def looks_like_address_label(value):
+    if not value:
+        return False
+    lower = value.lower().strip()
+    if lower.endswith((".bundle", ".hash", ".json")):
+        return False
+    if lower.startswith(("http://", "https://", "file://")):
+        return False
+    if len(value) > 160 or is_hexish(value):
+        return False
+    return any(ch.isalpha() for ch in value)
+
+
+def address_label_score(value):
+    if not looks_like_address_label(value):
+        return -100
+    lower = value.lower().replace("\\\\", "/")
+    score = 0
+    if "/" in lower:
+        score += 8
+    if lower.endswith((".png", ".jpg", ".jpeg", ".webp", ".gif", ".mp4", ".webm", ".ogg", ".wav", ".prefab", ".asset", ".controller", ".mat")):
+        score += 6
+    if any(token in lower for token in ("assets/", "sprites", "textures", "images", "cg", "movie", "video", "audio", "prefab", "character", "ui")):
+        score += 4
+    if len(value) <= 48:
+        score += 1
+    return score
+
+
+def load_addressable_labels():
+    global addressable_labels
+    labels = {}
+    catalogs = []
+    try:
+        for root, dirs, files in os.walk(GAME_PATH):
+            lower = root.lower()
+            if "streamingassets" not in lower and os.path.basename(root).lower() != "aa":
+                continue
+            if "catalog.json" in files:
+                catalogs.append(os.path.join(root, "catalog.json"))
+            if len(catalogs) >= 20:
+                break
+    except Exception:
+        catalogs = []
+
+    for catalog in catalogs:
+        try:
+            with open(catalog, "r", encoding="utf-8", errors="replace") as handle:
+                data = json.load(handle)
+            strings = []
+            flatten_json_strings(data, strings)
+            for index, text in enumerate(strings):
+                lower = text.lower().replace("\\", "/")
+                if ".bundle" not in lower:
+                    continue
+                bundle_name = os.path.basename(lower.split("?", 1)[0])
+                key = os.path.splitext(bundle_name)[0].lower()
+                if not key or key in labels:
+                    continue
+                window = strings[max(0, index - 16):min(len(strings), index + 17)]
+                candidates = [item for item in window if item != text and looks_like_address_label(item)]
+                if candidates:
+                    best = max(candidates, key=address_label_score)
+                    labels[key] = short_component(best, key)
+                    labels[bundle_name.lower()] = labels[key]
+        except Exception:
+            continue
+    addressable_labels = labels
 
 
 def resolve_resource(file_path, source):
@@ -147,13 +331,108 @@ def export_mesh(path, mesh):
     return os.path.getsize(path), int(renamed)
 
 
-def extract_archive(file_path):
+def text_asset_bytes(data):
+    for attr in ("script", "m_Script"):
+        value = safe_getattr(data, attr)
+        if value is None:
+            continue
+        if isinstance(value, bytes):
+            return value
+        if isinstance(value, str):
+            return value.encode("utf-8")
+        try:
+            return bytes(value)
+        except Exception:
+            continue
+    return None
+
+
+def is_likely_text_bytes(data):
+    if not data:
+        return True
+    sample = data[:8192]
+    if sample.startswith((b"\xef\xbb\xbf", b"\xff\xfe", b"\xfe\xff")):
+        return True
+    if b"\x00" in sample:
+        return False
+    try:
+        sample.decode("utf-8")
+        return True
+    except Exception:
+        pass
+    printable = 0
+    for item in sample:
+        value = item if isinstance(item, int) else ord(item)
+        if value in (9, 10, 13) or 32 <= value <= 126 or value >= 128:
+            printable += 1
+    return printable >= max(1, int(len(sample) * 0.90))
+
+
+def text_asset_extension(name, data):
+    original_ext = os.path.splitext(str(name or ""))[1].lower()
+    if original_ext in TEXT_EXTENSIONS and original_ext != ".bytes":
+        return original_ext
+    return ".txt" if is_likely_text_bytes(data) else ".bytes"
+
+
+def find_embedded_unity_bundle_offset(file_path):
+    key = file_cache_key(file_path)
+    cached = embedded_offset_cache.get(key)
+    if isinstance(cached, int) and cached > 0:
+        embedded_offset_cache_touched.add(key)
+        return cached
+    try:
+        with open(file_path, "rb") as handle:
+            chunk = handle.read(UNITY_BUNDLE_SCAN_BYTES)
+        offsets = [chunk.find(signature) for signature in UNITY_BUNDLE_SIGNATURES]
+        offsets = [offset for offset in offsets if offset > 0]
+        offset = min(offsets) if offsets else 0
+        if offset > 0:
+            embedded_offset_cache[key] = offset
+            embedded_offset_cache_touched.add(key)
+        return offset
+    except Exception:
+        return 0
+
+
+
+def load_unity_environment(file_path):
+    env = UnityPy.load(file_path)
+    try:
+        object_count = len(env.objects)
+    except Exception:
+        object_count = 0
+    if object_count > 0:
+        return env, 0
+
+    offset = find_embedded_unity_bundle_offset(file_path)
+    if offset <= 0:
+        return env, 0
+
+    with open(file_path, "rb") as handle:
+        handle.seek(offset)
+        payload = handle.read()
+    fallback_env = UnityPy.load(io.BytesIO(payload))
+    try:
+        fallback_count = len(fallback_env.objects)
+    except Exception:
+        fallback_count = 0
+    if fallback_count > object_count:
+        return fallback_env, offset
+    return env, 0
+
+
+def extract_archive(file_path, dry_run=False):
     extracted = 0
     total_size = 0
     errors = 0
     renamed = 0
     skipped = 0
     object_count = 0
+    embedded_offset = 0
+    type_counts = Counter()
+    exported_type_counts = Counter()
+    skip_reason_counts = Counter()
     pending_saves = []
     save_pool = ThreadPoolExecutor(max_workers=SAVE_WORKERS) if (MODE_TEXTURES or MODE_VIDEOS or MODE_AUDIOS) else None
 
@@ -171,24 +450,31 @@ def extract_archive(file_path):
                 log_warn("WARN:{0}:{1}".format(os.path.basename(file_path), error))
 
     try:
-        env = UnityPy.load(file_path)
+        env, embedded_offset = load_unity_environment(file_path)
         try:
             object_count = len(env.objects)
         except Exception:
             object_count = 0
         output_dir = archive_output_dir(file_path)
-        os.makedirs(output_dir, exist_ok=True)
 
         for index, obj in enumerate(env.objects):
             obj_type = obj.type.name
+            type_counts[obj_type] += 1
             supported = (
                 (MODE_TEXTURES and obj_type in TEXTURE_TYPES)
                 or (MODE_VIDEOS and obj_type == "VideoClip")
                 or (MODE_AUDIOS and obj_type == "AudioClip")
+                or (MODE_TEXT and obj_type == "TextAsset")
                 or (MODE_MESHES and obj_type == "Mesh")
+                or (MODE_ANIMATIONS and obj_type == "AnimationClip")
             )
             if not supported:
                 skipped += 1
+                skip_reason_counts[skip_reason_for_type(obj_type)] += 1
+                continue
+
+            if dry_run:
+                exported_type_counts[obj_type] += 1
                 continue
 
             try:
@@ -207,8 +493,10 @@ def extract_archive(file_path):
                             )
                         )
                         drain_saves()
+                        exported_type_counts[obj_type] += 1
                     else:
                         skipped += 1
+                        skip_reason_counts["supported {0} object had no readable image payload".format(obj_type)] += 1
 
                 elif MODE_VIDEOS and obj_type == "VideoClip":
                     name = getattr(data, "m_Name", None)
@@ -229,25 +517,65 @@ def extract_archive(file_path):
                             )
                         )
                         drain_saves()
+                        exported_type_counts[obj_type] += 1
                     else:
                         skipped += 1
+                        skip_reason_counts["supported VideoClip had no readable embedded/external payload"] += 1
 
                 elif MODE_AUDIOS and obj_type == "AudioClip":
                     name = getattr(data, "name", None) or getattr(data, "m_Name", None)
-                    audio_data = read_streamed_resource(file_path, getattr(data, "m_Resource", None))
-                    if not audio_data:
-                        audio_data = safe_getattr(data, "audio_data") or safe_getattr(data, "m_AudioData")
-                    if audio_data:
-                        pending_saves.append(
-                            save_pool.submit(
-                                save_bytes,
-                                os.path.join(output_dir, safe_component(name, "audio_{0}".format(index)) + ".wav"),
-                                audio_data,
+                    samples = safe_getattr(data, "samples")
+                    saved_sample = False
+                    if isinstance(samples, dict) and samples:
+                        for sample_name, sample_data in samples.items():
+                            if not sample_data:
+                                continue
+                            sample_ext = os.path.splitext(str(sample_name))[1] or ".wav"
+                            sample_base = os.path.splitext(str(sample_name))[0] or safe_component(name, "audio_{0}".format(index))
+                            pending_saves.append(
+                                save_pool.submit(
+                                    save_bytes,
+                                    os.path.join(output_dir, safe_component(sample_base, "audio_{0}".format(index)) + sample_ext),
+                                    sample_data,
+                                )
                             )
+                            saved_sample = True
+                            drain_saves()
+                            exported_type_counts[obj_type] += 1
+                    if not saved_sample:
+                        audio_data = read_streamed_resource(file_path, getattr(data, "m_Resource", None))
+                        if not audio_data:
+                            audio_data = safe_getattr(data, "audio_data") or safe_getattr(data, "m_AudioData")
+                        if audio_data:
+                            pending_saves.append(
+                                save_pool.submit(
+                                    save_bytes,
+                                    os.path.join(output_dir, safe_component(name, "audio_{0}".format(index)) + ".wav"),
+                                    audio_data,
+                                )
+                            )
+                            drain_saves()
+                            exported_type_counts[obj_type] += 1
+                        else:
+                            skipped += 1
+                            skip_reason_counts["supported AudioClip had no readable samples/resource payload"] += 1
+
+                elif MODE_TEXT and obj_type == "TextAsset":
+                    name = getattr(data, "name", None) or getattr(data, "m_Name", None)
+                    text_data = text_asset_bytes(data)
+                    if text_data is not None:
+                        ext = text_asset_extension(name, text_data)
+                        size, collision = save_bytes(
+                            os.path.join(output_dir, safe_component(name, "text_{0}".format(index)) + ext),
+                            text_data,
                         )
-                        drain_saves()
+                        extracted += 1
+                        total_size += size
+                        renamed += collision
+                        exported_type_counts[obj_type] += 1
                     else:
                         skipped += 1
+                        skip_reason_counts["supported TextAsset had no readable script bytes"] += 1
 
                 elif MODE_MESHES and obj_type == "Mesh":
                     name = getattr(data, "m_Name", None)
@@ -258,7 +586,23 @@ def extract_archive(file_path):
                     extracted += 1
                     total_size += size
                     renamed += collision
+                    exported_type_counts[obj_type] += 1
 
+                elif MODE_ANIMATIONS and obj_type == "AnimationClip":
+                    name = getattr(data, "m_Name", None)
+                    try:
+                        tree = obj.read_typetree()
+                    except Exception:
+                        tree = {"name": name or "", "type": obj_type}
+                    payload = json.dumps(tree, ensure_ascii=False, indent=2, default=str).encode("utf-8")
+                    size, collision = save_bytes(
+                        os.path.join(output_dir, safe_component(name, "animation_{0}".format(index)) + ".json"),
+                        payload,
+                    )
+                    extracted += 1
+                    total_size += size
+                    renamed += collision
+                    exported_type_counts[obj_type] += 1
             except Exception as error:
                 errors += 1
                 log_warn("WARN:{0}:{1}".format(os.path.basename(file_path), error))
@@ -279,6 +623,10 @@ def extract_archive(file_path):
         "renamed": renamed,
         "skipped": skipped,
         "objects": object_count,
+        "embedded_offset": embedded_offset,
+        "types": dict(type_counts),
+        "exported_types": dict(exported_type_counts),
+        "skip_reasons": dict(skip_reason_counts),
     }
 
 
@@ -288,7 +636,32 @@ def direct_file_supported(filename):
         (MODE_TEXTURES and lower.endswith(IMAGE_EXTENSIONS))
         or (MODE_VIDEOS and lower.endswith(VIDEO_EXTENSIONS))
         or (MODE_AUDIOS and lower.endswith(AUDIO_EXTENSIONS))
+        or (MODE_TEXT and lower.endswith(TEXT_EXTENSIONS))
     )
+
+
+def should_probe_unity_bundle(path):
+    ext = os.path.splitext(path)[1].lower()
+    if ext in ARCHIVE_EXTENSIONS or ext in DIRECT_EXTENSIONS or ext in (".ress", ".resource"):
+        return False
+    lower = path.lower()
+    if any(hint in lower for hint in ADDRESSABLE_HINTS):
+        return True
+    parent = os.path.basename(os.path.dirname(path)).lower()
+    if parent.endswith(".bundle"):
+        return True
+    return not ext
+
+
+def is_unity_bundle_signature(path):
+    try:
+        if os.path.getsize(path) < 16:
+            return False
+        with open(path, "rb") as handle:
+            head = handle.read(16)
+        return any(head.startswith(signature) for signature in UNITY_BUNDLE_SIGNATURES)
+    except Exception:
+        return False
 
 
 def collect_files():
@@ -300,7 +673,8 @@ def collect_files():
         root_abs = os.path.abspath(root)
         dirs[:] = [
             name for name in dirs
-            if not os.path.abspath(os.path.join(root, name)).startswith(output_abs)
+            if name.lower() not in SKIP_DIR_NAMES
+            and not os.path.abspath(os.path.join(root, name)).startswith(output_abs)
             and not os.path.abspath(os.path.join(root, name)).startswith(extracted_abs)
         ]
         if root_abs.startswith(output_abs) or root_abs.startswith(extracted_abs):
@@ -308,10 +682,12 @@ def collect_files():
         for filename in files:
             full_path = os.path.join(root, filename)
             lower = filename.lower()
-            if lower.endswith(".bundle"):
+            if lower.endswith(OPTIONAL_BUNDLE_EXTENSIONS):
                 if INCLUDE_BUNDLES:
                     archives.append(full_path)
             elif lower.endswith(".assets"):
+                archives.append(full_path)
+            elif INCLUDE_BUNDLES and should_probe_unity_bundle(full_path) and is_unity_bundle_signature(full_path):
                 archives.append(full_path)
             elif lower.endswith(DIRECT_EXTENSIONS) and direct_file_supported(filename):
                 direct_files.append(full_path)
@@ -371,52 +747,30 @@ def rel_path(path):
         return path
 
 
-def write_unity_diagnostics(archives, direct_files, archive_results):
-    path = os.path.join(OUTPUT_PATH, "GameAssetTool-unity-diagnostics.txt")
-    try:
-        bundle_count = sum(1 for item in archives if item.lower().endswith(".bundle"))
-        assets_count = sum(1 for item in archives if item.lower().endswith(".assets"))
-        archive_input_size = sum(os.path.getsize(item) for item in archives if os.path.isfile(item))
-        zero_output = [item for item in archive_results if item.get("extracted", 0) == 0]
-        error_archives = [item for item in archive_results if item.get("errors", 0) > 0]
-        largest = sorted(
-            [item for item in archives if os.path.isfile(item)],
-            key=lambda item: os.path.getsize(item),
-            reverse=True,
-        )[:8]
+def build_unity_diagnostics_payload(archives, direct_files, archive_results):
+    return build_payload(
+        EXTRACT_MODE,
+        INCLUDE_BUNDLES,
+        archives,
+        direct_files,
+        archive_results,
+        addressable_labels,
+        warning_count,
+        ARCHIVE_EXTENSIONS,
+        is_unity_bundle_signature,
+        format_bytes,
+        rel_path,
+    )
 
-        with open(path, "w", encoding="utf-8") as output:
-            output.write("Unity diagnostics\n")
-            output.write("Mode: {0}\n".format(EXTRACT_MODE))
-            output.write("Include bundles: {0}\n".format("yes" if INCLUDE_BUNDLES else "no"))
-            output.write("Archives: {0}\n".format(len(archives)))
-            output.write("Bundles: {0}\n".format(bundle_count))
-            output.write("Assets: {0}\n".format(assets_count))
-            output.write("Direct files: {0}\n".format(len(direct_files)))
-            output.write("Archive input size: {0}\n".format(format_bytes(archive_input_size)))
-            output.write("Archives with output: {0}\n".format(max(0, len(archives) - len(zero_output))))
-            output.write("Archives with zero output: {0}\n".format(len(zero_output)))
-            output.write("Archives with errors: {0}\n".format(len(error_archives)))
-            output.write("Skipped Unity objects: {0}\n".format(sum(item.get("skipped", 0) for item in archive_results)))
-            output.write("Warnings emitted: {0}\n".format(warning_count))
-            if largest:
-                output.write("Largest archives:\n")
-                for item in largest:
-                    output.write("- {0} ({1})\n".format(rel_path(item), format_bytes(os.path.getsize(item))))
-            if zero_output:
-                output.write("Zero-output archives:\n")
-                for item in zero_output[:40]:
-                    output.write("- {0} | objects={1} | skipped={2} | errors={3}\n".format(
-                        rel_path(item.get("path", "")),
-                        item.get("objects", 0),
-                        item.get("skipped", 0),
-                        item.get("errors", 0),
-                    ))
-                if len(zero_output) > 40:
-                    output.write("- ... {0} more\n".format(len(zero_output) - 40))
+
+def write_unity_diagnostics(archives, direct_files, archive_results):
+    try:
+        payload = build_unity_diagnostics_payload(archives, direct_files, archive_results)
+        write_diagnostics(OUTPUT_PATH, payload)
+        return payload
     except Exception as error:
         log_warn("WARN:Unity diagnostics failed:{0}".format(error))
-
+        return {}
 
 def main():
     if not GAME_PATH or not OUTPUT_PATH:
@@ -424,6 +778,8 @@ def main():
         return 2
 
     os.makedirs(OUTPUT_PATH, exist_ok=True)
+    load_embedded_offset_cache()
+    load_addressable_labels()
     log("PHASE:scan")
     archives, direct_files = collect_files()
     log("TOTAL:{0}".format(len(archives)))
@@ -437,7 +793,7 @@ def main():
 
     log("PHASE:archives")
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = [executor.submit(extract_archive, path) for path in archives]
+        futures = [executor.submit(extract_archive, path, DRY_RUN) for path in archives]
         for future in as_completed(futures):
             result = future.result()
             archive_results.append(result)
@@ -454,7 +810,11 @@ def main():
             processed += 1
             log("PROGRESS:{0}:{1}:{2}".format(processed, len(archives), total_size))
 
-    write_unity_diagnostics(archives, direct_files, archive_results)
+    payload = write_unity_diagnostics(archives, direct_files, archive_results)
+    save_embedded_offset_cache()
+    if DRY_RUN:
+        prediction = build_prediction_text(payload)
+        log("DRYRUN_JSON:{0}".format(json.dumps({"prediction": prediction, "diagnostics": payload}, ensure_ascii=False, sort_keys=True)))
     log("RESULT:{0}:{1}:{2}:{3}:{4}".format(total_extracted, total_size, total_errors, total_renamed, total_skipped))
     return 0 if total_errors == 0 else 1
 

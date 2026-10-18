@@ -14,6 +14,7 @@ Drop a game folder or supported file into the window, run **Dry Run / Scan**, th
 - Drag and drop game folders, archives or files into the window.
 - Auto-detect engines and run a dry scan before extraction.
 - Extract images, video and supported loose media into organized folders.
+- Native offline extraction for several engines (Godot PCK, KiriKiri XP3, GameMaker `data.win`, Ren'Py RPA): many games extract without downloading the portable runtime.
 - Fast searchable results gallery with filters, grouping, thumbnail presets and a resizable preview panel.
 - HTML reports with extraction summary, diagnostics, skipped-item details, health snapshot and performance notes.
 - Recovery mode for unknown binary files with recognizable embedded media.
@@ -40,9 +41,9 @@ https://github.com/SANCHEI/Rpgm-NWJS-Renpy-Converter-tool
 
 The Windows build is unsigned, so SmartScreen or Defender may show a warning until the app gains reputation. This does not automatically mean the file is malicious; verify the SHA-256 below if needed.
 
-SHA-256 for v2.4.1:
+SHA-256 for v2.5.4:
 
-`4DFF2C87572776B55C7789387EB2D13F1E6F6DA3961E4B651E91D24B3C0FC832`
+`88DD97D26FF51178C6E97676226195660C4E4B51B01A490A9941F323A8C9AC4C`
 
 ## Support Development
 
@@ -54,7 +55,7 @@ Optional support helps fund compatibility fixes, new engine support and gallery 
 
 - Windows 10 version 1803 or later, or Windows 11 x64 is recommended.
 - No separate Python, package or .NET runtime installation is required on supported Windows versions.
-- Encrypted Godot PCK archives require a valid key.
+- Encrypted Godot PCK archives require a valid key, entered manually or discovered inside the game executable.
 - Some protected XP3, Unreal IoStore and custom archive formats are detected but not fully extracted.
 - Unreal Oodle-compressed PAK files may need the game's own `oo2core*_win64.dll`.
 - BepInEx and SW_Decensor compatibility is not guaranteed for every Unity game, especially games with custom launchers or anti-tamper behavior.

@@ -8,6 +8,7 @@
     <RootNamespace>RpgmvpConverterWinForms</RootNamespace>
     <AssemblyName>GameAssetTool</AssemblyName>
     <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <LangVersion>12.0</LangVersion>
     <FileAlignment>512</FileAlignment>
     <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
@@ -40,8 +41,10 @@
     <Compile Include="source\Application\Dialogs\SpriteSheetPreviewForm.cs" />
     <Compile Include="source\Application\Controllers\DryScanCache.cs" />
     <Compile Include="source\Application\Controllers\DirectorySnapshot.cs" />
+    <Compile Include="source\Application\Controllers\EngineInfo.cs" />
     <Compile Include="source\Application\Controllers\ExtractionProfile.cs" />
     <Compile Include="source\Application\Controllers\ExtractionProgressEvent.cs" />
+    <Compile Include="source\Application\Controllers\ExtractionProfileResolver.cs" />
     <Compile Include="source\Application\Controllers\PreflightBuilder.cs" />
     <Compile Include="source\Application\RpgmvpConverterForm.cs" />
     <Compile Include="source\Application\RpgmvpConverterForm.Ui.cs" />
@@ -62,6 +65,17 @@
     <Compile Include="source\Extractors\SignatureAssetExtractor.cs" />
     <Compile Include="source\Extractors\SpakDatExtractor.cs" />
     <Compile Include="source\Extractors\UnityExtractionConfig.cs" />
+    <Compile Include="source\Extractors\UnityArchiveDiscovery.cs" />
+    <Compile Include="source\Extractors\GodotExtractor.cs" />
+    <Compile Include="source\Extractors\HspDpmExtractor.cs" />
+    <Compile Include="source\Extractors\RpgmCrypt.cs" />
+    <Compile Include="source\Extractors\KirikiriXp3Extractor.cs" />
+    <Compile Include="source\Extractors\ArcExtractor.cs" />
+    <Compile Include="source\Extractors\GameMakerExtractor.cs" />
+    <Compile Include="source\Extractors\RpaExtractor.cs" />
+    <Compile Include="source\Extractors\PickleReader.cs" />
+    <Compile Include="source\Extractors\CompressionHelper.cs" />
+    <Compile Include="source\Extractors\PngEncoder.cs" />
     <Compile Include="source\Features\UnlockerResources.cs" />
     <Compile Include="source\Features\UnityDecensorInstaller.cs" />
     <Compile Include="source\Reporting\ApkDiagnosticBuilder.cs" />
@@ -81,6 +95,9 @@
     <EmbeddedResource Include="source\scripts\extract_unity.py">
       <LogicalName>RpgmvpConverterWinForms.scripts.extract_unity.py</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="source\scripts\unity_diagnostics.py">
+      <LogicalName>RpgmvpConverterWinForms.scripts.unity_diagnostics.py</LogicalName>
+    </EmbeddedResource>
     <EmbeddedResource Include="source\scripts\extract_godot.py">
       <LogicalName>RpgmvpConverterWinForms.scripts.extract_godot.py</LogicalName>
     </EmbeddedResource>
@@ -96,13 +113,19 @@
     <EmbeddedResource Include="source\scripts\extract_spite.py">
       <LogicalName>RpgmvpConverterWinForms.scripts.extract_spite.py</LogicalName>
     </EmbeddedResource>
-    <EmbeddedResource Include="payload\runtime-win-x64.zip" Condition="Exists('payload\runtime-win-x64.zip')">
+    <EmbeddedResource Include="payload\runtime-win-x64.zip" Condition="Exists('payload\runtime-win-x64.zip') And '$(EmbedRuntime)' != 'false'">
       <LogicalName>RpgmvpConverterWinForms.runtime.runtime-win-x64.zip</LogicalName>
     </EmbeddedResource>
-    <EmbeddedResource Include="third_party\uberwolf\UberWolfCli.exe">
+    <EmbeddedResource Include="third_party\uberwolf\UberWolfCli.exe.deflated" Condition="Exists('third_party\uberwolf\UberWolfCli.exe.deflated')">
       <LogicalName>RpgmvpConverterWinForms.tools.UberWolfCli.exe</LogicalName>
     </EmbeddedResource>
-    <EmbeddedResource Include="third_party\resvg\resvg.exe">
+    <EmbeddedResource Include="third_party\uberwolf\UberWolfCli.exe" Condition="!Exists('third_party\uberwolf\UberWolfCli.exe.deflated')">
+      <LogicalName>RpgmvpConverterWinForms.tools.UberWolfCli.exe</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="third_party\resvg\resvg.exe.deflated" Condition="Exists('third_party\resvg\resvg.exe.deflated')">
+      <LogicalName>RpgmvpConverterWinForms.tools.resvg.exe</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="third_party\resvg\resvg.exe" Condition="!Exists('third_party\resvg\resvg.exe.deflated')">
       <LogicalName>RpgmvpConverterWinForms.tools.resvg.exe</LogicalName>
     </EmbeddedResource>
     <EmbeddedResource Include="third_party\sw_decensor\SW_Decensor_v0.7.4.2.zip">

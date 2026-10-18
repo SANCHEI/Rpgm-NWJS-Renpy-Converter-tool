@@ -10,6 +10,7 @@ namespace RpgmvpConverterWinForms
 {
     internal sealed class UnityDecensorDialog : Form
     {
+        private const int LaunchVerifyTimeoutMs = 60000;
         private readonly string gameRoot;
         private readonly UnityDecensorEnvironment environment;
         private readonly Label installed;
@@ -19,6 +20,7 @@ namespace RpgmvpConverterWinForms
         private readonly Button installSw;
         private readonly Button remove;
         private readonly Button diagnose;
+        private readonly Button launch;
         private List<BepInExPackage> latestPackages = new List<BepInExPackage>();
         private List<BepInExPackage> compatiblePackages = new List<BepInExPackage>();
 
@@ -89,6 +91,9 @@ namespace RpgmvpConverterWinForms
             diagnose = CreateButton("Diagnose Launch", 18, 314, 220);
             diagnose.Click += delegate { DiagnoseLaunch(); };
             Controls.Add(diagnose);
+            launch = CreateButton("Launch Game & Verify BepInEx", 250, 314, 300);
+            launch.Click += async delegate { await LaunchAndVerifyAsync(); };
+            Controls.Add(launch);
             status = new Label
             {
                 Text = "Loading latest BepInEx package list...",
@@ -172,6 +177,76 @@ namespace RpgmvpConverterWinForms
             UpdateButtons();
         }
 
+        private async Task LaunchAndVerifyAsync()
+        {
+            if (!UnityDecensorInstaller.IsBepInExPresent(gameRoot))
+            {
+                status.Text = "Install BepInEx first, then use this button to launch the game and verify it loads.";
+                UpdateButtons();
+                return;
+            }
+            if (MessageBox.Show(
+                "The game will be launched so Game Asset Tool can confirm BepInEx loaded. Close the game as usual afterwards.",
+                "Unity Decensor", MessageBoxButtons.OK, MessageBoxIcon.Information) != DialogResult.OK)
+                return;
+
+            SetBusy(true, "Launching the game and waiting for BepInEx...");
+            try
+            {
+                BepInExLaunchResult result = await Task.Run(delegate
+                {
+                    return UnityDecensorInstaller.LaunchAndVerifyBepInEx(
+                        environment,
+                        LaunchVerifyTimeoutMs,
+                        delegate { return IsDisposed; },
+                        delegate(string line) { BeginUiSafe(delegate { status.Text = line; }); });
+                });
+
+                if (result.Succeeded && result.LogExists)
+                {
+                    string installedEntry;
+                    try
+                    {
+                        SetBusy(true, "BepInEx loaded. Installing built-in SW_Decensor...");
+                        installedEntry = await Task.Run(delegate { return UnityDecensorInstaller.InstallEmbeddedSwDecensor(gameRoot); });
+                        status.Text = "BepInEx loaded successfully. Installed built-in SW_Decensor " + environment.SwDecensorVariant + ": " + installedEntry;
+                    }
+                    catch (Exception ex)
+                    {
+                        status.Text = "BepInEx loaded, but SW_Decensor installation failed: " + ex.Message;
+                    }
+                }
+                else
+                {
+                    status.Text = result.Details;
+                    UnityDoorstopDiagnostic diagnostic = await Task.Run(delegate { return UnityDecensorInstaller.DiagnoseDoorstop(gameRoot); });
+                    if (diagnostic.LikelyDoorstopConflict)
+                    {
+                        MessageBox.Show(diagnostic.Details, "Unity Launch Diagnostics", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                status.Text = "Launch verification failed: " + ex.Message;
+            }
+            finally
+            {
+                SetBusy(false, status.Text);
+            }
+        }
+
+        private void BeginUiSafe(Action action)
+        {
+            try
+            {
+                if (IsDisposed || !IsHandleCreated) return;
+                if (InvokeRequired) BeginInvoke((MethodInvoker)delegate { action(); });
+                else action();
+            }
+            catch { }
+        }
+
         private void DiagnoseLaunch()
         {
             UnityDoorstopDiagnostic diagnostic = UnityDecensorInstaller.DiagnoseDoorstop(gameRoot);
@@ -201,6 +276,12 @@ namespace RpgmvpConverterWinForms
             installSw.Enabled = !busy && UnityDecensorInstaller.IsBepInExLaunchConfirmed(gameRoot);
             remove.Enabled = !busy && UnityDecensorInstaller.IsManagedInstallPresent(gameRoot);
             diagnose.Enabled = !busy;
+            launch.Enabled = !busy && IsLaunchVerifyAvailable();
+        }
+
+        private bool IsLaunchVerifyAvailable()
+        {
+            return UnityDecensorInstaller.IsBepInExPresent(gameRoot);
         }
 
         private BepInExPackage GetSelectedPackage()

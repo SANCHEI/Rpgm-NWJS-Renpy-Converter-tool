@@ -1,12 +1,114 @@
 # Changelog
 
-## 2.4.1 - 2026-06-20
+## 2.5.4 - 2026-10-17
+- New Godot engine: PCK archives (v1-v4) now extract natively and offline with folder structure preserved, no portable runtime needed. Encrypted packs are decrypted when the key is supplied or found inside the game executable.
+- Godot texture previews: `.ctex`/`.stex` resources decode to viewable images, and per-file digests are verified so corrupted entries are flagged instead of silently written.
+- Faster Godot runs: plain entries stream straight to disk, key discovery scans large game executables in chunks, and large packs no longer load fully into memory.
+- The portable Godot script remains as a fallback for packs the native path does not cover.
 
-- Removed the redundant Unity **Asset type** selector; Unity extraction now follows the selected **Extract** profile.
-- Shortened the completion dialog to a minimal one-screen summary with compact file type and Unity diagnostic lines.
-- Removed largest-file noise from the result summary and HTML report; detailed diagnostics remain available through the HTML diagnostics tab or engine-specific files where applicable.
-- Fixed a Results Gallery startup crash caused by loading the initial folder before the gallery window handle exists.
+## 2.5.3 - 2026-10-16
+- New HSP engine: Hot Soup Processor DPM2 archives are detected, their full contents listed with sizes, and loose files collected. DPM2 file bytes use a closed cipher and stay inside the archives.
+- New Data ARC engine: native offline extraction for Raylib-style .arc containers with folder structure preserved.
+- No more startup hangs outside game folders: game-root lookup bails out on dev markers and runs off the UI thread.
+
+## 2.5.2 - 2026-10-16
+- Never scans the tool's own binaries: GameAssetTool files inside a game folder no longer pollute detection, scans or results.
+- New Data ARC engine: native offline extraction for Raylib-style .arc containers with folder structure preserved.
+- New HSP engine: detection plus content manifests and loose-file collection for Hot Soup Processor DPM2 archives (file bytes use a closed cipher and stay inside the archive).
+- No more startup hangs outside game folders: game-root lookup bails out on dev markers and runs off the UI thread.
+- RPG Maker decryption now writes correct PNG/JPG extensions, validates keys structurally, skips undecryptable files instead of garbage output, and optionally saves JPG copies.
+- Faster signature recovery: Boyer-Moore-Horspool search, zero-copy chunk scanning and header-only DAT classification.
+- Smaller downloads: embedded third-party tools are deflate-compressed.
+
+## 2.5.1 - 2026-10-06
+- Faster engine detection and dry-run scans: a single-pass directory snapshot replaces dozens of repeated folder walks.
+- New Lite build (~3 MB): the portable Python runtime is downloaded once on first use as versioned base/unity/spite packs instead of being embedded.
+- Native offline extractors with Python fallback: KiriKiri XP3 (including TLG5 previews), GameMaker data.win (including FIOQ textures) and Ren'Py RPA (all official versions plus ALT-1.0).
+- Faster signature recovery: Boyer-Moore-Horspool search, zero-copy chunk scanning and header-only DAT classification.
+- Smaller downloads: embedded third-party tools are deflate-compressed (Lite 5.6 MB to 2.9 MB).
+- Removed the 20 MB build artifact and 10 MB promo video from git tracking.
+
+## 2.5.0 - 2026-07-08
+- Split Unity diagnostics helpers into a separate embedded Python module and keep structured JSON diagnostics alongside the HTML report.
+- Added Unity dry-run object forecast so scans can show likely exportable/skipped Unity object types before extraction.
+- Improved Unity Addressables bundle folder naming by choosing stronger catalog labels instead of raw hashes where possible.
+- Trimmed wrapped UnityFS offset cache to active current-run entries to avoid stale diagnostic cache growth.
+- Added a temporary native gallery manifest index that is deleted when the gallery window closes.
+- Kept Unity diagnostics available in the HTML report while reducing reliance on loose text diagnostic files.
+
+## 2.4.10 - 2026-07-04
+- Added a Unity `Images + Video + Audio` extraction profile for media-only exports that include AudioClip samples without pulling text, meshes or animation JSON.
+- Expanded Unity diagnostics with object-type export counts, skip reason summaries, wrapped UnityFS cache metadata and Addressables catalog label hints.
+- Added a `What was skipped?` table to the HTML report, with copy buttons for Unity object types and skip reasons.
+- Optimized the native results gallery to index previewable image/vector/video files first, show skipped non-previewable counters and expose exported `.obj` models through a lightweight `Models...` folder button.
+- Cached wrapped UnityFS offsets under diagnostics/cache so repeated Addressables scans avoid rechecking the same wrapped bundles.
+- Updated GitHub Actions release publishing to attach the main EXE, SHA256 and optional experimental tools ZIP while avoiding standalone experimental EXEs in the main release surface.
+- Added a release checklist covering version bumps, tag workflow behavior, GitHub assets and itch.io upload hygiene.
+## 2.4.9 - 2026-07-04
+- Added Unity bundle fallback for Addressables files where UnityFS starts after a small wrapper/header offset.
+- Recovered textures and meshes from wrapped UnityFS bundles that previously produced zero-output archive folders.
+- Stopped creating empty archive output folders before an archive actually exports files.
+- Added Unity diagnostics for recovered embedded UnityFS offsets.
+## 2.4.8 - 2026-07-03
+- Added Unity AudioClip sample extraction from Addressables bundles, including UnityPy-provided WAV samples.
+- Added AnimationClip JSON export in the Everything profile so Unity animation data is no longer silently skipped.
+- Improved coverage for Addressables bundles that contain audio, meshes and animation data rather than textures/videos.
+## 2.4.7 - 2026-07-03
+- Added Unity Addressables discovery for extensionless UnityFS/UnityWeb/UnityRaw archives inside StreamingAssets/aa and bundle folders.
+- Updated Unity dry-run and bundle prompts so Addressables archives are counted before extraction.
+- Added Unity diagnostics count for Addressables/signature-detected bundles.
+## 2.4.6 - 2026-07-03
+
+- Added best-effort Godot `.ctex/.stex` raw texture preview decoding for simple RGBA/RGB/L8/LA8 payloads, with clearer diagnostics for unsupported compressed texture cache files.
+- Added cancellable large-preview loading in the results gallery to reduce UI stalls when switching selections or upscale-heavy previews.
+- Added Dry Run detection confidence, detection notes and collection-folder warnings to help avoid scanning parent folders that contain multiple games.
+- Highlighted Force engine when auto-detection confidence is low or a collection-folder warning is present.
+- Added a safety prompt before extraction when the selected folder looks like a game collection rather than one exact game root.
+- Hidden APK follow-up actions unless the suggested extracted target path exists.
+- Added a small no-argument UnityTextLab folder-picker GUI while keeping CLI usage unchanged.
+- Added a separate experimental tools ZIP for UnityTextLab releases.
+- Updated the release version to 2.4.6.
+## 2.4.5 - 2026-07-03
+
+- Expanded HTML skipped diagnostics with clearer Unity filtered/unsupported-entry wording and Godot imported-cache details.
+- Improved Unity Dry Run archive previews with UnityFS/UnityWeb/UnityRaw/unknown signature counts for `.assets`, `.bundle` and `.unity3d` inputs.
+- Moved gallery filtering and sorting to a cancellable background task to reduce UI freezes on large result folders.
+- Added Godot diagnostics for imported `.ctex/.stex` texture cache files, recovered previews and audio stream/cache containers.
+- Kept Unity text extraction isolated in the separate UnityTextLab build for translation experiments instead of mixing it into the main extractor.
+- Updated the release version to 2.4.5.
+## 2.4.4 - 2026-07-02
+
+- Added Unity `.unity3d` archive support for games that store main assets in `data.unity3d`; Dry Run, extraction and diagnostics now count these archives.
+- Excluded service folders such as `BepInEx`, `dotnet`, `mono`, `logs` and `extracted` from Unity archive/direct-media scans to avoid collecting mod/runtime files as game assets.
+- Added `ExtractionProfileResolver` to centralize Extract/Collect profile mode mapping for Unity, Java and loose-resource collection.
+- Added `UnityArchiveDiscovery` to centralize Unity archive discovery, bundle-like prompts and preflight archive summaries.
+- Improved Dry Run / Scan preflight with top extensions, largest inputs, route hints, Unity archive previews and excluded folder summaries.
+- Improved Health diagnostics with a user-facing summary before technical details, including unsigned build and Mark-of-the-Web guidance.
+- Improved gallery filtering with Huge images and Wide CG presets, Top folder grouping, search tooltip and the sprite sheet button in the toolbar.
+- Renamed the loose-resource action to Collect in the UI and clarified its tooltips.
+- Updated the release version to 2.4.4.
+
+## 2.4.3 - 2026-06-27
+
+- Added **Text only** and **Images + Text** extraction profiles for translation workflows.
+- Unity extraction now exports `TextAsset` resources and direct text/localization files such as `.txt`, `.json`, `.csv`, `.xml`, `.po`, `.strings`, `.lang`, `.rpy`, `.ks` and `.bytes`.
+- Loose resource collection and Ren'Py loose-resource fallback can now follow text-focused profiles instead of always collecting the same resource mix.
+- Reports now count extracted text files separately from `Other`, and the results gallery can list text files with a generic file preview.
+- Updated the release version to 2.4.3.
+
+## 2.4.2 - 2026-06-26
+
+- Fixed startup auto-path detection for Pygame/PyInstaller games so launching Game Asset Tool from inside that game folder no longer selects a parent collection folder.
+- Fixed Pygame/PyInstaller `.exe` and `_internal` inputs so Dry Run and extraction use the actual game folder instead of a parent collection folder.
+- File-based Godot extraction now writes to `extracted/<game name>` and only prompts to replace that game output folder.
+- Fixed Godot file-input extraction so selecting an embedded-PCK `.exe` no longer scans sibling game folders in the same directory.
+- Prepare the results gallery index in the background after extraction so the completion dialog opens immediately.
+- Added clearer HTML skipped-output hints for Unity, Godot, Unreal and NWJS, including low-output and high-skip guidance.
+- Added a GitHub Actions workflow for reproducible Windows release builds with exe and SHA-256 artifacts.
+- Improved Godot imported texture recovery for `.stex` and hashed `.godot/imported` texture cache files, not only `.ctex`.
 - Added Godot imported texture preview recovery for `.ctex` files that contain embedded WebP, PNG or JPEG image data.
+- Added an **Engine override** dropdown for forcing extraction when auto-detection picks the wrong engine.
+- Added a **Skip gallery index** option for low-memory runs and very large extraction outputs.
 - Hide the follow-up extractor button when no APK follow-up exists and give it a concrete engine-specific label when it is available.
 - Removed the always-visible **Clean extracted** checkbox; existing output now prompts to delete only when needed, with more robust long-path cleanup.
 - Added Pygame/PyInstaller detection and recovery for XOR `0x6A` image `.dat` files used by games such as Isekai NTR Inn.
@@ -28,6 +130,14 @@
 - Added a lightweight sprite-sheet preview/export tool for selected raster images in the gallery.
 - Added extraction performance statistics to the HTML report, including files/sec, data/sec and process memory.
 - Stopped writing `GameAssetTool-report.txt`; `GameAssetTool-report.html` is now the single persisted report file.
+- Updated the release version to 2.4.2.
+
+## 2.4.1 - 2026-06-20
+
+- Removed the redundant Unity **Asset type** selector; Unity extraction now follows the selected **Extract** profile.
+- Shortened the completion dialog to a minimal one-screen summary with compact file type and Unity diagnostic lines.
+- Removed largest-file noise from the standard text and HTML reports; detailed diagnostic files remain available in the output folder.
+- Fixed a Results Gallery startup crash caused by loading the initial folder before the gallery window handle exists.
 - Updated the release version to 2.4.1.
 
 ## 2.4.0 - 2026-06-18

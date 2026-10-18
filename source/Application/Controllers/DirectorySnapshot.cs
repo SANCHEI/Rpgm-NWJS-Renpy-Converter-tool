@@ -179,6 +179,9 @@ namespace RpgmvpConverterWinForms
                     // Skip previous extraction output to keep scan focused on inputs.
                     if (fullPath.StartsWith(rootWithSep + "extracted" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
                         continue;
+                    // Never count the tool's own binaries as game content.
+                    if (ExtractionPathUtils.IsOwnToolFile(fullPath))
+                        continue;
                     string ext;
                     try { ext = Path.GetExtension(fullPath).ToLowerInvariant(); }
                     catch { ext = ""; }
@@ -224,6 +227,16 @@ namespace RpgmvpConverterWinForms
                         string full = Path.GetFullPath(subdirs[i]);
                         if (string.Equals(full, rootWithSep + "extracted", StringComparison.OrdinalIgnoreCase) ||
                             full.StartsWith(rootWithSep + "extracted" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                            continue;
+                    }
+                    catch { }
+                    // Version-control metadata is never game content.
+                    try
+                    {
+                        string folderName = Path.GetFileName(subdirs[i]);
+                        if (string.Equals(folderName, ".git", StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(folderName, ".svn", StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(folderName, ".hg", StringComparison.OrdinalIgnoreCase))
                             continue;
                     }
                     catch { }

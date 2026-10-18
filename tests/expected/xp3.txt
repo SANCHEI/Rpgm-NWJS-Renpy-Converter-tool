@@ -1,0 +1,5 @@
+RESULT:4:16568:1:0
+FILE:archives\a\data\split.bin:8b2ac8d8f2e66e9ef65e5fb066773ea82a81a241f272cfb36d2b9f2f8d19e99d
+FILE:archives\a\docs\hello.txt:a3accbe61749c9483bcde14e94cf3eec893270e258a108ffaf249e3e7917cfbc
+FILE:archives\b\images\picture.png:8ebb09972c6f6ddb0bb75bfebf4a69d242a24927f8a6ce5edf58333d1ed866cf
+FILE:archives\b\images\picture.tlg:149f5449561fce0f99e082425dae4a9a01d1d49fa8c41fe7fbaa3d7b95630aa9

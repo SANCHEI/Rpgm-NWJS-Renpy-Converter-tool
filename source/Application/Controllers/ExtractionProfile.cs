@@ -7,6 +7,9 @@ namespace RpgmvpConverterWinForms
         AutoImagesVideo,
         ImagesOnly,
         ImagesVideo,
+        ImagesVideoAudio,
+        TextOnly,
+        ImagesText,
         Everything,
         DiagnosticsOnly,
         Recovery
@@ -25,6 +28,9 @@ namespace RpgmvpConverterWinForms
 
         public bool IsImagesOnly { get { return Kind == ExtractionProfileKind.ImagesOnly; } }
         public bool IsImagesVideo { get { return Kind == ExtractionProfileKind.AutoImagesVideo || Kind == ExtractionProfileKind.ImagesVideo; } }
+        public bool IsImagesVideoAudio { get { return Kind == ExtractionProfileKind.ImagesVideoAudio; } }
+        public bool IsTextOnly { get { return Kind == ExtractionProfileKind.TextOnly; } }
+        public bool IsImagesText { get { return Kind == ExtractionProfileKind.ImagesText; } }
         public bool IsEverything { get { return Kind == ExtractionProfileKind.Everything; } }
         public bool IsDiagnosticsOnly { get { return Kind == ExtractionProfileKind.DiagnosticsOnly; } }
         public bool IsRecovery { get { return Kind == ExtractionProfileKind.Recovery; } }
@@ -34,6 +40,9 @@ namespace RpgmvpConverterWinForms
             if (IsEverything) return "all";
             if (IsImagesOnly) return "textures";
             if (IsImagesVideo) return "media";
+            if (IsImagesVideoAudio) return "media-audio";
+            if (IsTextOnly) return "text";
+            if (IsImagesText) return "textures-text";
             switch (unityComboIndex)
             {
                 case 0: return "media";
@@ -50,6 +59,9 @@ namespace RpgmvpConverterWinForms
             if (IsEverything) return "all";
             if (IsImagesOnly) return "images";
             if (IsImagesVideo) return "images-svg";
+            if (IsImagesVideoAudio) return "media";
+            if (IsTextOnly) return "text";
+            if (IsImagesText) return "images-text";
             switch (javaComboIndex)
             {
                 case 0: return "images";
@@ -63,6 +75,9 @@ namespace RpgmvpConverterWinForms
             if (IsEverything) return "all";
             if (IsImagesOnly) return "images";
             if (IsImagesVideo) return "media";
+            if (IsImagesVideoAudio) return "media-audio";
+            if (IsTextOnly) return "text";
+            if (IsImagesText) return "images-text";
             switch (looseComboIndex)
             {
                 case 1: return "images";
@@ -78,9 +93,12 @@ namespace RpgmvpConverterWinForms
             {
                 case 1: kind = ExtractionProfileKind.ImagesOnly; break;
                 case 2: kind = ExtractionProfileKind.ImagesVideo; break;
-                case 3: kind = ExtractionProfileKind.Everything; break;
-                case 4: kind = ExtractionProfileKind.DiagnosticsOnly; break;
-                case 5: kind = ExtractionProfileKind.Recovery; break;
+                case 3: kind = ExtractionProfileKind.ImagesVideoAudio; break;
+                case 4: kind = ExtractionProfileKind.TextOnly; break;
+                case 5: kind = ExtractionProfileKind.ImagesText; break;
+                case 6: kind = ExtractionProfileKind.Everything; break;
+                case 7: kind = ExtractionProfileKind.DiagnosticsOnly; break;
+                case 8: kind = ExtractionProfileKind.Recovery; break;
                 default: kind = ExtractionProfileKind.AutoImagesVideo; break;
             }
 
@@ -95,6 +113,9 @@ namespace RpgmvpConverterWinForms
             {
                 case ExtractionProfileKind.ImagesOnly: return "Images only";
                 case ExtractionProfileKind.ImagesVideo: return "Images + Video";
+                case ExtractionProfileKind.ImagesVideoAudio: return "Images + Video + Audio";
+                case ExtractionProfileKind.TextOnly: return "Text only";
+                case ExtractionProfileKind.ImagesText: return "Images + Text";
                 case ExtractionProfileKind.Everything: return "Everything";
                 case ExtractionProfileKind.DiagnosticsOnly: return "Diagnostics only";
                 case ExtractionProfileKind.Recovery: return "Recovery mode";

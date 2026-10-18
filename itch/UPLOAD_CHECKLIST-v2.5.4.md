@@ -1,0 +1,27 @@
+# itch.io Upload Checklist - v2.5.4
+
+## Upload (manual: needs your itch.io login, cannot be automated without an API key)
+
+- File: `release/GameAssetTool-v2.5.4.exe` (16.8 MB)
+- Display name: `Game Asset Tool v2.5.4 - Windows x64`
+- Platform: Windows
+- Architecture: x64
+- SHA-256: `88dd97d26ff51178c6e97676226195660c4e4b51b01a490a9941f323a8c9ac4c`
+
+## Patch Log (suggested devlog text)
+
+### New: native Godot engine
+- Godot PCK archives (v1-v4) now extract natively and offline with folder structure preserved - no portable runtime needed.
+- Encrypted packs are decrypted when you supply the key or when it is found inside the game executable.
+- `.ctex`/`.stex` texture resources decode to viewable images, and per-file digests are verified so corrupted entries are flagged instead of silently written.
+- The portable Godot script remains as a fallback for packs the native path does not cover.
+
+### Faster
+- Plain Godot entries stream straight to disk instead of loading large packs fully into memory.
+- Key discovery scans large game executables in chunks.
+
+## Page Update
+
+- Use `itch/itch_description.md` or `itch/itch_description.html` for the release description.
+- Keep the existing logo, background, banner and demo video unless updating screenshots.
+- Upload `release/GameAssetTool-v2.5.4.exe` as the current Windows build.
