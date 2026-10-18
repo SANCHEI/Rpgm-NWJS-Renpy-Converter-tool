@@ -6,7 +6,11 @@
 - Display name: `Game Asset Tool v2.5.4 - Windows x64`
 - Platform: Windows
 - Architecture: x64
-- SHA-256: `88dd97d26ff51178c6e97676226195660c4e4b51b01a490a9941f323a8c9ac4c`
+- SHA-256 (this local build): `920a7ea5deb6b4c3c68c82ac5cfc2dab2a521524625cf4d628bb6f61eba60f43`
+- SHA-256 (GitHub release build): `5be01cd07fa8d4fccf82d3d33793201d5cc80e2e26eb88f14be433a5da68661a`
+
+Note: builds are not bit-reproducible, so the two SHAs above differ. Re-check the hash
+immediately before uploading if the EXE was rebuilt.
 
 ## Patch Log (suggested devlog text)
 
