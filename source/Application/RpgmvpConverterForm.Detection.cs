@@ -48,11 +48,10 @@ namespace RpgmvpConverterWinForms
             if (HasRpgmFilesSnapshot(snapshot)) return GameEngine.RpgMaker;
             if (IsGodotGameSnapshot(snapshot, rootPath)) return GameEngine.Godot;
             if (IsKirikiriGameSnapshot(snapshot)) return GameEngine.Kirikiri;
-            if (IsWolfRpgGame(rootPath)) return GameEngine.WolfRpg;
-            if (IsTyranoScriptGame(rootPath)) return GameEngine.TyranoScript;
-            if (IsUnrealGameSnapshot(snapshot)) return GameEngine.Unreal;
             if (IsElectronGame(rootPath)) return GameEngine.Electron;
             if (IsNwjsGame(rootPath)) return GameEngine.Nwjs;
+            if (IsWolfRpgGame(rootPath)) return GameEngine.WolfRpg;
+            if (IsTyranoScriptGame(rootPath)) return GameEngine.TyranoScript;
             if (IsSrpgStudioGame(rootPath)) return GameEngine.SrpgStudio;
             if (IsPixelGameMakerGameSnapshot(snapshot, rootPath)) return GameEngine.PixelGameMaker;
             if (IsJavaJarGame(rootPath)) return GameEngine.JavaJar;
@@ -61,6 +60,7 @@ namespace RpgmvpConverterWinForms
             if (IsPygamePyInstallerGame(rootPath)) return GameEngine.PygamePyInstaller;
             if (IsDataArcGame(rootPath)) return GameEngine.DataArc;
             if (IsHspGame(rootPath)) return GameEngine.Hsp;
+            if (IsAliceSactGame(rootPath)) return GameEngine.AliceSact;
             if (AssetCollectors.IsHtmlGame(rootPath)) return GameEngine.Html;
             if (AssetCollectors.IsQspGame(rootPath)) return GameEngine.Qsp;
             if (AssetCollectors.IsRagsInput(rootPath)) return GameEngine.Rags;
@@ -76,11 +76,11 @@ namespace RpgmvpConverterWinForms
             if (HasRpgmFiles(rootPath)) return GameEngine.RpgMaker;
             if (IsGodotGame(rootPath)) return GameEngine.Godot;
             if (IsKirikiriGame(rootPath)) return GameEngine.Kirikiri;
+            if (IsElectronGame(rootPath)) return GameEngine.Electron;
+            if (IsNwjsGame(rootPath)) return GameEngine.Nwjs;
             if (IsWolfRpgGame(rootPath)) return GameEngine.WolfRpg;
             if (IsTyranoScriptGame(rootPath)) return GameEngine.TyranoScript;
             if (IsUnrealGame(rootPath)) return GameEngine.Unreal;
-            if (IsElectronGame(rootPath)) return GameEngine.Electron;
-            if (IsNwjsGame(rootPath)) return GameEngine.Nwjs;
             if (IsSrpgStudioGame(rootPath)) return GameEngine.SrpgStudio;
             if (IsPixelGameMakerGame(rootPath)) return GameEngine.PixelGameMaker;
             if (IsJavaJarGame(rootPath)) return GameEngine.JavaJar;
@@ -89,6 +89,7 @@ namespace RpgmvpConverterWinForms
             if (IsPygamePyInstallerGame(rootPath)) return GameEngine.PygamePyInstaller;
             if (IsDataArcGame(rootPath)) return GameEngine.DataArc;
             if (IsHspGame(rootPath)) return GameEngine.Hsp;
+            if (IsAliceSactGame(rootPath)) return GameEngine.AliceSact;
             if (AssetCollectors.IsHtmlGame(rootPath)) return GameEngine.Html;
             if (AssetCollectors.IsQspGame(rootPath)) return GameEngine.Qsp;
             if (AssetCollectors.IsRagsInput(rootPath)) return GameEngine.Rags;
@@ -113,11 +114,11 @@ namespace RpgmvpConverterWinForms
             if (HasRpgmFilesFast(rootPath)) return GameEngine.RpgMaker;
             if (IsGodotGameFast(rootPath)) return GameEngine.Godot;
             if (IsKirikiriGameFast(rootPath)) return GameEngine.Kirikiri;
+            if (IsElectronGame(rootPath)) return GameEngine.Electron;
+            if (IsNwjsGame(rootPath)) return GameEngine.Nwjs;
             if (IsWolfRpgGame(rootPath)) return GameEngine.WolfRpg;
             if (IsTyranoScriptGame(rootPath)) return GameEngine.TyranoScript;
             if (IsUnrealGameFast(rootPath)) return GameEngine.Unreal;
-            if (IsElectronGame(rootPath)) return GameEngine.Electron;
-            if (IsNwjsGame(rootPath)) return GameEngine.Nwjs;
             if (IsSrpgStudioGame(rootPath)) return GameEngine.SrpgStudio;
             if (IsPixelGameMakerGameFast(rootPath)) return GameEngine.PixelGameMaker;
             if (IsJavaJarGame(rootPath)) return GameEngine.JavaJar;
@@ -126,6 +127,7 @@ namespace RpgmvpConverterWinForms
             if (IsPygamePyInstallerGame(rootPath)) return GameEngine.PygamePyInstaller;
             if (IsDataArcGameFast(rootPath)) return GameEngine.DataArc;
             if (IsHspGame(rootPath)) return GameEngine.Hsp;
+            if (IsAliceSactGame(rootPath)) return GameEngine.AliceSact;
             if (AssetCollectors.IsHtmlGame(rootPath)) return GameEngine.Html;
             if (AssetCollectors.IsQspGame(rootPath)) return GameEngine.Qsp;
             if (AssetCollectors.IsRagsInput(rootPath)) return GameEngine.Rags;
@@ -161,6 +163,7 @@ namespace RpgmvpConverterWinForms
                 case ".dat": return SpakDatExtractor.IsSpakArchive(path) ? GameEngine.SpakDat : GameEngine.Unknown;
                 case ".arc": return ArcExtractor.HasNativeSupport(path) ? GameEngine.DataArc : GameEngine.Unknown;
                 case ".dpm": return HspDpmExtractor.HasNativeSupport(path) ? GameEngine.Hsp : GameEngine.Unknown;
+                case ".ald": return AliceSactExtractor.HasNativeSupport(path) ? GameEngine.AliceSact : GameEngine.Unknown;
                 case ".exe": return IsGodotEmbeddedPckFile(path) ? GameEngine.Godot : GameEngine.Unknown;
                 default: return GameEngine.Unknown;
             }
@@ -195,6 +198,24 @@ namespace RpgmvpConverterWinForms
             {
                 foreach (string archive in EnumerateFilesSafe(rootPath, "*.dpm"))
                     if (HspDpmExtractor.HasNativeSupport(archive)) return true;
+            }
+            catch { }
+            return false;
+        }
+
+        private static bool IsAliceSactGame(string rootPath)
+        {
+            try
+            {
+                foreach (string archive in EnumerateFilesSafe(rootPath, "*.ald"))
+                    if (AliceSactExtractor.HasNativeSupport(archive)) return true;
+                foreach (string inc in EnumerateFilesSafe(rootPath, "SACT_DLL.inc"))
+                    if (File.Exists(inc)) return true;
+                if (Directory.Exists(rootPath))
+                {
+                    foreach (string archive in EnumerateFilesTopLevelSafe(rootPath, "*.ald"))
+                        if (AliceSactExtractor.HasNativeSupport(archive)) return true;
+                }
             }
             catch { }
             return false;
@@ -267,6 +288,7 @@ namespace RpgmvpConverterWinForms
 
         private static bool IsWolfRpgGame(string rootPath)
         {
+            if (IsElectronGame(rootPath) || IsNwjsGame(rootPath)) return false;
             List<string> archives = FindWolfArchiveFiles(rootPath);
             bool hasWolfArchive = archives.Any(delegate(string path)
             {
@@ -719,6 +741,11 @@ namespace RpgmvpConverterWinForms
             else if (engine == GameEngine.Hsp)
             {
                 files = HspDpmExtractor.FindArchives(rootPath, Path.Combine(rootPath, "extracted", "hsp"));
+                archives = ((List<string>)files).Count;
+            }
+            else if (engine == GameEngine.AliceSact)
+            {
+                files = AliceSactExtractor.FindArchives(rootPath, Path.Combine(rootPath, "extracted", "alice-sact"));
                 archives = ((List<string>)files).Count;
             }
             else
@@ -1390,7 +1417,8 @@ namespace RpgmvpConverterWinForms
             SpakDat,
             PygamePyInstaller,
             DataArc,
-            Hsp
+            Hsp,
+            AliceSact
         }
 
         private sealed class ScanSummary

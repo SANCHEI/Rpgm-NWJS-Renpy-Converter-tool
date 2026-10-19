@@ -68,6 +68,7 @@
     <Compile Include="source\Extractors\UnityArchiveDiscovery.cs" />
     <Compile Include="source\Extractors\GodotExtractor.cs" />
     <Compile Include="source\Extractors\HspDpmExtractor.cs" />
+    <Compile Include="source\Extractors\AliceSactExtractor.cs" />
     <Compile Include="source\Extractors\RpgmCrypt.cs" />
     <Compile Include="source\Extractors\KirikiriXp3Extractor.cs" />
     <Compile Include="source\Extractors\ArcExtractor.cs" />

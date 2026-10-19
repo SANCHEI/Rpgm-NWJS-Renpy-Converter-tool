@@ -93,6 +93,12 @@ public static class FixtureTest
             foreach (string diagnostics in Directory.GetFiles(output, "*diagnostics*", SearchOption.AllDirectories))
                 File.Delete(diagnostics);
         }
+        else if (mode == "alice")
+        {
+            AliceSactResult result = AliceSactExtractor.ExtractAll(game, output, null, null);
+            Console.WriteLine("ALICE:" + result.Archives + ":" + result.Files + ":" + result.OpaqueEntries
+                + ":" + result.Bytes + ":" + result.Errors);
+        }
         else
         {
             Console.WriteLine("Unknown mode: " + mode);

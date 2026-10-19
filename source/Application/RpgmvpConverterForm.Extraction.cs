@@ -167,6 +167,11 @@ namespace RpgmvpConverterWinForms
                 await StartHspExtractionAsync();
                 return;
             }
+            if (engine == GameEngine.AliceSact)
+            {
+                await StartAliceSactExtractionAsync();
+                return;
+            }
             if (engine != GameEngine.RpgMaker)
             {
                 await StartSignatureRecoveryAsync();
@@ -875,6 +880,31 @@ namespace RpgmvpConverterWinForms
         private async Task StartHspExtractionAsync()
         {
             await StartLocalExtractionAsync("HSP DPM", "hsp", RunHspExtraction);
+        }
+
+        private async Task StartAliceSactExtractionAsync()
+        {
+            await StartLocalExtractionAsync("AliceSoft SACT", "alice-sact", RunAliceSactExtraction);
+        }
+
+        private OperationResult RunAliceSactExtraction(string inputPath, string outputDir)
+        {
+            DateTime start = DateTime.UtcNow;
+            string rootPath = InputDirectory(inputPath);
+            Directory.CreateDirectory(outputDir);
+            AliceSactResult archives = AliceSactExtractor.ExtractAll(
+                rootPath,
+                outputDir,
+                delegate(string line) { SafeLog(line); },
+                delegate { return localCopyCancellationRequested; });
+            List<string> loose = AssetCollectors.GetLooseResourceFiles(rootPath, outputDir);
+            CollectorResult copied = AssetCollectors.CopyFiles(rootPath, loose, outputDir, "loose");
+            SafeLog("AliceSoft SACT: " + archives.Archives + " archive(s), " + archives.Files
+                + " entries listed, " + archives.OpaqueEntries + " opaque CG entries kept inside archives");
+            return new OperationResult("AliceSoft SACT", outputDir,
+                copied.Extracted + archives.Files, copied.Bytes + archives.Bytes,
+                archives.Errors, copied.Renamed + archives.Renamed, copied.Skipped,
+                DateTime.UtcNow - start);
         }
 
         private OperationResult RunHspExtraction(string inputPath, string outputDir)

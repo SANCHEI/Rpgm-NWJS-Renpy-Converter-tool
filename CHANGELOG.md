@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.5.5 - 2026-10-19
+- New AliceSoft SACT engine: `.ald` containers (Rance7BA/WA/GA/GM) are listed with a contents manifest; standard media payloads (OGG, PNG, JPG and others) are extracted natively. CG image/video payloads use the game's own closed codec and stay inside the archive.
+- Fixed Electron/NWJS mistakenly detected as WOLF RPG on Chromium-wrapped games (`resources/app.asar` now takes priority over `.pak` heuristics).
+- Restored correct extensions for hidden media: `.png_`/`.jpg_` and similar are renamed to `.png`/`.jpg` after extraction.
+
 ## 2.5.4 - 2026-10-17
 - New Godot engine: PCK archives (v1-v4) now extract natively and offline with folder structure preserved, no portable runtime needed. Encrypted packs are decrypted when the key is supplied or found inside the game executable.
 - Godot texture previews: `.ctex`/`.stex` resources decode to viewable images, and per-file digests are verified so corrupted entries are flagged instead of silently written.

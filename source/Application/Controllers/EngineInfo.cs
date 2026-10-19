@@ -185,6 +185,11 @@ namespace RpgmvpConverterWinForms
                 "Содержимое HSP DPM перечисляется, открытые файлы собираются. Данные файлов DPM2 закрыты шифром и остаются в архиве.",
                 null, null, 255, 130, 200, 160, false, NoPacks,
                 "HSP markers: .dpm containers or hsp DLLs"),
+            Row(GameEngine.AliceSact, "AliceSoft SACT experimental", "AliceSoft SACT", "alice-sact",
+                "AliceSoft SACT .ald containers are listed with a contents manifest and standard media payloads extracted. CG image/video payloads use the game's own closed codec and stay inside the archive.",
+                "Контейнеры AliceSoft SACT .ald перечисляются с манифестом, стандартные медиа извлекаются. Данные изображений/видео CG используют закрытый кодек игры и остаются в архиве.",
+                null, null, 255, 235, 150, 95, false, NoPacks,
+                "AliceSoft SACT markers: System*.ini with MainVM, SACT_DLL.inc or .ald containers"),
         ];
 
         public static EngineInfo For(GameEngine engine)

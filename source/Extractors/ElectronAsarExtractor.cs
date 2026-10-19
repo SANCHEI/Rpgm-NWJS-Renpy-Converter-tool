@@ -91,6 +91,7 @@ namespace RpgmvpConverterWinForms
                     string destination = ExtractionPathUtils.GetSafeOutputPath(outputDir, Path.Combine(prefix, normalized));
                     bool collision;
                     destination = ExtractionPathUtils.GetUniqueFilePath(destination, out collision);
+                    destination = MediaTypeRegistry.RestoreMediaExtension(destination);
                     Directory.CreateDirectory(Path.GetDirectoryName(destination));
 
                     try

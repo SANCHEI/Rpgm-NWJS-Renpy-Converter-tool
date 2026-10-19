@@ -26,6 +26,7 @@ Write-Host "Building fixtures..."
 & $python.Source "$root\tests\fixtures\mk_rpa.py" (Join-Path $fixtures "rpa") | Out-Null
 & $python.Source "$root\tests\fixtures\mk_rpgm.py" (Join-Path $fixtures "rpgm") | Out-Null
 & $python.Source "$root\tests\fixtures\mk_godot.py" (Join-Path $fixtures "godot") | Out-Null
+& $python.Source "$root\tests\fixtures\mk_alice.py" (Join-Path $fixtures "alice") | Out-Null
 
 Write-Host "Compiling fixture harness..."
 $csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
@@ -42,7 +43,8 @@ $sources = @(
     "$root\source\Extractors\PngEncoder.cs",
     "$root\source\Extractors\ExtractionPathUtils.cs",
     "$root\source\Extractors\RpgmCrypt.cs",
-    "$root\source\Extractors\GodotExtractor.cs"
+    "$root\source\Extractors\GodotExtractor.cs",
+    "$root\source\Extractors\AliceSactExtractor.cs"
 )
 & $csc /nologo /out:$harness $sources /r:System.dll /r:System.Core.dll
 if ($LASTEXITCODE -ne 0) {
@@ -50,7 +52,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $failed = $false
-foreach ($mode in @("xp3", "gm", "rpa", "rpgm", "godot")) {
+foreach ($mode in @("xp3", "gm", "rpa", "rpgm", "godot", "alice")) {
     $outDir = Join-Path $outRoot $mode
     New-Item -ItemType Directory -Path $outDir | Out-Null
     $actual = & $harness $mode (Join-Path $fixtures $mode) $outDir | Out-String
