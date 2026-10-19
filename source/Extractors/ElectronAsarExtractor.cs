@@ -120,7 +120,79 @@ namespace RpgmvpConverterWinForms
                     }
                 }
             }
+            DecryptRpgmEncryptedFiles(outputDir);
             return new CollectorResult(extracted, bytes, renamed, skipped);
+        }
+
+        private static void DecryptRpgmEncryptedFiles(string outputDir)
+        {
+            string keyHex = FindEncryptionKey(outputDir);
+            if (string.IsNullOrWhiteSpace(keyHex)) return;
+            byte[] keyBytes;
+            try { keyBytes = HexToBytes(keyHex); }
+            catch { return; }
+            if (keyBytes == null || keyBytes.Length < 16) return;
+            int decryptedCount = 0;
+            foreach (string path in Directory.GetFiles(outputDir, "*", SearchOption.AllDirectories))
+            {
+                try
+                {
+                    if (path.EndsWith(".png_", StringComparison.OrdinalIgnoreCase) ||
+                        path.EndsWith(".jpg_", StringComparison.OrdinalIgnoreCase) ||
+                        path.EndsWith(".ogg_", StringComparison.OrdinalIgnoreCase))
+                    {
+                        byte[] data = File.ReadAllBytes(path);
+                        if (!RpgmCrypt.HasEncryptedHeader(data)) continue;
+                        byte[] decrypted = RpgmCrypt.Decrypt(data, keyBytes);
+                        string ext = DetectDecryptedExtension(decrypted);
+                        if (ext == null) continue;
+                        string renamed = ExtractionPathUtils.GetUniqueFilePath(
+                            Path.ChangeExtension(path, ext), out bool _);
+                        File.WriteAllBytes(renamed, decrypted);
+                        decryptedCount++;
+                    }
+                }
+                catch { }
+            }
+            Console.WriteLine("RPGM_DECRYPTED: " + decryptedCount + " files");
+        }
+
+        private static string FindEncryptionKey(string outputDir)
+        {
+            foreach (string sysJson in Directory.GetFiles(outputDir, "System.json", SearchOption.AllDirectories))
+            {
+                try
+                {
+                    string text = File.ReadAllText(sysJson);
+                    var root = new JavaScriptSerializer().DeserializeObject(text) as Dictionary<string, object>;
+                    if (root != null && root.TryGetValue("encryptionKey", out object keyObj))
+                        return keyObj as string;
+                }
+                catch { }
+            }
+            return null;
+        }
+
+        private static byte[] HexToBytes(string hex)
+        {
+            if (string.IsNullOrWhiteSpace(hex) || hex.Length % 2 != 0) return null;
+            byte[] bytes = new byte[hex.Length / 2];
+            for (int i = 0; i < bytes.Length; i++)
+                bytes[i] = byte.Parse(hex.Substring(i * 2, 2), System.Globalization.NumberStyles.HexNumber);
+            return bytes;
+        }
+
+        private static string DetectDecryptedExtension(byte[] data)
+        {
+            string img = RpgmCrypt.DetectImageExtension(data);
+            if (img != null) return img;
+            if (data.Length >= 4 && data[0] == (byte)'O' && data[1] == (byte)'g' && data[2] == (byte)'g' && data[3] == (byte)'S')
+                return ".ogg";
+            if (data.Length >= 2 && data[0] == 0xFF && (data[1] & 0xE0) == 0xE0)
+                return ".mp3";
+            if (data.Length >= 3 && data[0] == (byte)'I' && data[1] == (byte)'D' && data[2] == (byte)'3')
+                return ".mp3";
+            return null;
         }
 
         private static AsarHeader ReadHeader(FileStream stream)

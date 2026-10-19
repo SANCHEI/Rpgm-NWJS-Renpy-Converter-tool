@@ -122,6 +122,55 @@ namespace RpgmvpConverterWinForms
                 || normalized == ".tiff";
         }
 
+        // Скрытые медиа хранятся с расширением вида .png_/.jpg_; восстанавливаем
+        // правильное расширение по содержимому, если сигнатура файла совпадает.
+        // Возвращает путь к возможному nuevo файлу (File.Move уже выполнен).
+        public static string RestoreMediaExtension(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return path;
+            string ext = Path.GetExtension(path);
+            if (ext.Length <= 2 || ext[ext.Length - 1] != '_') return path;
+            string candidate = ext.Substring(0, ext.Length - 1);
+            if (!IsMedia(candidate) && !IsText(candidate) && !IsLooseResource(candidate))
+                return path;
+            try
+            {
+                byte[] header = new byte[16];
+                using (FileStream stream = File.OpenRead(path))
+                {
+                    int read = stream.Read(header, 0, header.Length);
+                    if (!SignalMatches(header, read, candidate)) return path;
+                }
+            }
+            catch
+            {
+                return path;
+            }
+            string renamed = Path.ChangeExtension(path, candidate);
+            if (string.Equals(renamed, path, StringComparison.OrdinalIgnoreCase)) return path;
+            renamed = ExtractionPathUtils.GetUniqueFilePath(renamed, out bool _);
+            try { File.Move(path, renamed); }
+            catch { return path; }
+            return renamed;
+        }
+
+        private static bool SignalMatches(byte[] header, int read, string candidate)
+        {
+            string c = candidate.ToLowerInvariant();
+            if (c == ".png" && read >= 8 && header[0] == 0x89 && header[1] == 0x50 && header[2] == 0x4E && header[3] == 0x47) return true;
+            if ((c == ".jpg" || c == ".jpeg") && read >= 3 && header[0] == 0xFF && header[1] == 0xD8 && header[2] == 0xFF) return true;
+            if (c == ".webp" && read >= 12 && header[0] == (byte)'R' && header[1] == (byte)'I' && header[2] == (byte)'F' && header[3] == (byte)'F' && header[8] == (byte)'W' && header[9] == (byte)'E' && header[10] == (byte)'B' && header[11] == (byte)'P') return true;
+            if (c == ".ogg" && read >= 4 && header[0] == (byte)'O' && header[1] == (byte)'g' && header[2] == (byte)'g' && header[3] == (byte)'S') return true;
+            if (c == ".mp3" && read >= 2 && ((header[0] == 0xFF && (header[1] & 0xE0) == 0xE0) || (header[0] == (byte)'I' && header[1] == (byte)'D' && header[2] == (byte)'3'))) return true;
+            if (c == ".flac" && read >= 4 && header[0] == (byte)'f' && header[1] == (byte)'L' && header[2] == (byte)'a' && header[3] == (byte)'C') return true;
+            if (c == ".wav" && read >= 12 && header[0] == (byte)'R' && header[1] == (byte)'I' && header[2] == (byte)'F' && header[3] == (byte)'F' && header[8] == (byte)'W' && header[9] == (byte)'A' && header[10] == (byte)'V' && header[11] == (byte)'E') return true;
+            if ((c == ".webm" || c == ".mkv") && read >= 4 && header[0] == 0x1A && header[1] == 0x45 && header[2] == 0xDF && header[3] == 0xA3) return true;
+            if (c == ".mp4" && read >= 8 && header[4] == (byte)'f' && header[5] == (byte)'t' && header[6] == (byte)'y' && header[7] == (byte)'p') return true;
+            if (c == ".gif" && read >= 6 && header[0] == (byte)'G' && header[1] == (byte)'I' && header[2] == (byte)'F' && header[3] == (byte)'8') return true;
+            if (c == ".bmp" && read >= 2 && header[0] == (byte)'B' && header[1] == (byte)'M') return true;
+            return false;
+        }
+
         public static MediaAssetKind GetMediaKind(string pathOrExtension)
         {
             string extension = Normalize(pathOrExtension);
