@@ -122,21 +122,6 @@ namespace RpgmvpConverterWinForms
                 || normalized == ".tiff";
         }
 
-        // Скрытые медиа хранятся с расширением вида .png_/.jpg_; восстанавливаем
-        // правильное расширение по содержимому, чтобы файл открывался как обычное изображение/аудио/видео.
-        public static string RestoreMediaExtension(string path)
-        {
-            if (string.IsNullOrWhiteSpace(path)) return path;
-            string ext = Path.GetExtension(path);
-            if (ext.Length > 2 && ext[ext.Length - 1] == '_')
-            {
-                string candidate = ext.Substring(0, ext.Length - 1);
-                if (IsMedia(candidate) || IsText(candidate) || IsLooseResource(candidate))
-                    return Path.ChangeExtension(path, candidate);
-            }
-            return path;
-        }
-
         public static MediaAssetKind GetMediaKind(string pathOrExtension)
         {
             string extension = Normalize(pathOrExtension);

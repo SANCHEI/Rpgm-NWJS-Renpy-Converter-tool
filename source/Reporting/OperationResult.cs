@@ -38,7 +38,7 @@ namespace RpgmvpConverterWinForms
         public string ToReport()
         {
             return ExtractionReportBuilder.Build(
-                "2.5.5",
+                "2.5.6",
                 Engine,
                 OutputDir,
                 Extracted,

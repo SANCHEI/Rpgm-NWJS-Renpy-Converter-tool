@@ -882,7 +882,16 @@ namespace RpgmvpConverterWinForms
                 foreach (string folder in Directory.EnumerateDirectories(rootPath, "*", SearchOption.TopDirectoryOnly).Take(12))
                 {
                     string name = Path.GetFileName(folder);
-                    if (name.Equals("extracted", StringComparison.OrdinalIgnoreCase) || name.Equals("tools", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (name.Equals("extracted", StringComparison.OrdinalIgnoreCase)
+                        || name.Equals("tools", StringComparison.OrdinalIgnoreCase)
+                        || name.Equals("resources", StringComparison.OrdinalIgnoreCase)
+                        || name.Equals("locales", StringComparison.OrdinalIgnoreCase)
+                        || name.Equals("www", StringComparison.OrdinalIgnoreCase)
+                        || name.Equals("data", StringComparison.OrdinalIgnoreCase)
+                        || name.Equals("Data", StringComparison.OrdinalIgnoreCase)
+                        || name.Equals("game", StringComparison.OrdinalIgnoreCase)
+                        || name.Equals("Game", StringComparison.OrdinalIgnoreCase)
+                        || name.Equals("Contents", StringComparison.OrdinalIgnoreCase)) continue;
                     if (DetectEngineFast(folder) != GameEngine.Unknown) detectedFolders++;
                     if (detectedFolders >= 2) return "selected folder looks like a collection with multiple games; choose the exact game folder or force the engine before extraction.";
                 }

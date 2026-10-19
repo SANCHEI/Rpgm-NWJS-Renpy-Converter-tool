@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.5.6 - 2026-10-19
+- Исправлено ложное определение как WOLF RPG на Chromium-обёртках (Electron/NWJS с `resources/app.asar` и `chrome_*.pak` определяется верно).
+- Исправлено предупреждение «папка с несколькими играми» при выборе одной игры: подпапки `resources`, `locales`, `www`, `data`, `game` не считаются отдельными играми.
+- Возвращено исходное расширение скрытых медиа (`.png_`/`.jpg_` не переименовываются — они зашифрованы и требуют расшифровки движком, а не смены расширения).
+
 ## 2.5.5 - 2026-10-19
 - New AliceSoft SACT engine: `.ald` containers (Rance7BA/WA/GA/GM) are listed with a contents manifest; standard media payloads (OGG, PNG, JPG and others) are extracted natively. CG image/video payloads use the game's own closed codec and stay inside the archive.
 - Fixed Electron/NWJS mistakenly detected as WOLF RPG on Chromium-wrapped games (`resources/app.asar` now takes priority over `.pak` heuristics).
