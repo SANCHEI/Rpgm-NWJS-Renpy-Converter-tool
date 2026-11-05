@@ -742,7 +742,7 @@ namespace RpgmvpConverterWinForms
         private static WebClient CreateWebClient()
         {
             WebClient client = new WebClient();
-            client.Headers[HttpRequestHeader.UserAgent] = "GameAssetTool/2.5.0";
+            client.Headers[HttpRequestHeader.UserAgent] = "GameAssetTool/2.5.7";
             return client;
         }
 
